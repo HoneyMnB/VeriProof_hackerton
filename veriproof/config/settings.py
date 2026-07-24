@@ -71,6 +71,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -113,10 +114,19 @@ _DEFAULT_SQLITE = {
     }
 }
 
-_DATABASE_URL = os.environ.get("DATABASE_URL")
+_DATABASE_URL = os.environ.get("POSTGRES_DB")
 if _DATABASE_URL:
-    # dj_database_url parses the URL and returns a Django DB config dict.
-    DATABASES = {"default": dj_database_url.parse(_DATABASE_URL)}
+    # PostgreSQL 설정이 있는 경우 설정
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB"),
+            "USER": os.environ.get("POSTGRES_USER"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD"),
+            "HOST": os.environ.get("POSTGRES_HOST"),
+            "PORT": os.environ.get("POSTGRES_PORT"),
+        }
+    }
 else:
     DATABASES = _DEFAULT_SQLITE
 
@@ -152,6 +162,14 @@ LOGIN_REDIRECT_URL = "/"
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+STORAGES = {
+    "default": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # MEDIA_ROOT holds the local backend image store (thumbnails, watermarks,
 # temporary originals) when STORAGE_BACKEND=local.

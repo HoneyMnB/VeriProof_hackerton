@@ -36,6 +36,7 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.py[cod]
 .mypy_cache/
 .ruff_cache/
 *.db
@@ -43,6 +44,19 @@ __pycache__/
 *.sqlite3
 *.rdb
 *.dbm
+
+# ===========================================
+# Django Project Artifacts (merged from origin/main)
+# Patterns are unanchored so they also cover the app under veriproof/
+# (origin/main moved these from veriproof/.gitignore to root; a leading
+# slash would have stopped matching veriproof/staticfiles and veriproof/media).
+# ===========================================
+db.sqlite3
+db.sqlite3-journal
+staticfiles/
+media/
+settings_local.py
+.tox/
 
 # ===========================================
 # Virtual Environments
@@ -232,5 +246,3 @@ dist-ssr/
 .vercel/
 .netlify/
 .firebase/
-
-
