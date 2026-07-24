@@ -2,9 +2,11 @@
 Django>=5.0,<6.0
 Pillow>=10.0
 dj-database-url>=2.0
+psycopg[binary]>=3.1.8
 python-dotenv>=1.0
 gunicorn>=22.0
 packaging>=23.0
+whitenoise>=6.12,<7.0
 
 # --- AI (Gemini / Vertex) [import-guarded] ---
 google-genai>=0.3
@@ -12,6 +14,13 @@ google-genai>=0.3
 # --- Solana / payments [import-guarded] ---
 solana>=0.34
 solders>=0.21
+
+# --- GCP pipeline / data [import-guarded, degrade to no-op when disabled] ---
+google-cloud-firestore>=2.14
+google-cloud-bigquery>=3.18
+google-cloud-pubsub>=2.19
+google-cloud-kms>=2.21
+google-cloud-storage>=2.16
 
 # --- Test / dev (test-plan 3) ---
 pytest>=8

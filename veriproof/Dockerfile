@@ -22,6 +22,9 @@ RUN pip install -r requirements.txt
 # Copy the application package (config, apps, services, manage.py, etc.).
 COPY . .
 
+# Materialise hashed and compressed static assets for WhiteNoise/Gunicorn.
+RUN python manage.py collectstatic --noinput
+
 # Cloud Run injects PORT=8080; gunicorn listens on $PORT.
 ENV PORT=8080
 EXPOSE 8080
