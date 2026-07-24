@@ -14,15 +14,15 @@
         <p class="vp-library-page__head-desc" data-i18n="library.head.body">Review registration certificates, publication settings, and sales activity for each work.</p>
     </header>
 
-    {% comment %}The server resolves the account wallet; URL input remains only for A2A verification compatibility.{% endcomment %}
-    <div id="library-state" data-wallet="{{ wallet }}" data-assets-count="{{ assets|length }}">
-        {% if not wallet %}
+    {% comment %}The server resolves the library from the authenticated account only.{% endcomment %}
+    <div id="library-state" data-assets-count="{{ assets|length }}">
+        {% if not has_active_wallet and not assets %}
         <p class="no-assets" data-i18n="library.empty.nowallet">Connect your creator wallet in the sidebar to view your registered IP assets.</p>
         {% elif not assets %}
         {# 6 edge: zero assets -> empty-state guidance. #}
         <p class="no-assets"><span data-i18n="library.empty.noassets">No IP assets registered for this wallet yet. </span><a href="/" data-i18n="library.empty.register">Register your first asset</a></p>
         {% else %}
-        <p class="library__meta"><span data-i18n="library.meta" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} works · wallet</span> <code translate="no">{{ wallet|slice:":6" }}…{{ wallet|slice:"-4:" }}</code></p>
+        <p class="library__meta"><span data-i18n="library.meta" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} works</span></p>
         <ul class="asset-grid"
             data-events-url="{{ events_url }}"
             data-firestore-enabled="{{ firestore_enabled|yesno:'true,false' }}"
@@ -33,7 +33,8 @@
                 data-min-price="{{ asset.min_price_usdc }}"
                 data-target-price="{{ asset.target_price_usdc }}"
                 data-visibility="{{ asset.visibility }}"
-                data-explorer-url="{{ asset.explorer_url|default:'' }}">
+                data-explorer-url="{{ asset.explorer_url|default:'' }}"
+                data-manage="{{ asset.manage_json|escape }}">
 
                 {# R6 / AC-5: preview toggle (watermark <-> thumbnail, never original). #}
                 <div class="asset-card__preview">
@@ -64,6 +65,7 @@
                     </div>
 
                     <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_price_usdc }} USDC</strong></p>
+                    <p class="asset-card__wallet"><span data-i18n="library.field.creator_wallet">Creator wallet</span> <code translate="no">{{ asset.certificate.creator_wallet }}</code></p>
 
                     <div class="asset-card__actions">
                     {# 인증서와 설정만 카드에서 바로 연다. 부가 관리 UI는 카드에서 분리한다. #}
@@ -73,6 +75,8 @@
                             data-anchor-tx-sig="{{ asset.certificate.anchor_tx_sig|default:'' }}"
                             data-certificate-tx-sig="{{ asset.certificate.certificate_tx_sig|default:'' }}"
                             data-creator-wallet="{{ asset.certificate.creator_wallet }}"
+                            data-work-title="{{ asset.title|default:''|escape }}"
+                            data-registered-at="{{ asset.created_at|default:'' }}"
                             data-explorer-url="{{ asset.certificate.explorer_url|default:'' }}" data-i18n="library.asset.certificate">View certificate</button>
                     <button type="button" class="btn btn--asset-settings" data-i18n="library.asset.manage">Manage</button>
                     </div>
@@ -87,12 +91,29 @@
 <div id="asset-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="asset-settings-title">
     <div class="modal__backdrop" data-asset-settings-close></div>
     <section class="modal__panel asset-settings-modal__panel">
-        <header><div><p class="vp-page__eyebrow" data-i18n="library.terms.eyebrow">Work management</p><h2 id="asset-settings-title" data-i18n="library.terms.title">Listing settings</h2></div><button type="button" data-asset-settings-close data-i18n="library.modal.close">Close</button></header>
+        <header><div><p class="vp-page__eyebrow" data-i18n="library.terms.eyebrow">Work management</p><h2 id="asset-settings-title" data-i18n="library.terms.title">Work details and listing</h2></div><button type="button" class="vp-modal-close" data-asset-settings-close aria-label="Close" data-i18n-aria-label="library.modal.close" title="Close" data-i18n-title="library.modal.close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="sr-only" data-i18n="library.modal.close">Close</span></button></header>
         <p id="asset-settings-name" class="asset-settings-modal__name"></p>
         <form id="asset-settings-form" class="asset-card__terms">
-            <label><span data-i18n="library.terms.minimum">Minimum USDC</span><input name="min_price_usdc" type="number" min="0" step="0.01" required></label>
-            <label><span data-i18n="library.terms.target">Target USDC</span><input name="target_price_usdc" type="number" min="0" step="0.01" required></label>
-            <label><span data-i18n="library.terms.visibility">Visibility</span><select name="visibility"><option value="private" data-i18n="library.terms.private">Private</option><option value="public" data-i18n="library.terms.public">Public</option></select></label>
+            <section class="asset-settings-modal__section">
+                <p class="asset-settings-modal__section-title" data-i18n="library.terms.registration">Registration details</p>
+                <dl id="asset-settings-registration" class="asset-settings-modal__registration"></dl>
+            </section>
+            <section class="asset-settings-modal__section asset-settings-modal__editor">
+                <p class="asset-settings-modal__section-title" data-i18n="library.terms.edit">Editable work details</p>
+                <label><span data-i18n="library.terms.work_title">Title</span><input name="title" type="text" maxlength="120"></label>
+                <label><span data-i18n="library.terms.description">Description</span><textarea name="description" rows="4"></textarea></label>
+                <label><span data-i18n="library.terms.tags">Tags</span><input name="tags" type="text" data-i18n-placeholder="library.terms.tags_placeholder" placeholder="Comma-separated tags"></label>
+            </section>
+            <section class="asset-settings-modal__section asset-settings-modal__pricing">
+                <p class="asset-settings-modal__section-title" data-i18n="library.terms.listing">Listing settings</p>
+                <div class="asset-settings-modal__price-fields"><label><span data-i18n="library.terms.minimum">Minimum USDC</span><input name="min_price_usdc" type="number" min="0" step="0.01" required></label><label><span data-i18n="library.terms.target">Target USDC</span><input name="target_price_usdc" type="number" min="0" step="0.01" required></label></div>
+                <label><span data-i18n="library.terms.visibility">Visibility</span><select name="visibility"><option value="private" data-i18n="library.terms.private">Private</option><option value="public" data-i18n="library.terms.public">Public</option></select></label>
+            </section>
+            <section class="asset-settings-modal__section asset-settings-modal__sales" aria-labelledby="asset-sales-title">
+                <div><p class="asset-settings-modal__section-title" id="asset-sales-title" data-i18n="library.sales.title">Sales information</p><p class="asset-settings-modal__section-note" data-i18n="library.sales.body">Completed licenses are shared here.</p></div>
+                <div id="asset-settings-sales-summary" class="asset-settings-modal__sales-summary"></div>
+                <ol id="asset-settings-sales-list" class="asset-settings-modal__sales-list"></ol>
+            </section>
             <a id="asset-settings-explorer" class="asset-settings-modal__explorer" target="_blank" rel="noopener" hidden data-i18n="library.asset.explorer">Solana Explorer verify</a>
             <button type="submit" data-i18n="library.terms.save">Save listing settings</button><span class="asset-card__terms-status" role="status"></span>
         </form>
@@ -102,12 +123,15 @@
 {# R8 / AC-7: QR modal shell (library.js renders the QR / scan block into it). #}
 <div id="certificate-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal__backdrop" data-modal-close></div>
-    <div class="modal__panel">
-        <header><h2 id="modal-title" data-i18n="library.modal.title">On-chain Certificate</h2>
-            <button type="button" data-modal-close data-i18n="library.modal.close">Close</button>
+    <div class="modal__panel certificate-modal__panel">
+        <header><div><p class="certificate-modal__kicker">VERIPROOF AI</p><h2 id="modal-title" data-i18n="library.modal.title">Registration Certificate</h2></div>
+            <button type="button" class="vp-modal-close" data-modal-close aria-label="Close" data-i18n-aria-label="library.modal.close" title="Close" data-i18n-title="library.modal.close"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="sr-only" data-i18n="library.modal.close">Close</span></button>
         </header>
-        <div id="certificate-qr" class="modal__qr"></div>
-        <dl id="certificate-fields" class="modal__fields"></dl>
+        <div class="certificate-modal__seal" aria-hidden="true"><span>VP</span><i>✓</i></div>
+        <p id="certificate-work-title" class="certificate-modal__work-title"></p>
+        <p class="certificate-modal__statement" data-i18n="library.certificate.statement">This certifies the registration fingerprint and creator record shown below.</p>
+        <div class="certificate-modal__proof"><div id="certificate-qr" class="modal__qr"></div><dl id="certificate-fields" class="modal__fields"></dl></div>
+        <footer class="certificate-modal__footer"><span><span data-i18n="library.certificate.issued">Registration record</span><time id="certificate-registered-at"></time></span><a id="certificate-download" class="certificate-modal__download" hidden data-i18n="library.certificate.download">Download PDF certificate</a></footer>
     </div>
 </div>
 

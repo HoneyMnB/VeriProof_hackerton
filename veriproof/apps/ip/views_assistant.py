@@ -4,10 +4,11 @@ from __future__ import annotations
 import decimal
 import json
 import uuid
+from datetime import date
 
+from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_http_methods
 
 from services.cashflow_service import CashflowValidationError, get_cashflow_service
@@ -44,6 +45,7 @@ def status(request: HttpRequest) -> JsonResponse:
 
 
 def overview(request: HttpRequest) -> JsonResponse:
+    """창작자 지갑 기준 비서 대시보드 요약 데이터를 반환한다."""
     wallet = (request.GET.get("creator") or request.GET.get("wallet") or "").strip()
     if not wallet:
         return JsonResponse({"error": "creator_required"}, status=422)
@@ -123,9 +125,36 @@ def sales(request: HttpRequest) -> JsonResponse:
     if not wallet:
         return JsonResponse({"error": "creator_required"}, status=422)
     try:
-        return JsonResponse(get_creator_assistant_service().sales(wallet))
+        start_date = _sales_date(request.GET.get("start"), "start")
+        end_date = _sales_date(request.GET.get("end"), "end")
+        if start_date and end_date and start_date > end_date:
+            raise ValueError("start date must not be after end date")
+        return JsonResponse(get_creator_assistant_service().sales(
+            wallet,
+            search=(request.GET.get("q") or "").strip()[:120],
+            asset_id=(request.GET.get("asset") or "").strip(),
+            usage_type=(request.GET.get("usage") or "").strip()[:30],
+            start_date=start_date,
+            end_date=end_date,
+            page=max(1, int(request.GET.get("page") or 1)),
+            page_size=min(50, max(1, int(request.GET.get("page_size") or 20))),
+            work_page=max(1, int(request.GET.get("work_page") or 1)),
+            work_page_size=min(25, max(1, int(request.GET.get("work_page_size") or 10))),
+        ))
+    except (TypeError, ValueError):
+        return JsonResponse({"error": "invalid_sales_filter"}, status=422)
     except LookupError:
         return JsonResponse({"error": "creator_not_found"}, status=404)
+
+
+def _sales_date(raw: str | None, name: str) -> date | None:
+    """ISO 날짜 문자열을 date로 변환한다. 실패 시 invalid <name> date ValueError를 발생시킨다."""
+    if not raw:
+        return None
+    try:
+        return date.fromisoformat(raw)
+    except ValueError as exc:
+        raise ValueError(f"invalid {name} date") from exc
 
 
 def actions(request: HttpRequest) -> JsonResponse:
@@ -200,6 +229,7 @@ def directives(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def chat(request: HttpRequest) -> JsonResponse:
+    """사용자 메시지를 비서에 전달하고 응답·수행 액션·대화 식별자를 반환한다."""
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
     try:

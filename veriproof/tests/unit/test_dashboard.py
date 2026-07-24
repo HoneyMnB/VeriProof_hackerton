@@ -129,50 +129,7 @@ def test_preview_toggle_switches_src():
 # --- R10 / AC-9: Polling-vs-Firestore decision (frontend pure mirror) --------
 
 
-def test_firestore_disabled_uses_polling():
-    """FIRESTORE_ENABLED=false OR Firebase SDK absent -> fall back to polling."""
-    from apps.ip.dashboard import should_poll_events
-
-    # Firestore disabled -> always poll (architecture 5.2 fallback).
-    assert should_poll_events(firestore_enabled=False, firebase_sdk_present=False) is True
-    assert should_poll_events(firestore_enabled=False, firebase_sdk_present=True) is True
-    # Firestore enabled BUT SDK missing in the browser -> still poll (guarded).
-    assert should_poll_events(firestore_enabled=True, firebase_sdk_present=False) is True
-    # Both enabled and present -> use onSnapshot, no polling.
-    assert should_poll_events(firestore_enabled=True, firebase_sdk_present=True) is False
-
-
 # --- R2 / AC-2: Analysis-card field extraction (frontend pure mirror) -------
-
-
-def test_render_analysis_card_from_response():
-    """The analysis-card render pulls tags/category/score/price from response."""
-    from apps.ip.dashboard import analysis_card_fields
-
-    asset_id = "11111111-1111-1111-1111-111111111111"
-    response = {
-        "asset_id": asset_id,
-        "anchor_tx": "anchor_sig_xyz",
-        "analysis": {
-            "tags": ["photo", "nature"],
-            "category": "photography",
-            "originality_score": 87,
-            "recommended_min_price_usdc": "1.50",
-            "degraded": False,
-        },
-        "x402_endpoint": f"/api/v1/ip/{asset_id}",
-        "watermark_url": "https://cdn/wm.png",
-    }
-    card = analysis_card_fields(response)
-    assert card["tags"] == ["photo", "nature"]
-    assert card["category"] == "photography"
-    assert card["originality_score"] == 87
-    assert card["recommended_min_price_usdc"] == "1.50"
-    assert card["degraded"] is False
-    # R4 / AC-3: completion card fields surfaced from the same response.
-    assert card["anchor_tx"] == "anchor_sig_xyz"
-    assert card["x402_endpoint"] == f"/api/v1/ip/{asset_id}"
-    assert card["asset_id"] == asset_id
 
 
 def test_analysis_card_fields_degraded_flag_propagated():

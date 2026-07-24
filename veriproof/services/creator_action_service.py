@@ -28,6 +28,11 @@ class CreatorActionService:
     def execute(
         self, *, creator: Any, source_message: Any, action: dict[str, Any]
     ) -> ActionExecution:
+        """Gemini 계획을 감사 행에 먼저 남기고 허용된 도구만 실행한 뒤 DB를 다시 읽어 검증한다.
+
+        미지원 도구는 REJECTED, 실행 중 예외는 FAILED로 기록하며 어떤 경로이든
+        AssistantAction 이력을 보존한다. 검증 결과까지 포함해 반환한다.
+        """
         from apps.ip.models import AssistantAction
 
         action_name = str(action.get("name") or "").strip()
@@ -150,6 +155,7 @@ class CreatorActionService:
 
     @staticmethod
     def _finish(record: Any, *, status: str, verified: bool, result: dict[str, Any]):
+        """실행 결과를 감사 행에 확정하고 API/UI용 ActionExecution으로 반환한다."""
         record.status = status
         record.result_payload = result
         record.verification_passed = verified

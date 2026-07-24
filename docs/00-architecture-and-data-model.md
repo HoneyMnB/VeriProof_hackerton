@@ -192,7 +192,7 @@ X-Payment-Mint: <USDC_MINT_ADDRESS>
 
 ```
 GeminiService
-  analyze_image(image_bytes) -> AnalysisResult(tags, category, originality_score, recommended_min_price_usdc)
+  analyze_asset(file_bytes, mime_type) -> AnalysisResult(tags, category, originality_score, recommended_min_price_usdc)
   negotiate(min_price, target_price, offer_usdc, usage_type, history) -> NegotiationResult(status, price_usdc, reason)
   quote_batch(items, usage_type) -> [BatchQuote(asset_id, unit_price_usdc)]   # 3.5-flash-lite
 

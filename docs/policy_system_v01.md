@@ -448,12 +448,11 @@ cd /Volumes/KevinData/Office/00.\ HoneyMnB/05.\ 업무진행/02.\ 내부\ 프로
 
 `start.sh`는 다음 순서로 실행한다.
 
-1. 이 프로젝트가 기록한 web/celery PID만 종료한다.
+1. 이 프로젝트가 기록한 web PID만 종료한다.
 2. Django check와 migration drift check를 실행한다.
 3. 최신 migration을 적용하고 migration plan을 표시한다.
 4. 추적되지 않은 다른 프로세스가 55000 포트를 사용하면 종료하지 않고 실패한다.
 5. Django 서버를 시작한다.
-6. `CELERY_APP`이 설정됐을 때만 Celery worker를 시작한다.
 
 종료:
 
@@ -489,7 +488,7 @@ cd veriproof
 | `services/registration_service.py` | `RegistrationService.register` | 분석·미리보기·앵커·저장·자산 영속화 |
 | `services/creator_assistant_service.py` | `overview`, `ask`, `history`, `directives`, `actions`, `sales` | 창작자 비서 상태·기록·실행 결과 관리 |
 | `services/creator_action_service.py` | `execute` | 허용 자연어 도구의 실행·사후 검증·감사 기록 |
-| `services/gemini_service.py` | `analyze_image`, `negotiate`, `quote_batch`, `plan_creator_action` | 실제 Gemini 호출·구조화 계획·응답 검증 |
+| `services/gemini_service.py` | `analyze_asset`, `negotiate`, `quote_batch`, `plan_creator_action` | 실제 Gemini 호출·구조화 계획·응답 검증 |
 | `services/payment_verifier.py` | `PaymentVerifier`, `LocalMockPaymentVerifier`, `get_payment_verifier` | 결제 검증 어댑터 선택 |
 | `services/_payment.py` | `resolve_pay_to` | 결제 수취인 단일 규칙 |
 | `services/license_service.py` | `LicenseService.grant` | idempotent 라이선스 발급 |

@@ -40,6 +40,10 @@
         });
         if (wallet()) { loadHistory(); }
 
+        /**
+         * 채팅 폼 제출과 입력창 자동 확장을 바인딩한다. Enter(Shift 없음)로 제출하고
+         * 입력 줄 수에 따라 textarea를 최대 4줄까지 높이를 키운다.
+         */
         function bindChat() {
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
@@ -55,6 +59,10 @@
             input.addEventListener("keydown", function (event) { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
         }
 
+        /**
+         * 첨부(+) 버튼의 드롭다운 메뉴를 바인딩한다. 파일 첨부와 등록 패널 열기를 연결하고
+         * 외부 클릭·Esc로 메뉴 닫힘을 처리한다.
+         */
         function bindAttachmentMenu() {
             var add = byId("composer-add");
             var menu = byId("composer-add-menu");
@@ -126,6 +134,10 @@
             });
         }
 
+        /**
+         * 등록 캔버스의 드롭존·파일 입력·입력 필드·버튼을 바인딩한다.
+         * 단위 변경 시 패키지 모드 활성화, 필드 입력 시 초안 캡처, 등록 상담/확정 버튼을 연결한다.
+         */
         function bindCanvas() {
             var dropzone = byId("dropzone");
             var fileInput = byId("file-input");
@@ -137,8 +149,7 @@
             dropzone.addEventListener("drop", function (event) { chooseRegistrationFiles(event.dataTransfer.files); });
             fileInput.addEventListener("change", function () { chooseRegistrationFiles(fileInput.files); fileInput.value = ""; });
             byId("registration-unit").addEventListener("change", function () {
-                if (byId("registration-unit").value === "package" && state.files.length) { activateRegistrationFile(0); return; }
-                renderFileQueue();
+                if (state.files.length) { activateRegistrationFile(byId("registration-unit").value === "package" ? 0 : state.activeFileIndex); }
             });
             ["asset-type", "asset-title", "asset-description", "asset-tags", "min-price", "target-price", "asset-share"].forEach(function (id) {
                 byId(id).addEventListener("input", captureActiveFields);
@@ -157,6 +168,9 @@
             canvas.querySelector("#file-input").focus();
         }
         function closeCanvas() { canvas.hidden = true; document.body.classList.remove("is-registration-canvas-open"); }
+        /**
+         * 선택/드롭된 파일 목록을 상태에 저장하고 첫 파일을 활성 파일로 세팅한 뒤 큐를 렌더링한다.
+         */
         function chooseRegistrationFiles(files) {
             var selected = Array.from(files || []);
             if (!selected.length) { return; }
@@ -168,10 +182,16 @@
             chooseRegistrationFile(selected[0]);
         }
         function activeFileProfile() { return state.fileProfiles[state.activeFileIndex] || null; }
+        /**
+         * 현재 활성 파일 프로필에 현재 입력 필드 값을 스냅샷으로 저장한다(파일 전환 시 손실 방지).
+         */
         function captureActiveFields() {
             var profile = activeFileProfile();
             if (profile) { profile.fields = fields(); }
         }
+        /**
+         * 활성 파일의 저장된 입력값을 폼에 복원한다. 저장값이 없으면 파일명에서 제목을 유추해 채운다.
+         */
         function restoreActiveFields(file) {
             var saved = (activeFileProfile() || {}).fields || {};
             byId("asset-type").value = saved.asset_type || "image";
@@ -182,6 +202,9 @@
             byId("target-price").value = saved.target_price || "3.00";
             byId("asset-share").checked = saved.visibility === "public";
         }
+        /**
+         * 지정 인덱스의 파일을 활성 파일로 전환한다. 현재 입력값을 캡처하고, 패키지 모드면 항상 0번으로 강제한다.
+         */
         function activateRegistrationFile(index) {
             captureActiveFields();
             if (byId("registration-unit").value === "package") { index = 0; }
@@ -191,14 +214,20 @@
             renderFileQueue();
             chooseRegistrationFile(file);
         }
+        /**
+         * 단일 파일을 선택해 드롭존에 표시하고 해시를 계산한 뒤 서버 초안(saveDraft)을 갱신한다.
+         */
         function chooseRegistrationFile(file) {
             if (!file) { return; }
             state.file = file;
             var dropzone = byId("dropzone");
             dropzone.classList.add("has-file");
-            dropzone.querySelector(".dropzone__hint").textContent = file.name;
-            hashFile(file).then(function (digest) { saveDraft(digest); }).catch(function () { renderDraftError(t("workspace.status.file_prepare")); });
+            dropzone.querySelector(".dropzone__hint").textContent = registrationFiles().length > 1 ? t("workspace.canvas.images_selected", { n: registrationFiles().length }) : file.name;
+            hashFiles(registrationFiles()).then(function (digest) { saveDraft(digest); }).catch(function () { renderDraftError(t("workspace.status.file_prepare")); });
         }
+        /**
+         * 선택된 파일 목록을 큐 UI로 렌더링하고 활성 파일을 표시한다.
+         */
         function renderFileQueue() {
             var queue = byId("registration-file-queue");
             queue.replaceChildren();
@@ -214,8 +243,17 @@
                 item.appendChild(button); queue.appendChild(item);
             });
         }
+        /**
+         * 현재 등록 폼의 모든 입력값을 객체로 수집해 반환한다(자산 유형/제목/설명/태그/가격/공개여부).
+         */
         function fields() {
             return { asset_type: byId("asset-type").value, title: byId("asset-title").value.trim(), description: byId("asset-description").value.trim(), tags: byId("asset-tags").value.trim(), min_price: byId("min-price").value, target_price: byId("target-price").value, visibility: byId("asset-share").checked ? "public" : "private" };
+        }
+        function registrationFiles() {
+            if (byId("registration-unit").value === "package" && byId("asset-type").value === "image") {
+                return state.files;
+            }
+            return state.file ? [state.file] : [];
         }
         function saveDraft(digest) {
             // 계정 설정 전에는 파일과 입력값을 현재 캔버스에만 보존한다.
@@ -229,12 +267,16 @@
                 renderDraftMessage(t("workspace.status.draft_saved"));
             });
         }
+        /**
+         * 등록 확정 흐름을 실행한다. 파일 해시 계산 → 초안 저장 → 확정 토큰 발급 →
+         * 파일 업로드(uploadConfirmed) 순으로 진행하며 각 단계 실패를 에러로 표시한다.
+         */
         function confirmAndRegister() {
             if (!state.file) { return renderDraftError(t("workspace.status.choose_first")); }
             if (!wallet()) { return setStatus(t("workspace.status.wallet_register"), true); }
             captureActiveFields();
             var profile = activeFileProfile();
-            hashFile(state.file).then(function (digest) {
+            hashFiles(registrationFiles()).then(function (digest) {
                 request("/api/v1/assistant/registration-drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet(), draft_id: profile.draft && profile.draft.draft_id, file_name: state.file.name, file_sha256: digest, fields: fields() }) }).then(function (saved) {
                     if (!saved.ok) { return renderDraftError(saved.body.detail || t("workspace.status.draft_update_failed")); }
                     profile.draft = saved.body;
@@ -245,6 +287,9 @@
                 });
             });
         }
+        /**
+         * 확정 토큰과 함께 파일을 등록 엔드포인트로 업로드한다. 패키지 모드면 나머지 파일을 지원 파일로 첨부한다.
+         */
         function uploadConfirmed(token, draftId) {
             var data = new FormData();
             data.append("image", state.file);
@@ -255,7 +300,9 @@
             data.append("draft_id", draftId);
             data.append("confirmation_token", token);
             if (byId("registration-unit").value === "package") {
-                state.files.filter(function (file) { return file !== state.file; }).forEach(function (file) { data.append("supporting_files", file); });
+                state.files.filter(function (file) { return file !== state.file; }).forEach(function (file) {
+                    data.append(fields().asset_type === "image" ? "gallery_images" : "supporting_files", file);
+                });
             }
             renderDraftMessage(t("workspace.status.confirming"));
             request(shell.dataset.registerUrl, { method: "POST", body: data }).then(function (result) {
@@ -264,6 +311,9 @@
                 if (VP.refreshSummary) { VP.refreshSummary(); }
             });
         }
+        /**
+         * 현재 등록 초안 내용을 채팅 메시지로 꾸려 AI 등록 상담을 요청한다(sendConversation에 위임).
+         */
         function requestRegistrationFeedback() {
             if (!state.file) { return renderDraftError(t("workspace.status.choose_first")); }
             captureActiveFields();
@@ -279,6 +329,10 @@
                 visibility: registrationFields.visibility === "public" ? "yes" : "no"
             }));
         }
+        /**
+         * 사용자 메시지를 /api/v1/assistant/chat 로 전송한다. 타이핑 표시 후 응답을 화면에 추가하고,
+         * 대화 ID를 갱신하며 첨부를 초기화한다. 실패 시 네트워크 에러를 상태로 표시한다.
+         */
         function sendConversation(text) {
             clearEmpty(); appendMessage("user", text);
             var typing = appendTyping(); setStatus(t("workspace.status.thinking"));
@@ -289,17 +343,26 @@
                 window.dispatchEvent(new CustomEvent("vp:history-changed"));
             }).catch(function () { typing.remove(); setStatus(t("workspace.status.network"), true); });
         }
+        /**
+         * /api/v1/assistant/history 에서 현재 지갑(및 선택된 대화)의 메시지 이력을 불러와 화면에 다시 그린다.
+         */
         function loadHistory() {
             if (!wallet()) { return; }
             var url = "/api/v1/assistant/history?creator=" + encodeURIComponent(wallet());
             if (state.conversationId) { url += "&conversation=" + encodeURIComponent(state.conversationId); }
             request(url).then(function (result) { if (!result.ok) { return; } messages.replaceChildren(); if (!result.body.items.length) { appendEmpty(); } else { result.body.items.forEach(function (item) { appendMessage(item.role, item.content); }); } });
         }
+        /**
+         * 현재 대화를 초기화한다. 메시지/첨부를 비우고 URL에서 conversation 파라미터를 제거한 뒤 빈 상태를 표시한다.
+         */
         function resetConversation() {
             messages.replaceChildren(); state.attachments = []; renderComposerAttachments(); state.conversationId = null;
             var url = new URL(window.location.href); url.searchParams.delete("conversation"); window.history.replaceState({}, "", url);
             appendEmpty(); setStatus(""); input.focus();
         }
+        /**
+         * 대화 첨부 파일을 /api/v1/assistant/attachments 로 업로드한다. 이미지는 로컬 blob 미리보기를 덧붙인다.
+         */
         function uploadConversationFile(file) {
             if (!wallet()) { return setStatus(t("workspace.status.wallet_first"), true); }
             var data = new FormData();
@@ -324,6 +387,9 @@
             image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>',
             file: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>'
         };
+        /**
+         * MIME 타입과 확장자로 첨부의 종류(image/audio/video/archive/doc/file)를 판별한다.
+         */
         function attachmentKind(mime, fileName) {
             mime = String(mime || "").toLowerCase();
             var ext = (String(fileName || "").split(".").pop() || "").toLowerCase();
@@ -334,6 +400,9 @@
             if (mime === "application/pdf" || mime.indexOf("text/") === 0 || mime.indexOf("word") !== -1 || mime.indexOf("document") !== -1 || ["pdf", "txt", "md", "doc", "docx", "rtf", "odt", "ppt", "pptx", "xls", "xlsx", "csv"].indexOf(ext) !== -1) { return "doc"; }
             return "file";
         }
+        /**
+         * 파일명에서 확장자(최대 4자, 대문자) 라벨을 추출한다. 확장자가 없으면 빈 문자열.
+         */
         function attachmentExtLabel(fileName) {
             var s = String(fileName || "");
             var dot = s.lastIndexOf(".");
@@ -383,6 +452,17 @@
         function renderDraftError(text) { var item = document.createElement("li"); item.className = "analysis-card vp-registration-error"; item.textContent = text; byId("analysis-feed").replaceChildren(item); }
         function setStatus(text, error) { var target = byId("assistant-status"); target.textContent = text || ""; target.classList.toggle("is-error", Boolean(error)); }
     }
+    /**
+     * 파일을 SHA-256 해시(16진수 문자열)로 변환한다. crypto.subtle.digest를 사용한다.
+     */
     function hashFile(file) { return file.arrayBuffer().then(function (bytes) { return crypto.subtle.digest("SHA-256", bytes); }).then(function (digest) { return Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, "0"); }).join(""); }); }
+    function hashFiles(files) {
+        return Promise.all(Array.from(files || []).map(hashFile)).then(function (hashes) {
+            if (hashes.length === 1) { return hashes[0]; }
+            return crypto.subtle.digest("SHA-256", new TextEncoder().encode(hashes.join("\n"))).then(function (digest) {
+                return Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, "0"); }).join("");
+            });
+        });
+    }
     if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", init); } else { init(); }
 }());

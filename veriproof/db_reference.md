@@ -1,5 +1,20 @@
 # VeriProof AI DB 변경 이력
 
+## 2026-07-24 — 계정 단위 라이브러리 소유권 (migration `ip.0015`)
+
+- `IpAsset.account_owner` (nullable FK to Django user, `SET_NULL`): 작품을 등록·관리하는
+  로그인 계정이다. `creator`의 Solana 지갑과 역할을 분리해 한 계정이 여러 지갑으로
+  등록한 모든 작품을 하나의 비공개 라이브러리에서 조회할 수 있다.
+- 영향 범위: `/library`와 작품 조건 수정은 URL·요청 본문의 지갑값이 아니라 현재
+  로그인 계정의 `account_owner`만 사용한다. 카드에는 각 작품의 `creator_wallet`을
+  계속 표시한다. 신규 등록은 인증된 계정을 필수로 하며 해당 계정을 소유자로 저장한다.
+- 운영 데이터 보완: `seed_demo_catalog` 재실행은 기존 데모 작품을 로컬 관리자 계정에
+  연결한다. 현재 로컬 DB에서 관리자 소유 작품 15건으로 확인했다.
+- 검증: Django migration 적용, 계정/URL 지갑 격리·익명 라이브러리 거부·등록 경로
+  통합 테스트를 실행했다.
+- Alembic 필요 여부: 불필요. Django migration
+  `apps/ip/migrations/0015_ipasset_account_owner.py`를 적용한다.
+
 ## 2026-07-24 — 다중 지갑 수령 구성 (migration `accounts.0003`)
 
 - `WalletConfiguration`: 계정이 보관하는 공개 Solana 주소, 표시 이름, 입금 수령 여부,
@@ -95,6 +110,23 @@ separate so a chat transcript cannot silently become an agent instruction.
 - 검증: Django migration drift 검사, 공개/비공개 카탈로그 통합 테스트, 전체 pytest 실행.
 - 마이그레이션: Django migration `apps/ip/migrations/0002_public_catalog_and_assistant.py` 필요. Alembic은 이 Django 프로젝트에 적용하지 않는다.
 # Database change log
+
+## 2026-07-24 — 작품 다중 이미지 갤러리 (migration `ip.0016`)
+
+- `AssetImage.asset_id` (FK to `IpAsset`, cascade): 추가 이미지는 독립 작품이 아니라 부모
+  작품의 구성 이미지다. 따라서 등록 인증서·결제·라이선스는 계속 부모 `IpAsset` 하나에만
+  연결된다.
+- `position`, `file_name`, `content_mime_type`, `content_sha256`: 작품 내 이미지 순서와
+  검증 가능한 원본 지문을 보존한다. `IpAsset.image_sha256`는 첫 이미지와 추가 이미지의
+  순서 있는 SHA-256 목록을 다시 해시한 작품 매니페스트 값으로 앵커링된다.
+- `watermark_url`, `original_url`: 보호 미리보기와 만료 전 원본 보관 위치다. 공개 응답은
+  애플리케이션 권한 경계의 워터마크 preview URL만 제공하며, 원본 위치는 제공하지 않는다.
+- 영향 범위: 공개 상세는 모든 보호 미리보기를 썸네일 갤러리로 노출하고, 하나의 라이선스
+  다운로드 토큰은 작품의 모든 구성 이미지를 전달한다. `MAX_WORK_IMAGES` 운영 설정(기본 10)은
+  한 작품에 허용하는 전체 이미지 수를 제한한다.
+- 검증: 다중 이미지 등록, 단일 앵커/등록 인증서, 공개 상세 갤러리, 라이선스 다운로드 및
+  기존 단일 이미지 회귀 테스트를 실행한다.
+- Alembic 필요 여부: 불필요. 이 Django 프로젝트는 `apps/ip/migrations/0016_asset_image.py`를 적용한다.
 
 ## 2026-07-24 — 대화형 등록 초안 (migration `ip.0007`)
 

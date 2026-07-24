@@ -8,8 +8,7 @@ Covers the SPEC-003 §5 unit TDD list for GeminiService.negotiate:
 
 The real ``google-genai`` SDK is NOT installed; these tests inject a stub
 client mirroring ``client.models.generate_content(model, contents, config)``
-so the service is exercised without network, exactly like the SPEC-001
-analyze_image unit tests.
+so the service is exercised without network, like the asset-analysis tests.
 """
 from __future__ import annotations
 

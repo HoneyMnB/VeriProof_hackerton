@@ -211,6 +211,7 @@ GCS_BUCKET = os.environ.get("GCS_BUCKET", "")
 
 # --- App-level tunable constants (env override per architecture 1.4) ---------
 MAX_UPLOAD_BYTES = int(os.environ.get("MAX_UPLOAD_BYTES", "10485760"))  # 10 MB
+MAX_WORK_IMAGES = int(os.environ.get("MAX_WORK_IMAGES", "10"))
 MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "5"))
 MICRO_FLOOR_USDC = os.environ.get("MICRO_FLOOR_USDC", "0.05")  # Decimal string
 BATCH_MAX_ITEMS = int(os.environ.get("BATCH_MAX_ITEMS", "200"))

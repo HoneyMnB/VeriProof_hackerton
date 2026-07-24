@@ -6,6 +6,7 @@ from .models import NegotiationSession
 
 @admin.register(NegotiationSession)
 class NegotiationSessionAdmin(admin.ModelAdmin):
+    """협상 세션(NegotiationSession)의 관리자 목록·필터·검색 설정이다."""
     list_display = (
         "id",
         "asset",

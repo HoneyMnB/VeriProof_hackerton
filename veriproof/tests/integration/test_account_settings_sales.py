@@ -19,6 +19,11 @@ def test_settings_modal_contains_sales_overview_and_sidebar_has_no_dashboard(cli
     assert 'data-settings-tab="sales"' in content
     assert 'id="settings-sales-metrics"' in content
     assert 'id="settings-sales-list"' in content
+    assert 'id="settings-sales-filters"' in content
+    assert 'id="settings-sales-wallet-select"' in content
+    assert 'id="settings-sales-detail"' not in content
+    assert 'id="settings-sales-work-pagination"' in content
+    assert 'class="vp-modal-close"' in content
     assert 'id="history-search"' in content
     assert 'href="/dashboard"' not in content
 

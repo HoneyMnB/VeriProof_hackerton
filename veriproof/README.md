@@ -3,6 +3,23 @@
 VeriProof is a creator-rights assistant and agent-accessible licensing service.
 The local app runs without Docker at `http://127.0.0.1:55000`.
 
+## 개발자 인수인계 문서와 현재 DB 덤프
+
+코드 기준 인수인계 문서는 [docs/docs_develop_v01.md](../docs/docs_develop_v01.md)입니다. 현재 아키텍처, 요청·데이터 흐름, 서비스, API, DB 스키마, migration, 외부 의존성, 검증 결과와 운영 경계를 정리했습니다. Solana 연결, a2a/x402/AP2 계약, 목업의 실제 동작과 운영 전환 시 제한도 별도 장에서 확인할 수 있습니다.
+
+저장소 루트의 `veriproof_current_db_django_fixture_2026-07-24.json`은 현재 로컬 SQLite DB에서 추출한 252건의 Django fixture입니다. **PostgreSQL에서 migration으로 스키마를 만든 후** 복원해야 합니다. 인증·세션·애플리케이션 데이터가 포함되므로 민감 정보로 취급하십시오.
+
+```bash
+# 대상 PostgreSQL 연결을 설정하고 스키마 생성 후 fixture를 적재한다.
+export DATABASE_URL='postgres://USER:PASSWORD@HOST:5432/veriproof'
+cd veriproof
+python manage.py migrate --noinput
+python manage.py loaddata ../veriproof_current_db_django_fixture_2026-07-24.json
+python manage.py check
+```
+
+이 파일은 portable Django 데이터 덤프이며 native `pg_dump` archive가 아닙니다. 점검한 실행 환경은 SQLite를 사용했고 PostgreSQL client binary/접속 설정이 없었습니다. 레코드 구성, 검증 결과, 안전한 취급 방법은 인수인계 문서를 확인하십시오.
+
 ## Start and stop
 
 ```bash

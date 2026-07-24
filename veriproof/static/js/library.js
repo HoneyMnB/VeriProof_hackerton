@@ -22,6 +22,9 @@
     var POLL_INTERVAL_MS = 2000;
     var config = readConfig();
 
+    /**
+     * 페이지에 삽입된 #library-config JSON 설정을 읽어온다. 파싱 실패 시 오프라인 기본값을 반환한다.
+     */
     function readConfig() {
         var node = document.getElementById("library-config");
         if (node) {
@@ -30,11 +33,11 @@
         return { firestore_enabled: false, events_url: "/api/v1/events", assets_api_url: "/api/v1/assets" };
     }
 
+    /**
+     * 라이브러리 페이지를 초기화한다. 미리보기 토글·인증서 모달·자산 설정 모달·
+     * 거래 타임라인·판매 조건 저장·실시간 상태 갱신을 순서대로 바인딩한다.
+     */
     function init() {
-        autoResolveWallet();
-        // UX-001: when the wallet is changed from the shared sidebar, reload so
-        // the server re-renders that creator's assets.
-        window.addEventListener("vp:wallet-changed", function () { window.location.reload(); });
         wirePreviewToggle();
         wireCertificateModal();
         wireAssetSettingsModal();
@@ -43,14 +46,16 @@
         wireLiveUpdates();
     }
 
+    /**
+     * 자산 설정 폼 제출을 바인딩한다. 서버로 판매 조건(title/description/tags/가격/공개여부)을
+     * 저장하고, 성공 시 카드의 가격·공개여부·제목 등을 새로고침 없이 갱신한다.
+     */
     function wireAssetTerms() {
         document.querySelectorAll("#asset-settings-form").forEach(function (form) {
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
-                var wallet = VP.getWallet ? VP.getWallet() : "";
                 var status = form.querySelector(".asset-card__terms-status");
-                if (!wallet) { status.textContent = t("library.terms.wallet_needed"); return; }
-                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet, min_price_usdc: form.elements.min_price_usdc.value, target_price_usdc: form.elements.target_price_usdc.value, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
+                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.elements.title.value, description: form.elements.description.value, tags: parseTags(form.elements.tags.value), min_price_usdc: form.elements.min_price_usdc.value, target_price_usdc: form.elements.target_price_usdc.value, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
                     status.textContent = result.ok ? t("library.terms.saved") : (result.body.detail || t("library.terms.failed"));
                     if (!result.ok) { return; }
                     // 저장 직후 그리드의 핵심 정보도 갱신하여 새로고침 전의 불일치를 막는다.
@@ -59,6 +64,9 @@
                     card.dataset.minPrice = form.elements.min_price_usdc.value;
                     card.dataset.targetPrice = form.elements.target_price_usdc.value;
                     card.dataset.visibility = form.elements.visibility.value;
+                    updateManageData(card, result.body);
+                    var title = card.querySelector("h3");
+                    if (title) { title.textContent = result.body.title || ""; }
                     var price = card.querySelector(".asset-card__price strong");
                     if (price) { price.textContent = form.elements.min_price_usdc.value + " USDC"; }
                 }).catch(function () { status.textContent = t("library.terms.network"); });
@@ -74,10 +82,12 @@
         var lastTrigger = null;
         function close() {
             modal.hidden = true;
+            document.body.style.overflow = "";
             if (lastTrigger) { lastTrigger.focus(); lastTrigger = null; }
         }
-        modal.querySelectorAll("[data-asset-settings-close]").forEach(function (element) {
-            element.addEventListener("click", close);
+        modal.addEventListener("click", function (event) {
+            var target = event.target && event.target.closest ? event.target.closest("[data-asset-settings-close]") : null;
+            if (target) { event.preventDefault(); close(); }
         });
         document.addEventListener("keydown", function (event) {
             if (event.key === "Escape" && !modal.hidden) { close(); }
@@ -91,27 +101,61 @@
                 form.elements.min_price_usdc.value = card.dataset.minPrice;
                 form.elements.target_price_usdc.value = card.dataset.targetPrice;
                 form.elements.visibility.value = card.dataset.visibility;
-                document.getElementById("asset-settings-name").textContent = card.querySelector("h3").textContent;
+                var data = manageData(card);
+                form.elements.title.value = data.title || "";
+                form.elements.description.value = data.description || "";
+                form.elements.tags.value = (data.tags || []).join(", ");
+                document.getElementById("asset-settings-name").textContent = data.title || card.querySelector("h3").textContent;
+                renderRegistration(data);
+                renderSales(data.sales_summary || {}, data.sales || []);
                 var explorer = document.getElementById("asset-settings-explorer");
                 explorer.hidden = !card.dataset.explorerUrl;
                 explorer.href = card.dataset.explorerUrl || "#";
                 modal.hidden = false;
+                document.body.style.overflow = "hidden";
                 form.elements.min_price_usdc.focus();
             });
         });
     }
 
-    // 계정 설정 지갑은 공유 셸의 단일 접근점에서 읽는다. 과거 localStorage 값은
-    // 신뢰하지 않아 다른 브라우저 사용자 자산을 잘못 표시하지 않는다.
-    function autoResolveWallet() {
-        var state = document.getElementById("library-state");
-        var current = state && state.getAttribute("data-wallet");
-        if (current) { return; }
-        var saved = VP.getWallet ? VP.getWallet() : "";
-        if (!saved) { return; }
-        var url = new URL(window.location.href);
-        url.searchParams.set("creator", saved);
-        window.location.replace(url.toString());
+    /**
+     * 카드의 data-manage JSON에서 등록 메타데이터를 읽어온다. 파싱 실패 시 빈 객체.
+     */
+    function manageData(card) {
+        try { return JSON.parse(card.dataset.manage || "{}"); } catch (e) { return {}; }
+    }
+    /**
+     * 카드의 data-manage에서 title/description/tags만 부분 갱신하여 다시 직렬화한다.
+     */
+    function updateManageData(card, values) {
+        var data = manageData(card);
+        ["title", "description", "tags"].forEach(function (key) { data[key] = values[key]; });
+        card.dataset.manage = JSON.stringify(data);
+    }
+    /**
+     * 쉼표로 구분된 태그 문자열을 trim·빈 값 제거한 태그 배열로 변환한다.
+     */
+    function parseTags(value) {
+        return value.split(",").map(function (tag) { return tag.trim(); }).filter(Boolean);
+    }
+    /**
+     * 자산 설정 모달에 등록 정보(유형/카테고리/등록시각/지문)를 필드 행으로 채운다.
+     */
+    function renderRegistration(data) {
+        var box = document.getElementById("asset-settings-registration");
+        if (!box) { return; }
+        box.innerHTML = fieldRow(t("library.terms.type"), data.asset_type) + fieldRow(t("library.terms.category"), data.category) + fieldRow(t("library.terms.registered_at"), formatTs(data.created_at)) + fieldRow(t("library.terms.fingerprint"), data.image_sha256);
+    }
+    /**
+     * 자산 설정 모달에 판매 요약(건수/총액)과 판매 내역 리스트를 렌더링한다.
+     */
+    function renderSales(summary, sales) {
+        var summaryBox = document.getElementById("asset-settings-sales-summary");
+        var list = document.getElementById("asset-settings-sales-list");
+        if (summaryBox) { summaryBox.innerHTML = '<span><strong>' + escapeHtml(summary.sale_count || 0) + '</strong>' + escapeHtml(t("library.sales.count")) + '</span><span class="asset-settings-modal__sales-summary--gross"><strong>' + escapeHtml(summary.gross_usdc || "0") + ' USDC</strong>' + escapeHtml(t("library.sales.gross")) + '</span>'; }
+        if (!list) { return; }
+        if (!sales.length) { list.innerHTML = "<li>" + escapeHtml(t("library.sales.empty")) + "</li>"; return; }
+        list.innerHTML = sales.map(function (sale) { return "<li><div><strong>" + escapeHtml(sale.price_usdc) + " USDC</strong><span>" + escapeHtml(sale.usage_type) + " · " + escapeHtml(shortWallet(sale.buyer_wallet)) + "</span></div><time>" + escapeHtml(formatTs(sale.granted_at)) + "</time></li>"; }).join("");
     }
 
     // --- R6 / AC-5: preview toggle -----------------------------------------
@@ -142,8 +186,9 @@
         var fieldsBox = document.getElementById("certificate-fields");
         if (!modal) { return; }
 
-        modal.addEventListener("click", function (e) {
-            if (e.target && e.target.hasAttribute("data-modal-close")) { hideModal(); }
+        modal.addEventListener("click", function (event) {
+            var closeControl = event.target && event.target.closest ? event.target.closest("[data-modal-close]") : null;
+            if (closeControl) { event.preventDefault(); hideModal(); }
         });
         document.addEventListener("keydown", function (e) {
             if (e.key === "Escape") { hideModal(); }
@@ -161,7 +206,7 @@
                 };
                 var certTx = btn.getAttribute("data-certificate-tx-sig") || null;
                 var payload = VP.buildCertificatePayload(asset, certTx);
-                showModal(payload);
+                showModal(payload, btn.getAttribute("data-work-title"), btn.getAttribute("data-registered-at"));
             });
         });
 
@@ -177,15 +222,26 @@
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
-        function showModal(payload) {
+        /**
+         * 인증서 모달을 연다. QR과 증명 필드를 채우고 포커스 트랩을 걸며 닫기 버튼으로 포커스를 옮긴다.
+         */
+        function showModal(payload, workTitle, registeredAt) {
             lastTrigger = document.activeElement;
             if (qrBox) { VP.renderQr(qrBox, payload); }
             if (fieldsBox) {
                 fieldsBox.innerHTML = fieldRow(t("library.field.asset_id"), payload.asset_id) +
+                    fieldRow(t("library.field.fingerprint"), payload.image_sha256) +
                     fieldRow(t("library.field.anchor_tx_sig"), payload.anchor_tx_sig) +
                     fieldRow(t("library.field.certificate_tx_sig"), payload.certificate_tx_sig) +
                     fieldRow(t("library.field.creator_wallet"), payload.creator_wallet) +
                     fieldRow(t("library.field.explorer_url"), payload.explorer_url);
+            }
+            document.getElementById("certificate-work-title").textContent = workTitle || payload.asset_id;
+            document.getElementById("certificate-registered-at").textContent = formatTs(registeredAt);
+            var download = document.getElementById("certificate-download");
+            if (download) {
+                download.hidden = !payload.certificate_tx_sig;
+                download.href = "/library/" + encodeURIComponent(payload.asset_id) + "/certificate.pdf";
             }
             modal.hidden = false;
             document.body.style.overflow = "hidden";
@@ -197,6 +253,9 @@
             var closeBtn = modal.querySelector("button[data-modal-close]");
             if (closeBtn) { closeBtn.focus(); } else { modal.setAttribute("tabindex", "-1"); modal.focus(); }
         }
+        /**
+         * 인증서 모달을 닫고 포커스 트랩을 해제하며 이전 트리거로 포커스를 되돌린다.
+         */
         function hideModal() {
             modal.hidden = true;
             document.body.style.overflow = "";
@@ -205,6 +264,9 @@
         }
     }
 
+    /**
+     * <dt><dd> 필드 행 HTML을 생성한다. 값이 null/빈 문자열이면 "—"로 대체하고 값은 HTML 이스케이프한다.
+     */
     function fieldRow(label, value) {
         var v = value == null || value === "" ? "—" : String(value);
         return "<dt>" + label + "</dt><dd>" + escapeHtml(v) + "</dd>";
@@ -233,6 +295,9 @@
         });
     }
 
+    /**
+     * 거래 타임라인에 이벤트/라이선스 항목을 렌더링한다. 비어 있으면 빈 상태 문구를 표시한다.
+     */
     function renderTimeline(timeline, items) {
         timeline.dataset.loaded = "1";
         if (!items.length) {
@@ -304,6 +369,9 @@
         });
     }
 
+    /**
+     * 등록된 모든 폴링 타이머를 정지한다.
+     */
     function stopPolling() {
         pollTimers.forEach(function (t) { clearInterval(t); });
         pollTimers = [];
@@ -323,6 +391,9 @@
         }
     }
 
+    /**
+     * Firestore 상태 문서를 해당 자산 카드의 상태 배지에 반영한다.
+     */
     function applyStatus(assetId, data) {
         var card = document.getElementById("asset-" + assetId);
         var badge = card && card.querySelector(".asset-card__status");
@@ -331,11 +402,17 @@
 
     // --- utils --------------------------------------------------------------
 
+    /**
+     * 타임스탬프를 로케일에 맞는 문자열로 변환한다. 잘못된 값은 원본을 그대로 반환한다.
+     */
     function formatTs(ts) {
         if (!ts) { return ""; }
         try { return new Date(ts).toLocaleString(); } catch (e) { return ts; }
     }
     function shortWallet(w) { return w ? w.slice(0, 6) + "…" + w.slice(-4) : "—"; }
+    /**
+     * 문자열을 HTML에 안전하게 이스케이프한다.
+     */
     function escapeHtml(s) {
         return String(s == null ? "" : s)
             .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")

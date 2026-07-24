@@ -56,7 +56,7 @@ def test_send_stores_attachment_without_llm_analysis(png_bytes):
         VALID_WALLET, "Here is my file.", [str(attachment.id)]
     )
     assert double.attachment_calls == 0
-    assert not any(call[0] in ("analyze_image", "analyze_asset") for call in gemini.calls)
+    assert not any(call[0] == "analyze_asset" for call in gemini.calls)
     attachment.refresh_from_db()
     assert attachment.analysis == {}
 

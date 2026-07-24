@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -78,6 +79,15 @@ class IpAsset(UUIDPrimaryKey):
         Creator,
         on_delete=models.PROTECT,
         related_name="assets",
+    )
+    # 작품의 계정 소유자와 창작자 지갑을 분리한다. 한 계정은 여러 지갑의
+    # 작품을 한 라이브러리에서 관리하고, 지갑은 작품별 증명·정산 정보로 남긴다.
+    account_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="library_assets",
     )
     title = models.CharField(max_length=120, null=True, blank=True)
     description = models.TextField(null=True, blank=True)
@@ -158,6 +168,7 @@ class IpAsset(UUIDPrimaryKey):
     # --- Validation invariant (architecture 5.1 S3 constraint) --------------
     # If a parent_asset is set, royalty_share_bps MUST be in 1..10000.
     def clean(self):
+        """파생 작품의 로열티 분담률(1..10000 bps) 불변식을 검증한다."""
         super().clean()
         if self.parent_asset_id is not None:
             if (
@@ -174,6 +185,7 @@ class IpAsset(UUIDPrimaryKey):
                 )
 
     def save(self, *args, **kwargs):
+        """저장 직전 로열티 불변식을 강제 적용하고 부모 저장에 위임한다."""
         # Enforce the S3 invariant on every save (not just full_clean) so the
         # contract holds even when callers bypass form validation.
         if self.parent_asset_id is not None:
@@ -209,6 +221,30 @@ class AssetComponent(UUIDPrimaryKey):
     content_sha256 = models.CharField(max_length=64, db_index=True)
     storage_url = models.CharField(max_length=500)
     created_at = models.DateTimeField(auto_now_add=True)
+
+
+class AssetImage(UUIDPrimaryKey):
+    """한 작품에 속한 추가 이미지와 공개용 보호 미리보기 정보.
+
+    첫 번째 이미지는 기존 ``IpAsset``의 미리보기/원본 필드를 계속 사용해 기존
+    카탈로그와 라이브러리 계약을 보존한다. 이 모델은 같은 작품에 추가된 이미지에만
+    사용되며, 독립적인 인증서·라이선스 대상이 아니다.
+    """
+
+    asset = models.ForeignKey(IpAsset, on_delete=models.CASCADE, related_name="gallery_images")
+    position = models.PositiveIntegerField()
+    file_name = models.CharField(max_length=255)
+    content_mime_type = models.CharField(max_length=100)
+    content_sha256 = models.CharField(max_length=64, db_index=True)
+    watermark_url = models.CharField(max_length=500)
+    original_url = models.CharField(max_length=500)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["position"]
+        constraints = [
+            models.UniqueConstraint(fields=["asset", "position"], name="ip_assetimage_unique_position"),
+        ]
 
 
 class AssistantMessage(models.Model):

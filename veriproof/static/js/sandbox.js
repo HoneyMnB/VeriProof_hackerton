@@ -1,10 +1,9 @@
 /*!
  * VeriProof AI — SPEC-006 sandbox live stream (vanilla JS).
  *
- * Mirror 1:1 of the Python SSOT in ``apps/sandbox/dashboard.py``. Kept in sync
- * so the offline pytest suite (tests/unit/test_sandbox_dashboard.py) verifies
- * the data contracts this file consumes. Extends the ``window.VP`` namespace
- * from dashboard.js (SPEC-005) with sandbox-specific helpers.
+ * Browser-side event-to-pane routing. This is the only runtime implementation;
+ * a duplicate Python mirror would not exercise the browser code. Extends the
+ * ``window.VP`` namespace from dashboard.js (SPEC-005) with sandbox helpers.
  *
  * Coverage:
  * - R4/R5/R6: eventPane(type) -> "seller" | "buyer" | "inspector"
@@ -31,6 +30,12 @@
     var BUYER_TYPES = { OFFER: 1, ACCEPT: 1 };
     var SELLER_TYPES = { COUNTER: 1 };
 
+    /**
+     * 이벤트 타입을 스트림 pane(seller/buyer/inspector)으로 라우팅한다.
+     * 알 수 없는 타입은 inspector로 보내 표시를 유지한다(R4/R5/R6).
+     * @param {string} type - 이벤트 타입.
+     * @returns {string} - "seller" | "buyer" | "inspector".
+     */
     function eventPane(type) {
         if (INSPECTOR_TYPES[type]) { return PANE_INSPECTOR; }
         if (BUYER_TYPES[type]) { return PANE_BUYER; }
@@ -38,6 +43,9 @@
         return PANE_INSPECTOR; // unknown -> inspector (stay visible)
     }
 
+    /**
+     * 이벤트 목록에서 inspector pane에 해당하는 이벤트만 순서대로 추출한다.
+     */
     function inspectorEvents(events) {
         var out = [];
         for (var i = 0; i < events.length; i++) {
@@ -71,6 +79,10 @@
         return VP.explorerUrl ? VP.explorerUrl(sig) : null;
     }
 
+    /**
+     * 단일 이벤트를 해당 pane의 스트림 리스트에 렌더링한다.
+     * inspector 이벤트는 tx 시그니처·상태·Explorer 링크·소요시간·수수료를 함께 표시한다(R6/R8).
+     */
     function renderEvent(ev) {
         var pane = eventPane(ev.type);
         var list = document.querySelector('.stream[data-pane="' + pane + '"]');
@@ -108,6 +120,9 @@
     var pollTimer = null;
     var lastSince = null;
 
+    /**
+     * 모든 pane의 스트림 리스트 내용을 비운다.
+     */
     function clearStream() {
         var lists = document.querySelectorAll(".stream");
         for (var i = 0; i < lists.length; i++) { lists[i].innerHTML = ""; }
@@ -126,6 +141,9 @@
         }, 2000);
     }
 
+    /**
+     * 폴링 타이머를 멈추고 해제한다.
+     */
     function stopPolling() {
         if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     }
@@ -136,6 +154,10 @@
         if (document.hidden) { stopPolling(); }
     });
 
+    /**
+     * 폴링으로 가져온 이벤트 아이템을 순회하며 렌더링하고 lastSince를 전진시킨다.
+     * SIMULATION_FAILED 도달 시 더 이상의 폴링을 중단한다.
+     */
     function ingestItems(items) {
         if (!items || !items.length) { return; }
         for (var i = 0; i < items.length; i++) {
@@ -182,6 +204,9 @@
 
     // --- Trigger (R1: "시뮬레이션 시작") -----------------------------------
 
+    /**
+     * 샌드박스 상태 표시 요소의 텍스트와 상태 클래스를 갱신한다.
+     */
     function setStatus(msg, cls) {
         var s = document.getElementById("sandbox-status");
         if (!s) { return; }
@@ -189,6 +214,10 @@
         s.className = "sandbox-status" + (cls ? " " + cls : "");
     }
 
+    /**
+     * 샌드박스 폼을 초기화한다. ?asset= 으로 자산 ID를 사전 채우기한 뒤, 제출 시 스트림을
+     * 리셋하고 /api/v1/sandbox/run 을 호출한다. 완료 후 Firestore 구독 또는 폴링으로 실시간 이벤트를 수신한다.
+     */
     function init() {
         var form = document.getElementById("sandbox-form");
         if (!form) { return; }

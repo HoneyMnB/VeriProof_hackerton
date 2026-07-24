@@ -113,6 +113,7 @@
             var modal = byId("history-modal");
             var open = byId("open-history");
             var list = byId("history-list");
+            var count = byId("history-count");
             var search = byId("history-search");
             var searchForm = byId("history-search-form");
             var recent = byId("recent-history");
@@ -339,6 +340,7 @@
             function render() {
                 list.replaceChildren();
                 modalConversations.forEach(function (item) { list.appendChild(rowFor(item, true)); });
+                count.textContent = t("sidebar.history.count").replace("{count}", modalConversations.length);
                 if (!list.children.length) {
                     var empty = document.createElement("li");
                     empty.className = "vp-list-empty";
@@ -425,35 +427,8 @@
                 modal.querySelectorAll("[data-settings-panel]").forEach(function (panel) {
                     panel.hidden = panel.dataset.settingsPanel !== tabName;
                 });
-                if (tabName === "sales") { loadSettingsSales(); }
+                if (tabName === "sales") { global.dispatchEvent(new CustomEvent("vp:sales-tab-open")); }
                 if (tabName === "wallet") { loadWalletMonitor(); }
-            }
-
-            function metric(label, value) {
-                var item = document.createElement("div");
-                var labelElement = document.createElement("span");
-                var valueElement = document.createElement("strong");
-                labelElement.textContent = label;
-                valueElement.textContent = value;
-                item.append(labelElement, valueElement);
-                return item;
-            }
-
-            function clearSettingsSales() {
-                var wallet = byId("settings-sales-wallet");
-                var metrics = byId("settings-sales-metrics");
-                var recent = byId("settings-sales-recent");
-                var list = byId("settings-sales-list");
-                var workList = byId("settings-sales-work-list");
-                var work = byId("settings-sales-by-work");
-                var period = byId("settings-sales-period");
-                if (wallet) { wallet.hidden = true; wallet.replaceChildren(); }
-                if (metrics) { metrics.replaceChildren(); }
-                if (recent) { recent.hidden = true; }
-                if (list) { list.replaceChildren(); }
-                if (workList) { workList.replaceChildren(); }
-                if (work) { work.hidden = true; }
-                if (period) { period.replaceChildren(); }
             }
 
             function loadWalletMonitor() {
@@ -487,87 +462,6 @@
                     });
                     if (!list.children.length) { list.textContent = t("account.wallet_empty"); }
                 }).catch(function () { list.textContent = t("shell.status.settings_network"); });
-            }
-
-            function loadSettingsSales() {
-                var status = byId("settings-sales-status");
-                var wallet = getWallet();
-                clearSettingsSales();
-                if (!wallet) {
-                    status.textContent = t("dashboard.wallet_required");
-                    return;
-                }
-                status.textContent = "";
-                Promise.all([
-                    requestJson("/api/v1/assistant/overview?creator=" + encodeURIComponent(wallet)),
-                    requestJson("/api/v1/assistant/sales?creator=" + encodeURIComponent(wallet))
-                ]).then(function (results) {
-                    var overviewResult = results[0];
-                    var salesResult = results[1];
-                    if (!overviewResult.ok) {
-                        status.textContent = overviewResult.status === 404 ? t("dashboard.wallet_connected") : t("shell.status.settings_failed");
-                        return;
-                    }
-                    var overview = overviewResult.body;
-                    var walletElement = byId("settings-sales-wallet");
-                    var metrics = byId("settings-sales-metrics");
-                    if (walletElement) {
-                        var walletLabel = document.createElement("span");
-                        var walletValue = document.createElement("code");
-                        walletLabel.textContent = t("dashboard.wallet");
-                        walletValue.textContent = overview.creator_wallet || wallet;
-                        walletElement.append(walletLabel, walletValue);
-                        walletElement.hidden = false;
-                    }
-                    if (metrics) {
-                        [
-                            ["dashboard.gross", (overview.gross_sales_usdc || "0") + " USDC"],
-                            ["dashboard.proceeds", (overview.creator_proceeds_usdc || "0") + " USDC"],
-                            ["dashboard.sales", overview.sale_count || 0],
-                            ["dashboard.works", overview.asset_count || 0],
-                            ["dashboard.public", overview.public_asset_count || 0],
-                            ["dashboard.anchored", overview.anchored_asset_count || 0],
-                            ["dashboard.expenses", (overview.expense_usdc || "0") + " USDC"],
-                            ["dashboard.net", (overview.net_usdc || "0") + " USDC"]
-                        ].forEach(function (entry) { metrics.appendChild(metric(t(entry[0]), entry[1])); });
-                    }
-                    if (!salesResult.ok) {
-                        status.textContent = t("shell.status.settings_failed");
-                        return;
-                    }
-                    var list = byId("settings-sales-list");
-                    var recent = byId("settings-sales-recent");
-                    var sales = salesResult.body.items || [];
-                    var dashboard = salesResult.body.dashboard || {};
-                    var period = byId("settings-sales-period");
-                    var work = byId("settings-sales-by-work");
-                    var workList = byId("settings-sales-work-list");
-                    if (period) {
-                        (dashboard.by_day || []).forEach(function (day) { period.appendChild(metric(day.date, (day.gross_usdc || "0") + " USDC · " + (day.sale_count || 0))); });
-                        if (!period.children.length) { period.textContent = t("dashboard.no_sales"); }
-                    }
-                    if (work && workList) {
-                        (dashboard.by_work || []).forEach(function (item) { var row = document.createElement("li"); var title = document.createElement("strong"); var value = document.createElement("span"); title.textContent = item.asset_title || item.asset_id; value.textContent = (item.gross_usdc || "0") + " USDC · " + (item.sale_count || 0); row.append(title, value); workList.appendChild(row); });
-                        work.hidden = !workList.children.length;
-                    }
-                    if (recent && list) {
-                        recent.hidden = false;
-                        sales.forEach(function (sale) {
-                            var row = document.createElement("li");
-                            var title = document.createElement("strong");
-                            var price = document.createElement("span");
-                            title.textContent = sale.asset_title || sale.asset_id;
-                            price.textContent = (sale.price_usdc || "0") + " USDC";
-                            row.append(title, price);
-                            list.appendChild(row);
-                        });
-                        if (!sales.length) {
-                            var empty = document.createElement("li");
-                            empty.textContent = t("dashboard.no_sales");
-                            list.appendChild(empty);
-                        }
-                    }
-                }).catch(function () { status.textContent = t("shell.status.settings_network"); });
             }
 
             modal.querySelectorAll("[data-settings-tab]").forEach(function (tab) {

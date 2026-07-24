@@ -108,6 +108,7 @@ def run(base_url: str, asset_id: str, offer: float, usage: str,
 
 
 def main(argv: list[str] | None = None) -> int:
+    """CLI 인자를 파싱하고 3단계 x402 흐름을 실행한 뒤 프로세스 종료 코드를 반환한다."""
     parser = argparse.ArgumentParser(description="VeriProof buyer-agent simulator")
     parser.add_argument("--base", default="http://127.0.0.1:8000",
                         help="server base URL (default %(default)s)")

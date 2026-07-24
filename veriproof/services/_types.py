@@ -13,9 +13,9 @@ from typing import Any
 
 @dataclass(frozen=True)
 class AnalysisResult:
-    """GeminiService.analyze_image result.
+    """GeminiService.analyze_asset result.
 
-    Architecture 4: ``analyze_image(image_bytes) -> AnalysisResult(
+    Architecture 4: ``analyze_asset(file_bytes, mime_type) -> AnalysisResult(
         tags, category, originality_score, recommended_min_price_usdc)``.
 
     SPEC-001 R13 extension: ``degraded`` is True when the model call failed

@@ -17,6 +17,7 @@ class AgentDiscoveryMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
+        """요청을 위임해 응답을 생성하고, 매니페스트 경로가 아닌 경우 Link 헤더를 추가한다."""
         response = self.get_response(request)
         if request.path != _MANIFEST_PATH:
             response.headers["Link"] = _MANIFEST_LINK

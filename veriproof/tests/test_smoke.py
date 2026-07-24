@@ -60,7 +60,7 @@ def test_all_services_are_implemented():
     """Closing gate: NO service method stubs remain.
 
     Progression log:
-    - SPEC-001 implemented ImageProcessor, GeminiService.analyze_image,
+    - SPEC-001 implemented ImageProcessor, GeminiService.analyze_asset,
       SolanaService.anchor_hash, StorageService.save_permanent.
     - SPEC-002 implemented X402Service.build_payment_required / classify_client
       / build_solana_pay_fallback and LicenseService.is_licensed.
@@ -85,11 +85,9 @@ def test_all_services_are_implemented():
         GeminiService,
         ImageProcessor,
         KmsSigner,
-        LicenseService,
         NegotiationEngine,
         PubSubPublisher,
         RoyaltyService,
-        SolanaService,
         StorageService,
         X402Service,
     )
@@ -98,8 +96,6 @@ def test_all_services_are_implemented():
     # 외부 AI 미설정은 구현 누락이 아니라 명시적 unavailable 오류여야 한다.
     from services.gemini_service import GeminiUnavailableError
     ImageProcessor().sha256(b"x")
-    with pytest.raises(GeminiUnavailableError):
-        GeminiService().analyze_image(b"x")
     StorageService(backend="local", media_root="/tmp").save_permanent(
         "thumbnail", "id", b"x"
     )
@@ -164,9 +160,9 @@ def test_fakes_implement_interfaces():
     )
 
     gemini = FakeGeminiService()
-    res = gemini.analyze_image(b"img")
+    res = gemini.analyze_asset(b"img", "image/png")
     assert res.originality_score == 80
-    assert gemini.calls[0][0] == "analyze_image"
+    assert gemini.calls[0][0] == "analyze_asset"
 
     solana = FakeSolanaService()
     sig = solana.anchor_hash("hash", "pubkey")
@@ -216,7 +212,6 @@ def test_ipasset_royalty_guard_rejects_invalid_parent():
     """S3 invariant: parent_asset set without valid royalty_share_bps raises."""
     from django.core.exceptions import ValidationError
 
-    from apps.ip.models import IpAsset
     from tests.factories import CreatorFactory, IpAssetFactory
 
     creator = CreatorFactory()

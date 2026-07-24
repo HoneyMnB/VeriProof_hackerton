@@ -9,9 +9,7 @@ REQUIREMENTS_FILE="$APP_DIR/requirements.txt"
 PYTHON_BIN="${VERIPROOF_PYTHON:-/opt/anaconda3/envs/agent01/bin/python}"
 RUNTIME_DIR="$APP_DIR/.runtime"
 WEB_PID_FILE="$RUNTIME_DIR/web.pid"
-CELERY_PID_FILE="$RUNTIME_DIR/celery.pid"
 WEB_LOG="$RUNTIME_DIR/web.log"
-CELERY_LOG="$RUNTIME_DIR/celery.log"
 HOST="${VERIPROOF_HOST:-127.0.0.1}"
 PORT="${VERIPROOF_PORT:-55000}"
 
@@ -48,16 +46,6 @@ fi
 echo "Starting VeriProof at http://$HOST:$PORT ..."
 nohup "$PYTHON_BIN" manage.py runserver "$HOST:$PORT" --noreload >"$WEB_LOG" 2>&1 &
 echo $! >"$WEB_PID_FILE"
-
-# This repository has no Celery application. Set CELERY_APP (for example,
-# config.celery) only when one is introduced; then this runner manages it too.
-if [[ -n "${CELERY_APP:-}" ]]; then
-    nohup "$PYTHON_BIN" -m celery -A "$CELERY_APP" worker --loglevel="${CELERY_LOGLEVEL:-INFO}" >"$CELERY_LOG" 2>&1 &
-    echo $! >"$CELERY_PID_FILE"
-    echo "Celery worker started (app: $CELERY_APP)."
-else
-    echo "Celery worker skipped: this project does not define a Celery app."
-fi
 
 sleep 1
 if ! kill -0 "$(cat "$WEB_PID_FILE")" 2>/dev/null; then

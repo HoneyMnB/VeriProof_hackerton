@@ -17,7 +17,9 @@ urlpatterns = [
     path("discover", views_web.discover, name="discover"),
     path("discover/<uuid:asset_id>", views_web.asset_detail, name="asset-detail"),
     path("previews/<uuid:asset_id>/<str:variant>", views_web.preview, name="preview"),
+    path("previews/<uuid:asset_id>/gallery/<uuid:image_id>", views_web.gallery_preview, name="gallery-preview"),
     path("workspace", views_web.workspace, name="workspace"),
     path("library", views_web.library, name="library"),
+    path("library/<uuid:asset_id>/certificate.pdf", views_web.download_registration_certificate, name="registration-certificate-download"),
     path("files/<str:token>", settlement_download, name="download"),
 ]

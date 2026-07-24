@@ -130,6 +130,39 @@ def test_public_detail_only_renders_watermarked_preview(client):
 
 
 @pytest.mark.django_db
+def test_public_detail_renders_gallery_previews_for_one_work(client, monkeypatch):
+    """다중 이미지도 동일 작품 상세에서 워터마크 미리보기만 전환할 수 있다."""
+    from apps.ip.models import AssetImage, IpAsset
+    from tests.factories import CreatorFactory, IpAssetFactory
+    from tests.fakes import FakeStorageService
+
+    asset = IpAssetFactory(
+        creator=CreatorFactory(), visibility=IpAsset.PUBLIC, status=IpAsset.ANCHORED
+    )
+    image = AssetImage.objects.create(
+        asset=asset,
+        position=1,
+        file_name="detail.png",
+        content_mime_type="image/png",
+        content_sha256="a" * 64,
+        watermark_url="memory://watermark/detail",
+        original_url="memory://original/detail",
+    )
+    storage = FakeStorageService()
+    storage.permanent[("watermark", image.id)] = b"gallery-watermark"
+    monkeypatch.setattr("apps.ip.views_web.get_storage_service", lambda: storage)
+
+    response = client.get(f"/discover/{asset.id}")
+    gallery_preview = client.get(f"/previews/{asset.id}/gallery/{image.id}")
+
+    assert response.status_code == 200
+    assert f"/previews/{asset.id}/gallery/{image.id}" in response.content.decode()
+    assert "data-gallery-thumbnail" in response.content.decode()
+    assert gallery_preview.status_code == 200
+    assert gallery_preview.content == b"gallery-watermark"
+
+
+@pytest.mark.django_db
 def test_public_watermark_preview_never_serves_thumbnail_to_anonymous(client, monkeypatch):
     """공개 워터마크는 반환하지만 비워터마크 썸네일은 익명 요청에 숨긴다."""
     from apps.ip.models import IpAsset

@@ -6,6 +6,7 @@ HTTP 파싱은 뷰에 남기고, 검증된 입력을 받아 분석·저장·온�
 from __future__ import annotations
 
 import datetime
+import hashlib
 import decimal
 import logging
 import uuid
@@ -79,13 +80,21 @@ class RegistrationService:
         self.subscription = subscription
 
     def register(
-        self, upload: Any, metadata: RegistrationMetadata, supporting_uploads: tuple[Any, ...] = ()
+        self,
+        upload: Any,
+        metadata: RegistrationMetadata,
+        supporting_uploads: tuple[Any, ...] = (),
+        gallery_uploads: tuple[Any, ...] = (),
+        account_owner: Any | None = None,
     ) -> RegistrationOutcome:
         """검증된 업로드를 실제 파이프라인에 등록하고 주요 단계를 기록한다."""
+        if gallery_uploads and metadata.asset_type != IpAsset.IMAGE:
+            raise RegistrationError("invalid_gallery", "gallery images are only supported for image works", 422)
         content = upload.read()
         if self.subscription is not None:
             self.subscription.authorize_registration(metadata.creator_wallet)
-        content_hash = self.image_processor.sha256(content)
+        gallery_contents = [(item, item.read()) for item in gallery_uploads]
+        content_hash = self._work_manifest_hash(content, gallery_contents)
         if IpAsset.objects.filter(image_sha256=content_hash).exists():
             raise RegistrationError("duplicate", "identical content is already registered", 409)
 
@@ -132,6 +141,7 @@ class RegistrationService:
             watermark_url = self._save_preview("watermark", asset_id, watermark)
             retention = datetime.timedelta(days=int(settings.ORIGINAL_RETENTION_DAYS))
             original_url = self.storage.save_temporary(asset_id, content, retention)
+            gallery_artifacts = self._prepare_gallery_artifacts(gallery_contents, asset_id, retention)
         except Exception as exc:  # noqa: BLE001 - storage adapter exceptions are external
             logger.error(
                 "registration storage failed creator_wallet=%s asset_id=%s error=%s",
@@ -148,6 +158,7 @@ class RegistrationService:
             asset = IpAsset.objects.create(
                 id=asset_id,
                 creator=creator,
+                account_owner=account_owner,
                 title=metadata.title,
                 description=metadata.description,
                 ai_description=analysis.description,
@@ -173,7 +184,7 @@ class RegistrationService:
                 status=IpAsset.ANCHORED,
             )
             # 보조 파일은 원본 공개 경로가 아니라 내부 매니페스트로만 보관한다.
-            from apps.ip.models import AssetComponent
+            from apps.ip.models import AssetComponent, AssetImage
             for index, component in enumerate(supporting_uploads):
                 component_bytes = component.read()
                 component_hash = self.image_processor.sha256(component_bytes)
@@ -187,6 +198,8 @@ class RegistrationService:
                     content_sha256=component_hash,
                     storage_url=component_url,
                 )
+            for position, artifact in enumerate(gallery_artifacts, start=1):
+                AssetImage.objects.create(asset=asset, position=position, **artifact)
             if self.subscription is not None:
                 self.subscription.consume_registration(creator, asset)
             self.event_recorder.record(
@@ -208,6 +221,40 @@ class RegistrationService:
             asset.visibility,
         )
         return RegistrationOutcome(asset=asset, analysis=analysis)
+
+    def _prepare_gallery_artifacts(self, gallery_contents, asset_id, retention):
+        """추가 이미지의 보호 미리보기·임시 원본을 모두 저장할 준비를 한다."""
+        artifacts = []
+        for position, (upload, content) in enumerate(gallery_contents, start=1):
+            try:
+                watermark = self.image_processor.make_watermark(content, "VeriProof")
+            except Exception as exc:  # noqa: BLE001 - Pillow decode errors are user input
+                raise RegistrationError("invalid_image", "gallery image could not be decoded") from exc
+            image_id = uuid.uuid4()
+            try:
+                watermark_url = self.storage.save_permanent("watermark", image_id, watermark)
+                original_url = self.storage.save_temporary(image_id, content, retention)
+            except Exception as exc:  # noqa: BLE001 - storage adapter exceptions are external
+                raise RegistrationError("storage_unavailable", "gallery image storage could not be completed", 503) from exc
+            artifacts.append(
+                {
+                    "file_name": upload.name,
+                    "content_mime_type": upload.content_type or "image/png",
+                    "content_sha256": self.image_processor.sha256(content),
+                    "watermark_url": watermark_url,
+                    "original_url": original_url,
+                    "id": image_id,
+                }
+            )
+        return artifacts
+
+    def _work_manifest_hash(self, primary_content: bytes, gallery_contents) -> str:
+        """작품을 구성하는 순서 있는 모든 이미지의 단일 증명 해시를 만든다."""
+        image_hashes = [self.image_processor.sha256(primary_content)]
+        image_hashes.extend(self.image_processor.sha256(content) for _upload, content in gallery_contents)
+        if len(image_hashes) == 1:
+            return image_hashes[0]
+        return hashlib.sha256("\n".join(image_hashes).encode("ascii")).hexdigest()
 
     def _prepare_artifacts(
         self, content: bytes, metadata: RegistrationMetadata, mime: str

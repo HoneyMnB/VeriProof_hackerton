@@ -50,7 +50,7 @@ __pycache__/
 venv/
 .venv/
 env/
-.env/
+.env
 .uv_cache/
 .uv-cache/
 

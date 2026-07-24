@@ -27,6 +27,10 @@ class CatalogService:
         price_min: Any | None = None,
         price_max: Any | None = None,
     ) -> list[Any]:
+        """공개 카탈로그를 유형·검색어·가격대·정렬 조건으로 필터링해 반환한다.
+
+        등록 인증이 완료된 공개 자산만 노출하며, 원본 위치는 절대 포함하지 않는다.
+        """
         from apps.ip.models import IpAsset
 
         queryset = IpAsset.objects.select_related("creator").filter(
@@ -61,6 +65,7 @@ class CatalogService:
 
     @staticmethod
     def serialize(asset: Any) -> dict:
+        """공개 카탈로그 응답용 DTO로 자산을 직렬화한다. 원본 URL은 제외한다."""
         from services.preview_service import watermark_preview_url
 
         return {
@@ -81,4 +86,5 @@ class CatalogService:
 
 
 def get_catalog_service() -> CatalogService:
+    """공개 카탈로그 서비스 인스턴스를 생성한다."""
     return CatalogService()

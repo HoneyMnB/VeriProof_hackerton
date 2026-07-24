@@ -18,6 +18,7 @@
 | [00-architecture-and-data-model.md](./00-architecture-and-data-model.md) | 기술스택, 시스템/비동기 아키텍처, 결제 프로토콜, 서비스 인터페이스, 데이터모델(PostgreSQL/Firestore/BigQuery), API 계약, 프로젝트 구조 |
 | [test-plan.md](./test-plan.md) | TDD 전략, 계층, 픽스처, 실패주입 매트릭스, SPEC↔테스트 매핑, E2E |
 | [policy_system_v01.md](./policy_system_v01.md) | 현재 구현의 정책, 실행 검증, 데이터 흐름, 운영 경계 |
+| [docs_develop_v01.md](./docs_develop_v01.md) | 코드·설정·서비스·API·DB 스키마·PostgreSQL 이관 fixture를 기준으로 한 개발자 인수인계 문서 |
 
 ## SPEC (EARS + 인수조건 + TDD 테스트명세)
 | SPEC | 제목 | 시나리오/페이지 |

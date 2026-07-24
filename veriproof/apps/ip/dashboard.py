@@ -10,8 +10,6 @@ Coverage:
 - R7 / AC-6: ``explorer_url`` — Solana Explorer devnet URL builder.
 - R8 / AC-7: ``build_certificate_payload`` — QR payload (proof data only).
 - R6 / AC-5: ``preview_src`` — watermark/thumbnail switch (never original).
-- R10 / AC-9: ``should_poll_events`` — Firestore onSnapshot vs polling fallback.
-- R2 / AC-2: ``analysis_card_fields`` — analysis/completion card field extraction.
 """
 from __future__ import annotations
 
@@ -73,21 +71,14 @@ def preview_src(
 def should_poll_events(
     *, firestore_enabled: bool, firebase_sdk_present: bool
 ) -> bool:
-    """Decide whether the frontend should poll ``/api/v1/events``.
-
-    SPEC-005 R10 / AC-9. Polling is the fallback when Firestore is disabled OR
-    the Firebase JS SDK is absent in the browser. Only when both are available
-    does the client use ``onSnapshot`` (no polling).
-    """
+    """브라우저가 Firestore 대신 이벤트 폴링을 해야 하는지 반환한다."""
     return not (firestore_enabled and firebase_sdk_present)
 
 
 def analysis_card_fields(response: dict[str, Any]) -> dict[str, Any]:
-    """Extract the fields the analysis + completion cards render from a register
-    response. SPEC-005 R2 / AC-2 + R4 / AC-3.
+    """등록 응답에서 분석·완료 카드가 읽는 필드만 추출한다.
 
-    Mirrors ``static/js/dashboard.js::analysisCardFields``. Consumes the JSON
-    contract produced by ``POST /api/v1/ip/register`` (SPEC-001).
+    브라우저 구현과의 계약 검증에 쓰이며, 서버 응답을 변경하지 않는다.
     """
     analysis = response.get("analysis", {}) or {}
     return {

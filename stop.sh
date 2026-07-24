@@ -42,7 +42,6 @@ stop_pid_file() {
     rm -f "$pid_file"
 }
 
-stop_pid_file "$RUNTIME_DIR/celery.pid" "Celery worker"
 stop_pid_file "$RUNTIME_DIR/web.pid" "Django server"
 
 # start.sh 이전에 수동으로 띄운 동일 프로젝트의 서버도 포트 재시작 계약에
@@ -65,4 +64,4 @@ stop_project_listener() {
 }
 
 stop_project_listener
-echo "VeriProof stopped. Unrelated servers and Celery workers were not touched."
+echo "VeriProof stopped. Unrelated servers were not touched."

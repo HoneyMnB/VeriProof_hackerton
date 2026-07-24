@@ -148,6 +148,7 @@ def wallet_configurations(request: HttpRequest) -> JsonResponse:
 @login_required
 @require_POST
 def activate_wallet(request: HttpRequest, wallet_id: int) -> JsonResponse:
+    """지정한 지갑을 활성 지갑으로 바꾸고 환경설정의 창작자 지갑 값을 동기화한다."""
     wallet = WalletConfiguration.objects.filter(pk=wallet_id, user=request.user).first()
     if wallet is None:
         return JsonResponse({"error": "wallet_not_found"}, status=404)
@@ -163,6 +164,7 @@ def activate_wallet(request: HttpRequest, wallet_id: int) -> JsonResponse:
 @login_required
 @require_http_methods(["GET"])
 def wallet_configuration_list(request: HttpRequest) -> JsonResponse:
+    """현재 사용자가 등록한 모든 수신 지갑과 활성 여부를 반환한다."""
     return JsonResponse({"items": [
         {"id": wallet.id, "label": wallet.label, "address": wallet.address, "accepts_deposits": wallet.accepts_deposits, "receives_payouts": wallet.receives_payouts, "is_active": wallet.is_active}
         for wallet in WalletConfiguration.objects.filter(user=request.user)

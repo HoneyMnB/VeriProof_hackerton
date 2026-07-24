@@ -27,7 +27,7 @@ _OTHER_WALLET = "OtherWalletxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 _BUYER_WALLET = "BuyerWalletxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
 
-def _login_creator(client, wallet: str) -> None:
+def _login_creator(client, wallet: str):
     """자산 API는 세션 계정과 저장된 창작자 지갑이 일치해야 한다."""
     from django.contrib.auth.models import User
 
@@ -40,23 +40,25 @@ def _login_creator(client, wallet: str) -> None:
     preference.creator_wallet = wallet
     preference.save(update_fields=["creator_wallet", "updated_at"])
     client.force_login(user)
+    return user
 
 
 # --- R5 / AC-4: /library renders only owner assets --------------------------
 
 
 @pytest.mark.django_db
-def test_library_view_renders_only_owner_assets(client):
-    """``/library?creator=<wallet>`` renders the owner's assets and no other."""
+def test_library_view_renders_only_authenticated_account_assets(client):
+    """The library uses the signed-in account, never a URL-selected wallet."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     owner = CreatorFactory(wallet_address=_OWNER_WALLET)
     other = CreatorFactory(wallet_address=_OTHER_WALLET)
-    IpAssetFactory(creator=owner, title="Owner Asset Alpha")
-    IpAssetFactory(creator=owner, title="Owner Asset Beta")
+    user = _login_creator(client, _OWNER_WALLET)
+    IpAssetFactory(creator=owner, account_owner=user, title="Owner Asset Alpha")
+    IpAssetFactory(creator=owner, account_owner=user, title="Owner Asset Beta")
     IpAssetFactory(creator=other, title="Other Creator Asset")  # must NOT appear
 
-    response = client.get("/library", {"creator": _OWNER_WALLET})
+    response = client.get("/library", {"creator": _OTHER_WALLET})
     assert response.status_code == 200
     content = response.content.decode()
     assert "Owner Asset Alpha" in content
@@ -70,22 +72,142 @@ def test_library_view_empty_state_when_no_assets(client):
     from tests.factories import CreatorFactory
 
     CreatorFactory(wallet_address=_OWNER_WALLET)
-    response = client.get("/library", {"creator": _OWNER_WALLET})
+    _login_creator(client, _OWNER_WALLET)
+    response = client.get("/library")
     assert response.status_code == 200
     # Empty-state hint rendered (template includes the marker).
     assert "no-assets" in response.content.decode()
 
 
 @pytest.mark.django_db
-def test_library_view_accepts_wallet_alias_param(client):
-    """The ``wallet`` query param is an accepted alias for ``creator``."""
+def test_library_view_ignores_wallet_alias_param(client):
+    """The legacy wallet parameter cannot select another account's assets."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     owner = CreatorFactory(wallet_address=_OWNER_WALLET)
-    IpAssetFactory(creator=owner, title="Alias Param Asset")
-    response = client.get("/library", {"wallet": _OWNER_WALLET})
+    other = CreatorFactory(wallet_address=_OTHER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    IpAssetFactory(creator=owner, account_owner=user, title="Account Asset")
+    IpAssetFactory(creator=other, title="URL-selected asset")
+    response = client.get("/library", {"wallet": _OTHER_WALLET})
     assert response.status_code == 200
-    assert "Alias Param Asset" in response.content.decode()
+    content = response.content.decode()
+    assert "Account Asset" in content
+    assert "URL-selected asset" not in content
+
+
+@pytest.mark.django_db
+def test_library_view_requires_login(client):
+    """A private account library cannot be opened anonymously."""
+    response = client.get("/library")
+    assert response.status_code == 302
+    assert response.url.startswith("/accounts/login/")
+
+
+@pytest.mark.django_db
+def test_owner_can_download_registration_certificate_pdf(client):
+    """PDF는 소유자의 실제 등록 지문과 온체인 증명에서만 생성된다."""
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    asset = IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        anchor_tx_sig="anchor_transaction_123",
+        registration_certificate_tx_sig="registration_transaction_123",
+    )
+
+    response = client.get(f"/library/{asset.id}/certificate.pdf")
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"].endswith(f"{asset.id}.pdf\"")
+    assert response.content.startswith(b"%PDF")
+    assert b"original_url" not in response.content
+
+
+@pytest.mark.django_db
+def test_registration_certificate_pdf_is_not_available_to_other_accounts(client):
+    """다른 계정은 인증서 PDF를 내려받을 수 없다."""
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    asset = IpAssetFactory(creator=owner, anchor_tx_sig="anchor_transaction_123")
+    _login_creator(client, _OTHER_WALLET)
+    response = client.get(f"/library/{asset.id}/certificate.pdf")
+    assert response.status_code == 404
+
+
+@pytest.mark.django_db
+def test_library_management_payload_contains_registered_metadata_and_real_sales(client):
+    """관리 모달은 등록 시 메타데이터와 실제 License 판매만 받는다."""
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    asset = IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        title="Registered work",
+        description="Registration description",
+        tags=["portrait", "oil"],
+    )
+    LicenseFactory(asset=asset, price_usdc=decimal.Decimal("3.25"))
+
+    response = client.get("/library")
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Registration description" in content
+    assert "data-manage=" in content
+    assert "sale_count&quot;: 1" in content
+    assert "gross_usdc&quot;: &quot;3.25" in content
+
+
+@pytest.mark.django_db
+def test_owner_can_update_work_metadata_and_listing_terms(client):
+    """관리 저장은 소유 작품의 제목·설명·태그와 판매 조건을 원자적으로 갱신한다."""
+    from apps.ip.models import IpAsset
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    asset = IpAssetFactory(creator=owner, account_owner=user, visibility=IpAsset.PRIVATE)
+    response = client.post(
+        f"/api/v1/ip/{asset.id}/terms",
+        data={
+            "title": "Edited work",
+            "description": "Updated creator description",
+            "tags": ["editorial", "portrait"],
+            "min_price_usdc": "4.50",
+            "target_price_usdc": "8.00",
+            "visibility": "private",
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    asset.refresh_from_db()
+    assert asset.title == "Edited work"
+    assert asset.description == "Updated creator description"
+    assert asset.tags == ["editorial", "portrait"]
+    assert str(asset.min_price_usdc) == "4.500000"
+
+
+@pytest.mark.django_db
+def test_owner_metadata_update_keeps_existing_tags_when_older_terms_client_omits_them(client):
+    """기존 가격 설정 클라이언트도 태그를 지우지 않고 계속 동작한다."""
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    asset = IpAssetFactory(creator=owner, account_owner=user, tags=["keep-me"])
+    response = client.post(
+        f"/api/v1/ip/{asset.id}/terms",
+        data={"min_price_usdc": "2", "target_price_usdc": "3", "visibility": "private"},
+        content_type="application/json",
+    )
+    assert response.status_code == 200
+    asset.refresh_from_db()
+    assert asset.tags == ["keep-me"]
 
 
 @pytest.mark.django_db
@@ -116,22 +238,32 @@ def test_start_registration_opens_canvas_before_wallet_connection():
     assert "!menu.contains(event.target)" in source
 
 
-# --- R11: GET /api/v1/assets?creator= ---------------------------------------
+def test_certificate_close_handles_clicks_on_its_svg_icon():
+    """닫기 버튼의 SVG 경로를 눌러도 상위 data 속성을 찾아 모달을 닫는다."""
+    from pathlib import Path
+
+    source = (Path(__file__).resolve().parents[2] / "static" / "js" / "library.js").read_text()
+    certificate_wiring = source.split("function wireCertificateModal()", 1)[1].split("function fieldRow", 1)[0]
+    assert 'closest("[data-modal-close]")' in certificate_wiring
+    assert "hideModal();" in certificate_wiring
+
+
+# --- R11: GET /api/v1/assets -------------------------------------------------
 
 
 @pytest.mark.django_db
-def test_assets_api_filters_by_creator(client):
-    """``GET /api/v1/assets?creator=<wallet>`` lists only that creator's assets."""
+def test_assets_api_lists_only_authenticated_account_assets(client):
+    """The API lists all and only assets owned by the signed-in account."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     owner = CreatorFactory(wallet_address=_OWNER_WALLET)
     other = CreatorFactory(wallet_address=_OTHER_WALLET)
-    IpAssetFactory(creator=owner, title="A1")
-    IpAssetFactory(creator=owner, title="A2")
+    user = _login_creator(client, _OWNER_WALLET)
+    IpAssetFactory(creator=owner, account_owner=user, title="A1")
+    IpAssetFactory(creator=owner, account_owner=user, title="A2")
     IpAssetFactory(creator=other, title="A3")
-    _login_creator(client, _OWNER_WALLET)
 
-    response = client.get("/api/v1/assets", {"creator": _OWNER_WALLET})
+    response = client.get("/api/v1/assets", {"creator": _OTHER_WALLET})
     assert response.status_code == 200
     body = response.json()
     items = body["items"]
@@ -147,23 +279,23 @@ def test_assets_api_filters_by_creator(client):
 
 
 @pytest.mark.django_db
-def test_assets_api_unknown_creator_returns_empty(client):
-    """An unknown creator wallet returns 200 with an empty item list."""
+def test_assets_api_empty_for_account_without_assets(client):
+    """An account without assets receives an empty account-scoped list."""
     _login_creator(client, _OWNER_WALLET)
-    response = client.get("/api/v1/assets", {"creator": _OWNER_WALLET})
+    response = client.get("/api/v1/assets")
     assert response.status_code == 200
     assert response.json()["items"] == []
 
 
 @pytest.mark.django_db
-def test_assets_api_rejects_anonymous_and_other_creator(client):
-    """개인 라이브러리 API는 지갑 query만으로 조회할 수 없다."""
+def test_assets_api_rejects_anonymous_but_ignores_wallet_query(client):
+    """개인 라이브러리 API는 로그인 계정만 사용한다."""
     from tests.factories import CreatorFactory
 
     CreatorFactory(wallet_address=_OWNER_WALLET)
     assert client.get("/api/v1/assets", {"creator": _OWNER_WALLET}).status_code == 401
     _login_creator(client, _OTHER_WALLET)
-    assert client.get("/api/v1/assets", {"creator": _OWNER_WALLET}).status_code == 403
+    assert client.get("/api/v1/assets", {"creator": _OWNER_WALLET}).status_code == 200
 
 
 # --- R9 / AC-8: GET /api/v1/ip/{asset_id}/transactions ----------------------
@@ -338,13 +470,15 @@ def test_library_view_includes_certificate_payload_for_anchored_asset(client):
     from tests.factories import CreatorFactory, IpAssetFactory
 
     owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
     IpAssetFactory(
         creator=owner,
+        account_owner=user,
         title="Anchored Asset",
         status=IpAsset.ANCHORED,
         anchor_tx_sig="anchor_sig_lib_001",
     )
-    response = client.get("/library", {"creator": _OWNER_WALLET})
+    response = client.get("/library")
     assert response.status_code == 200
     content = response.content.decode()
     # Explorer URL for the anchored asset is rendered (R7 / AC-6 wired in page).

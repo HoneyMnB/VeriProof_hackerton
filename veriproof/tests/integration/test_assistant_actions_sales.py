@@ -107,3 +107,67 @@ def test_sales_endpoint_uses_only_verified_license_rows(client):
         "creator_proceeds_usdc": "7.5",
     }
     assert data["items"][0]["asset_id"] == str(asset.id)
+
+
+@pytest.mark.django_db
+def test_sales_endpoint_filters_and_paginates_actual_license_history(client):
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+
+    creator = CreatorFactory(wallet_address=VALID_WALLET)
+    selected = IpAssetFactory(creator=creator, title="Selected work")
+    other = IpAssetFactory(creator=creator, title="Other work")
+    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletOne", usage_type="commercial", price_usdc=Decimal("3.000000"))
+    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletTwo", usage_type="editorial", price_usdc=Decimal("4.000000"))
+    LicenseFactory(asset=other, price_usdc=Decimal("9.000000"))
+
+    response = client.get(f"/api/v1/assistant/sales?creator={VALID_WALLET}&asset={selected.id}&usage=commercial&page_size=1")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["summary"]["sale_count"] == 1
+    assert data["summary"]["gross_usdc"] == "3"
+    assert data["pagination"] == {"page": 1, "page_size": 1, "total_count": 1, "page_count": 1}
+    assert data["dashboard"]["by_work_pagination"] == {
+        "page": 1,
+        "page_size": 10,
+        "total_count": 1,
+        "page_count": 1,
+    }
+    assert data["items"][0]["buyer_wallet"] == "BuyerWalletOne"
+    assert data["items"][0]["granted_at"]
+    assert data["items"][0]["payment_tx_sig"]
+
+
+@pytest.mark.django_db
+def test_sales_endpoint_rejects_invalid_filter_dates(client):
+    from tests.factories import CreatorFactory
+
+    CreatorFactory(wallet_address=VALID_WALLET)
+
+    response = client.get(f"/api/v1/assistant/sales?creator={VALID_WALLET}&start=not-a-date")
+
+    assert response.status_code == 422
+    assert response.json() == {"error": "invalid_sales_filter"}
+
+
+@pytest.mark.django_db
+def test_sales_endpoint_paginates_work_aggregates_server_side(client):
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+
+    creator = CreatorFactory(wallet_address=VALID_WALLET)
+    first = IpAssetFactory(creator=creator, title="Higher gross")
+    second = IpAssetFactory(creator=creator, title="Lower gross")
+    LicenseFactory(asset=first, price_usdc=Decimal("8.000000"))
+    LicenseFactory(asset=second, price_usdc=Decimal("3.000000"))
+
+    response = client.get(f"/api/v1/assistant/sales?creator={VALID_WALLET}&work_page=2&work_page_size=1")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["dashboard"]["by_work_pagination"] == {
+        "page": 2,
+        "page_size": 1,
+        "total_count": 2,
+        "page_count": 2,
+    }
+    assert data["dashboard"]["by_work"][0]["asset_title"] == "Lower gross"

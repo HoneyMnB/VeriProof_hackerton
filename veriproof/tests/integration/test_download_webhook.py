@@ -15,6 +15,7 @@ import decimal
 import hashlib
 import hmac
 import json
+import zipfile
 
 import pytest
 from freezegun import freeze_time
@@ -158,6 +159,40 @@ def test_download_valid_token_returns_original(client, monkeypatch):
     assert response.status_code == 200
     assert response.content == b"ORIGINAL-PNG-BYTES"
     assert "attachment" in response["Content-Disposition"]
+
+
+@pytest.mark.django_db
+def test_download_multi_image_work_returns_one_archive(client, monkeypatch):
+    """한 작품 라이선스 토큰으로 구성 이미지 전체를 하나의 ZIP으로 전달한다."""
+    import io
+
+    from apps.ip.models import AssetImage
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+    from tests.fakes import FakeStorageService
+
+    asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET))
+    image = AssetImage.objects.create(
+        asset=asset,
+        position=1,
+        file_name="detail.png",
+        content_mime_type="image/png",
+        content_sha256="b" * 64,
+        watermark_url="memory://watermark/detail",
+        original_url="memory://original/detail",
+    )
+    license = LicenseFactory(asset=asset, download_token="multi-image-token")
+    storage = FakeStorageService()
+    storage.temporary[asset.id] = b"PRIMARY"
+    storage.temporary[image.id] = b"DETAIL"
+    monkeypatch.setattr("apps.settlement.views_api.get_storage_service", lambda: storage)
+
+    response = client.get(_DOWNLOAD_TEMPLATE.format(token=license.download_token))
+
+    assert response.status_code == 200
+    assert response["Content-Type"] == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
+        assert archive.read("original-1") == b"PRIMARY"
+        assert archive.read("detail.png") == b"DETAIL"
 
 
 # === AC-6 / R10: expired token ==============================================

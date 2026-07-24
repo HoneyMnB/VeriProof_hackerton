@@ -24,6 +24,7 @@ def _requirements(path: Path) -> list[Requirement]:
 
 
 def main() -> int:
+    """requirements.txt의 각 의존성을 점검해 누락/버전 불일치를 보고하고 결과 코드를 반환한다."""
     requirements_file = Path(__file__).resolve().parents[1] / "requirements.txt"
     missing: list[str] = []
     incompatible: list[str] = []

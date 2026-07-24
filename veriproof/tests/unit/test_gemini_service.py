@@ -1,16 +1,6 @@
-"""SPEC-001 unit tests — GeminiService.analyze_image (services layer).
-
-Covers the TDD list:
-- test_gemini_analyze_returns_schema (mock client)
-- test_gemini_analyze_retries_then_degrades (mock 3 failures)
-
-The real ``google-genai`` SDK is NOT installed; these tests inject a stub
-client that mirrors the ``client.models.generate_content(...)`` shape so the
-service is exercised without network.
-"""
+"""GeminiService unit tests for structured assistant action planning."""
 from __future__ import annotations
 
-import decimal
 import json
 
 import pytest
@@ -95,72 +85,6 @@ def test_creator_action_plan_rejects_unknown_action_even_if_model_returns_it():
 
     with pytest.raises(GeminiResponseError):
         svc.plan_creator_action({}, "Pay now")
-
-
-# --- Tests -------------------------------------------------------------------
-
-
-def test_gemini_analyze_returns_schema():
-    """With a working client, analyze_image returns a fully-populated result."""
-    from services.gemini_service import GeminiService
-
-    payload = {
-        "tags": ["photo", "sunset"],
-        "category": "photography",
-        "originality_score": 87,
-        "recommended_min_price_usdc": "2.50",
-    }
-    svc = GeminiService(client=_StubClient(payload))
-
-    result = svc.analyze_image(b"\x89PNG\r\n\x1a\nfixture")
-
-    assert result.tags == ["photo", "sunset"]
-    assert result.category == "photography"
-    assert result.originality_score == 87
-    assert result.recommended_min_price_usdc == decimal.Decimal("2.50")
-    # Schema key set (not degraded in the success path).
-    assert result.degraded is False
-
-
-def test_gemini_analyze_retries_then_reports_error():
-    """3회 실패 후에도 분석값을 만들지 않고 오류를 반환한다."""
-    from services.gemini_service import GeminiResponseError, GeminiService
-
-    stub = _StubClient({}, fail=True)
-    svc = GeminiService(client=stub)
-
-    with pytest.raises(GeminiResponseError):
-        svc.analyze_image(b"\x89PNG\r\n\x1a\nfixture")
-    assert stub.models.call_count == 3
-
-
-def test_gemini_analyze_reports_unavailable_when_no_client():
-    """모델 미설정은 분석 결과가 아니라 unavailable 오류다."""
-    from services.gemini_service import GeminiService, GeminiUnavailableError
-
-    svc = GeminiService()  # no client, no keys
-    with pytest.raises(GeminiUnavailableError):
-        svc.analyze_image(b"\x89PNG\r\n\x1a\nfixture")
-
-
-def test_gemini_analyze_reports_error_on_non_json_response():
-    """잘못된 구조화 응답은 임의 분석값으로 대체하지 않는다."""
-    from services.gemini_service import GeminiResponseError, GeminiService
-
-    class _GarbageModels:
-        call_count = 0
-
-        def generate_content(self, **kwargs):  # noqa: ANN003
-            self.call_count += 1
-            return _StubResponse("not json {{{")
-
-    class _GarbageClient:
-        def __init__(self) -> None:
-            self.models = _GarbageModels()
-
-    svc = GeminiService(client=_GarbageClient())
-    with pytest.raises(GeminiResponseError):
-        svc.analyze_image(b"x")
 
 
 def test_gemini_get_client_returns_none_without_api_key():

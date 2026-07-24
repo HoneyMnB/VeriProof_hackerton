@@ -77,8 +77,8 @@ class RegistrationDraftService:
         logger.info("registration draft confirmed creator_wallet=%s draft_id=%s", wallet, draft.id)
         return self.serialize(draft)
 
-    def consume(self, wallet: str, draft_id: str, token: str, upload: Any) -> ConfirmedDraft:
-        """업로드 바이트 해시와 확정 토큰을 함께 검증해 실제 등록을 허용한다."""
+    def consume(self, wallet: str, draft_id: str, token: str, uploads: Any) -> ConfirmedDraft:
+        """확정한 작품 이미지 세트와 토큰을 검증해 실제 등록을 허용한다."""
         from apps.ip.models import Creator, RegistrationDraft
 
         with transaction.atomic():
@@ -88,9 +88,9 @@ class RegistrationDraftService:
                 raise DraftValidationError("The registration draft is not confirmed.")
             if str(draft.confirmation_token) != str(token):
                 raise DraftValidationError("The registration confirmation is invalid.")
-            digest = self._hash_upload(upload)
+            digest = self._hash_uploads(uploads)
             if digest != draft.file_sha256:
-                raise DraftValidationError("The selected file differs from the confirmed attachment.")
+                raise DraftValidationError("The selected work-image set differs from the confirmed attachment.")
             return ConfirmedDraft(draft_id=str(draft.id), fields=dict(draft.fields))
 
     def mark_executed(self, draft_id: str, asset: Any) -> None:
@@ -103,20 +103,37 @@ class RegistrationDraftService:
 
     @staticmethod
     def _hash_upload(upload: Any) -> str:
+        """업로드의 청크를 스트림으로 읽어 sha256 hex digest를 반환한다.
+
+        읽은 뒤 업로드 위치를 다시 맨 앞으로 되돌려, 이후 실제 등록 파이프라인이
+        파일 전체를 다시 읽을 수 있도록 한다.
+        """
         hasher = hashlib.sha256()
         for chunk in upload.chunks():
             hasher.update(chunk)
         upload.seek(0)
         return hasher.hexdigest()
 
+    @classmethod
+    def _hash_uploads(cls, uploads: Any) -> str:
+        """순서가 있는 이미지 해시 목록의 매니페스트 SHA-256을 계산한다."""
+        if not isinstance(uploads, (list, tuple)):
+            uploads = (uploads,)
+        image_hashes = [cls._hash_upload(upload) for upload in uploads]
+        if len(image_hashes) == 1:
+            return image_hashes[0]
+        return hashlib.sha256("\n".join(image_hashes).encode("ascii")).hexdigest()
+
     @staticmethod
     def _validate_ready(draft: Any) -> None:
+        """확정에 필요한 첨부·유형·제목·가격·공개 여부가 모두 채워졌는지 검사한다."""
         required = ("asset_type", "title", "min_price", "target_price", "visibility")
         if not draft.file_name or not draft.file_sha256 or any(not str(draft.fields.get(key) or "").strip() for key in required):
             raise DraftValidationError("Complete the attachment, type, title, pricing, and visibility before confirming.")
 
     @staticmethod
     def serialize(draft: Any) -> dict[str, Any]:
+        """초안을 API 응답용 dict로 직렬화한다. 확정 토큰은 발급된 경우에만 포함한다."""
         return {"draft_id": str(draft.id), "status": draft.status, "file_name": draft.file_name, "fields": draft.fields, "confirmation_token": str(draft.confirmation_token) if draft.confirmation_token else None}
 
 

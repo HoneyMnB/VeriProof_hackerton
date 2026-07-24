@@ -1,0 +1,3521 @@
+[
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "admin",
+    "model": "logentry"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "permission"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "group"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "auth",
+    "model": "user"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "contenttypes",
+    "model": "contenttype"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "sessions",
+    "model": "session"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "common",
+    "model": "agentevent"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "creator"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "ipasset"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "negotiation",
+    "model": "negotiationsession"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "settlement",
+    "model": "batchorder"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "settlement",
+    "model": "license"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "settlement",
+    "model": "batchitem"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "settlement",
+    "model": "royaltydistribution"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "assistantmessage"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "creatorexpense"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "agentdirective"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "assistantaction"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "subscriptionplan"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "creatorsubscription"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "registrationcharge"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "accounts",
+    "model": "userpreference"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "registrationdraft"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "conversationattachment"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "ip",
+    "model": "assetcomponent"
+  }
+},
+{
+  "model": "contenttypes.contenttype",
+  "fields": {
+    "app_label": "accounts",
+    "model": "walletconfiguration"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "0i0mzcrdttcde6z2oxn2ban1ogdk8xxq",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnAh9:32rpRoTYo0EMhCK-Lg3IAb3eukGTPh4z-EIVBhMNwKA",
+    "expire_date": "2026-08-07T07:51:47.711Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "5o98wushfgcbve87ipgckcgruztrw0np",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnAbS:g647c9HUKdVe_YB7gHpp4uXLnB8x8rMelRgcI5KYMuM",
+    "expire_date": "2026-08-07T07:45:54.670Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "74t5iy1qe2987ex8sf6q7hrxthrmutsp",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnAhH:wGaJu9G-FuEBHXwHUS7FL1GoB317WK9qS6qmy0I1dcg",
+    "expire_date": "2026-08-07T07:51:55.682Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "9m09702ln6uhn54b7b0bn0ztvu6sz99z",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wn9BC:04cwZ0r80QKfIqc_1weXDySLx1zMtiKjAERSkdkeClc",
+    "expire_date": "2026-08-07T06:14:42.195Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "bgtuo2q6hgli1ap47ntepmn7xlf9f35c",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnGTe:W0u3Bjcnxo__Rus_tBWNHQ1xFMaNfDzlUUDFfz6lP28",
+    "expire_date": "2026-08-07T14:02:14.940Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "i0tvxz6eqmhjsjmprd7tyectbz898c3b",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnGUV:BkYzDYsYvXz5LCKgAciWf5GRDK2GIamYFRmXHHFiyRQ",
+    "expire_date": "2026-08-07T14:03:07.767Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "qxjh3mjm8w4ycm1vh2sk9ifs2313cvmp",
+  "fields": {
+    "session_data": ".eJxVjEEOwiAQRe_C2hCgA7Uu3XsGMsMMUjU0Ke3KeHfbpAvd_vfef6uI61Li2mSOI6uL8ur0uxGmp9Qd8APrfdJpqss8kt4VfdCmbxPL63q4fwcFW9lq5HMgZsgIljg4tJ3n5EInYDgRJIDQOzHeCvg-DyFnIevcluDgrFGfLwTmOE4:1wn7KH:lTk93_Gcey-taANr-7kB30n0FUKkG7oGvI6yS_o_iKE",
+    "expire_date": "2026-08-07T04:15:57.720Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "rbejqn9gkuw2h8l563di2qae2pm2jdx6",
+  "fields": {
+    "session_data": ".eJxVjLsOAiEUBf-F2hAkPC3t_QZyHyCrBpJltzL-uyHZQtszM-ctEuxbTfvIa1pYXIQRp98NgZ65TcAPaPcuqbdtXVBORR50yFvn_Loe7t9BhVFnbQkCeEDvdPEaOJ9VULZwdtEEiMiRCVAVbWwE4zU6iNZqQ6gUYRafLwkcOLw:1wn7K0:rIN_xQNGf3e3VeU_s0mpK-LZ1b_TT3nVqLUlbv0VmFM",
+    "expire_date": "2026-08-07T04:15:40.692Z"
+  }
+},
+{
+  "model": "sessions.session",
+  "pk": "tra3v4ege9xuz1n877tbzar0jve1qf43",
+  "fields": {
+    "session_data": ".eJxVjE0OwiAYBe_C2hBAIeDSvWcg3x9SNZCUdmW8uzbpQrdvZt5LZViXmtchc55YnVVQh98NgR7SNsB3aLeuqbdlnlBvit7p0NfO8rzs7t9BhVG_NYH1jmzyJ8CAjl3xyUEqAQ1EkEKEIJ6EUQIZ4mRjYOOIvTlGlKjeHxjKOXQ:1wnGT2:j-Mh0uox3JNHGHUnLcEudl749ZcBrlEw_Puxh4Knu-w",
+    "expire_date": "2026-08-07T14:01:36.234Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 1,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "071957f0-64bb-45da-b171-5b5906137a5f",
+      "buyer_hint": ""
+    },
+    "created_at": "2026-07-23T16:41:26.394Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 2,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "00f4f28f-ad7a-4146-82c4-5f99ab528310",
+      "buyer_hint": "e2e-buyer"
+    },
+    "created_at": "2026-07-24T02:39:39.268Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 3,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "ACCEPT",
+    "payload": {
+      "asset_id": "00f4f28f-ad7a-4146-82c4-5f99ab528310",
+      "session_id": "20f9be34-79f9-48cf-9dfb-65b7603a696f",
+      "offer_usdc": "2.00",
+      "status": "ACCEPT",
+      "price_usdc": "2.000000",
+      "reason": "The offer meets the target price expectations."
+    },
+    "created_at": "2026-07-24T02:39:40.357Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 4,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "PAYMENT_VERIFIED",
+    "payload": {
+      "asset_id": "00f4f28f-ad7a-4146-82c4-5f99ab528310",
+      "license_id": "7484791d-b1b5-4560-886c-62ef5beb024b",
+      "payment_tx_sig": "mock:e2e-runtime-001",
+      "buyer_wallet": "So11111111111111111111111111111111111111112"
+    },
+    "created_at": "2026-07-24T02:40:00.836Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 5,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "CERT_ISSUED",
+    "payload": {
+      "asset_id": "00f4f28f-ad7a-4146-82c4-5f99ab528310",
+      "license_id": "7484791d-b1b5-4560-886c-62ef5beb024b",
+      "payment_tx_sig": "mock:e2e-runtime-001",
+      "certificate_tx_sig": null
+    },
+    "created_at": "2026-07-24T02:40:00.843Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 6,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "84c5a3c33139eeb70493ddd663c2feed5e4d92e23945fe4a984add3e7f93b687",
+      "anchor_tx_sig": "mock:solana:anchor:ab7eb9bff9a67c3756cddb58dcd3761f"
+    },
+    "created_at": "2026-07-24T02:49:16.545Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 7,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "ff941ea4-ec27-4a21-9c70-7f53654b54a9",
+      "buyer_hint": "e2e-external-agent"
+    },
+    "created_at": "2026-07-24T02:49:32.583Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 8,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "ACCEPT",
+    "payload": {
+      "asset_id": "ff941ea4-ec27-4a21-9c70-7f53654b54a9",
+      "session_id": "2fa1a16d-cd55-4f35-be14-a7fb6ee334e8",
+      "offer_usdc": "2.00",
+      "status": "ACCEPT",
+      "price_usdc": "2.000000",
+      "reason": "The offer meets the target price requirement for commercial usage."
+    },
+    "created_at": "2026-07-24T02:49:33.961Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 9,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "PAYMENT_VERIFIED",
+    "payload": {
+      "asset_id": "ff941ea4-ec27-4a21-9c70-7f53654b54a9",
+      "license_id": "7016eeba-ee83-48b9-9145-e6fa4430a08f",
+      "payment_tx_sig": "mock:e2e-full-001",
+      "buyer_wallet": "So11111111111111111111111111111111111111112"
+    },
+    "created_at": "2026-07-24T02:49:50.248Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 10,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "CERT_ISSUED",
+    "payload": {
+      "asset_id": "ff941ea4-ec27-4a21-9c70-7f53654b54a9",
+      "license_id": "7016eeba-ee83-48b9-9145-e6fa4430a08f",
+      "payment_tx_sig": "mock:e2e-full-001",
+      "certificate_tx_sig": "mock:solana:certificate:925f4f438b0556d9a0c3ceb8e821f7d6"
+    },
+    "created_at": "2026-07-24T02:49:50.255Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 11,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "6aa819781ed968bb8f2f9b4b6e65ac34d74634e9836937086683d0733495201e",
+      "anchor_tx_sig": "mock:solana:anchor:040f58961112d7b0fa39d1347ffb4d9a"
+    },
+    "created_at": "2026-07-24T03:17:33.311Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 12,
+  "fields": {
+    "asset": null,
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "a6899a4b636c5c50ed572a7ef79a064efcb938f0ace20dddccba008c24f24d8d",
+      "anchor_tx_sig": "mock:solana:anchor:a8faf872b2237a48aed5d881a08af976"
+    },
+    "created_at": "2026-07-24T03:17:52.375Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 13,
+  "fields": {
+    "asset": "b5d1e195-ee85-4e73-a933-f6176e840fe6",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "e8a97c61bcc812fdeae3170427ebe2d4036902000358d09158b47e81e9ea71a7",
+      "anchor_tx_sig": "mock:solana:anchor:f69c7586aa753bd0fdb077cbdc74da17"
+    },
+    "created_at": "2026-07-24T06:12:14.445Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 14,
+  "fields": {
+    "asset": "1bf29536-67dc-4cba-9991-522cc179b4df",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "ea5538ff6ceba61aad0f3baf9f6b989e4eb02a91667e42a047cdf20dea7b6812",
+      "anchor_tx_sig": "mock:solana:anchor:5de881871a56d14f8a4ad29ad1448932"
+    },
+    "created_at": "2026-07-24T06:12:17.765Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 15,
+  "fields": {
+    "asset": "4666b047-1025-4b58-b52a-f5fbcf7b5231",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "ed79d1961a44d90c69c92aa320ce4d7821369c1d870a8e487e2652a988c1f3ab",
+      "anchor_tx_sig": "mock:solana:anchor:415ec8652e499849197c1cebefe0b4f9"
+    },
+    "created_at": "2026-07-24T06:12:21.170Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 16,
+  "fields": {
+    "asset": "4c117612-6f3f-498c-97ea-08ca628b7ca6",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "fbc8e8d1ff4b0b8dd4c6335a0dced09d195f2655fa070b332568a438e1c2d204",
+      "anchor_tx_sig": "mock:solana:anchor:d500a4eb0037b263d52aa4917cec362a"
+    },
+    "created_at": "2026-07-24T06:12:24.978Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 17,
+  "fields": {
+    "asset": "426ca7a1-182f-4720-b1b9-50281b6dc3eb",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "a5095ab3526fe7d645c13f324cedc97f19835777ed5cac9f7bd078d0e2ede09e",
+      "anchor_tx_sig": "mock:solana:anchor:fedc9ad15c9a4880acc7680178f8ab4a"
+    },
+    "created_at": "2026-07-24T06:12:28.883Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 18,
+  "fields": {
+    "asset": "018433c1-763e-4111-ba8c-cd4a1e58bfbc",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "4ecb445a6f94ac11b5693cc258c598858cc41a68edd30e6d6ffb73b675643e40",
+      "anchor_tx_sig": "mock:solana:anchor:66d8de10a26e466d1607ecaea7d9fe9b"
+    },
+    "created_at": "2026-07-24T06:12:32.815Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 19,
+  "fields": {
+    "asset": "e0068c30-f3fd-463f-b444-252bac82c6d6",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "9fb85f46bdf6052f61dc7ae2e47e28c9b4da0d2a3db50e1e49a1aaf6ccf9b3fd",
+      "anchor_tx_sig": "mock:solana:anchor:c96ff8ac57ddc9a3478e6faccedc731a"
+    },
+    "created_at": "2026-07-24T06:12:36.485Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 20,
+  "fields": {
+    "asset": "a449ab12-ebb1-40f4-9ac1-a64de70117d6",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "3d54d0de6922672b16ad398a125a76aa854d7173e943768cc06731a1a9c1913e",
+      "anchor_tx_sig": "mock:solana:anchor:612e21b7398045fc2bce1f853dc17595"
+    },
+    "created_at": "2026-07-24T06:12:40.698Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 21,
+  "fields": {
+    "asset": "9953a2d0-ff22-4824-a384-a08516012a4a",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "cd61c9f16bcbb2fc4983d8bd18a507b9eb67caf98824aece482a63b27f27c097",
+      "anchor_tx_sig": "mock:solana:anchor:4083ae4c6ae92714e0d07f0f08164c9f"
+    },
+    "created_at": "2026-07-24T06:12:44.206Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 22,
+  "fields": {
+    "asset": "d8845fef-df78-42b6-ae47-6779f2d02966",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "8f20dec81232bba14e4551a3f2feb2e0c8360227b1c1365158b7865563fa9f33",
+      "anchor_tx_sig": "mock:solana:anchor:a73dd302741b282807a06660c9997bcb"
+    },
+    "created_at": "2026-07-24T06:12:48.601Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 23,
+  "fields": {
+    "asset": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "01d15e4ee155375a34cf92094426194244b0ef9a7fe696876abe8644cfc95c30",
+      "anchor_tx_sig": "mock:solana:anchor:bb594d243d2442f1f0389a2da0e3cef0"
+    },
+    "created_at": "2026-07-24T06:12:52.424Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 24,
+  "fields": {
+    "asset": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "4388cdfd3e3c16e8be086296994c4f29204d4379fe62e7a7f380a36f8c3083d7",
+      "anchor_tx_sig": "mock:solana:anchor:1150c3c0bc8422cce70677ce38adcc51"
+    },
+    "created_at": "2026-07-24T06:12:56.211Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 25,
+  "fields": {
+    "asset": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "04a5bd5912e470e865fcb456b7cd770fbdaa5d423043adff403cc4f9aed1cc10",
+      "anchor_tx_sig": "mock:solana:anchor:819d56aefd80bfad7887abbd5cc5292a"
+    },
+    "created_at": "2026-07-24T06:12:59.918Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 26,
+  "fields": {
+    "asset": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "843736279d40c0aa4c45b62f9aa63834f31917dd8b924c679569085cebee2ffb",
+      "anchor_tx_sig": "mock:solana:anchor:9198efdb186efa9ee0c8b66cf9e9be54"
+    },
+    "created_at": "2026-07-24T06:13:03.508Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 27,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "ANCHORED",
+    "payload": {
+      "content_sha256": "7aff916941c638a37c4700892c4dab2f3e8f6e07747c6a622f1f9794681342a2",
+      "anchor_tx_sig": "mock:solana:anchor:4d5e78861fcb0096ca9054348236291d"
+    },
+    "created_at": "2026-07-24T06:13:07.473Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 28,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "buyer_hint": ""
+    },
+    "created_at": "2026-07-24T06:14:42.231Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 29,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "buyer_hint": "sandbox-buyer"
+    },
+    "created_at": "2026-07-24T06:16:55.795Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 30,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": "811ab5e4-fdcd-492d-b29a-3f6935cee661",
+    "type": "COUNTER",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "session_id": "811ab5e4-fdcd-492d-b29a-3f6935cee661",
+      "offer_usdc": "9",
+      "status": "COUNTER_OFFER",
+      "price_usdc": "11.000000",
+      "reason": "The offer is below the target price of 11 USDC for commercial usage."
+    },
+    "created_at": "2026-07-24T06:16:57.269Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 31,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "SIMULATION_FAILED",
+    "payload": {
+      "run_id": "728dcae960c84e4a95edaad54ccdda23",
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "stage": "negotiate",
+      "detail": {
+        "status": "COUNTER_OFFER",
+        "reason": "The offer is below the target price of 11 USDC for commercial usage."
+      }
+    },
+    "created_at": "2026-07-24T06:16:57.270Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 32,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "HTTP_402",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "buyer_hint": "sandbox-buyer"
+    },
+    "created_at": "2026-07-24T06:17:08.990Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 33,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+    "type": "ACCEPT",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "session_id": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+      "offer_usdc": "9",
+      "status": "ACCEPT",
+      "price_usdc": "9.000000",
+      "reason": "The offer meets the minimum threshold and is reasonably close to the target price for a commercial license."
+    },
+    "created_at": "2026-07-24T06:17:10.369Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 34,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+    "type": "PAYMENT_VERIFIED",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "license_id": "ac63be41-2897-4d32-b777-e15163f1a764",
+      "payment_tx_sig": "mock:external-e2e-payment-2",
+      "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    },
+    "created_at": "2026-07-24T06:17:10.372Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 35,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+    "type": "CERT_ISSUED",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "license_id": "ac63be41-2897-4d32-b777-e15163f1a764",
+      "payment_tx_sig": "mock:external-e2e-payment-2",
+      "certificate_tx_sig": "mock:solana:certificate:b1dc63b78fe0dd1d617b6f0338ec6d29"
+    },
+    "created_at": "2026-07-24T06:17:10.374Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 36,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "PAYMENT_VERIFIED",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "license_id": "5e07aba3-fcb5-49e5-9681-b8797372acd1",
+      "payment_tx_sig": "mock:browser-detail-e2e-20260724",
+      "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+    },
+    "created_at": "2026-07-24T06:33:49.979Z"
+  }
+},
+{
+  "model": "common.agentevent",
+  "pk": 37,
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "type": "CERT_ISSUED",
+    "payload": {
+      "asset_id": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+      "license_id": "5e07aba3-fcb5-49e5-9681-b8797372acd1",
+      "payment_tx_sig": "mock:browser-detail-e2e-20260724",
+      "certificate_tx_sig": "mock:solana:certificate:b1dc63b78fe0dd1d617b6f0338ec6d29"
+    },
+    "created_at": "2026-07-24T06:33:49.980Z"
+  }
+},
+{
+  "model": "ip.creator",
+  "pk": 14,
+  "fields": {
+    "wallet_address": "11111111111111111111111111111111",
+    "display_name": null,
+    "created_at": "2026-07-24T06:12:09.674Z"
+  }
+},
+{
+  "model": "ip.assistantmessage",
+  "pk": 14,
+  "fields": {
+    "creator": 14,
+    "conversation_id": "ee9e809e-0620-4189-9b0f-722cd781feeb",
+    "conversation_title": null,
+    "role": "user",
+    "content": "이 첨부 작품의 라이선스 등록 전에 확인할 사항을 알려줘.",
+    "created_at": "2026-07-24T06:15:21.404Z"
+  }
+},
+{
+  "model": "ip.assistantmessage",
+  "pk": 15,
+  "fields": {
+    "creator": 14,
+    "conversation_id": "ee9e809e-0620-4189-9b0f-722cd781feeb",
+    "conversation_title": null,
+    "role": "assistant",
+    "content": "첨부된 작품 'coast-dawn.png'의 라이선스 등록을 진행하기 위해 먼저 파일 업로드가 필요합니다. VeriProof 시스템에서 작품의 원본 파일이 등록되면 라이선스 조건을 설정하고 온체인 등록 절차를 준비할 수 있습니다. 등록을 원하시면 작품 파일을 업로드해주세요.",
+    "created_at": "2026-07-24T06:15:23.178Z"
+  }
+},
+{
+  "model": "ip.conversationattachment",
+  "pk": "04a206e1-f95c-48ec-a5da-07a72a6e9452",
+  "fields": {
+    "creator": 14,
+    "source_message": 14,
+    "file_name": "coast-dawn.png",
+    "content_mime_type": "image/png",
+    "content_sha256": "9fb85f46bdf6052f61dc7ae2e47e28c9b4da0d2a3db50e1e49a1aaf6ccf9b3fd",
+    "perceptual_hash": "ffff7f1f0f070000",
+    "temporary_url": "/media/temporary/04a206e1-f95c-48ec-a5da-07a72a6e9452.bin",
+    "expires_at": "2026-07-31T06:15:21.352Z",
+    "analysis": {
+      "tags": [
+        "seascape",
+        "sunset",
+        "rocks",
+        "scandinavia",
+        "coastal",
+        "nature",
+        "serene",
+        "dusk",
+        "landscape"
+      ],
+      "category": "landscape photography",
+      "originality_score": 75
+    },
+    "created_at": "2026-07-24T06:15:21.352Z"
+  }
+},
+{
+  "model": "ip.conversationattachment",
+  "pk": "5f245e27-3a1d-4985-84d5-4ee9bcd222fa",
+  "fields": {
+    "creator": 14,
+    "source_message": null,
+    "file_name": "스크린샷 2026-07-24 오후 7.37.21.png",
+    "content_mime_type": "image/png",
+    "content_sha256": "d44b089a25cff1136f7ab0cd7d34efc966cd00975b2a91e634f0fb7a330e7e38",
+    "perceptual_hash": "ff3f3fff0286ffff",
+    "temporary_url": "/media/temporary/5f245e27-3a1d-4985-84d5-4ee9bcd222fa.bin",
+    "expires_at": "2026-07-31T10:40:22.732Z",
+    "analysis": {
+      "tags": [
+        "user interface",
+        "software",
+        "communication",
+        "license registration"
+      ],
+      "category": "interface element",
+      "originality_score": 10
+    },
+    "created_at": "2026-07-24T10:40:22.733Z"
+  }
+},
+{
+  "model": "ip.conversationattachment",
+  "pk": "8e386b63-7eb6-48fb-ab69-3e63645073ea",
+  "fields": {
+    "creator": 14,
+    "source_message": null,
+    "file_name": "스크린샷 2026-07-24 오후 7.40.37.png",
+    "content_mime_type": "image/png",
+    "content_sha256": "eb532636aab40eeeeaa06c54ea624c656ad42104aa6a98405f4367fdc0af0f35",
+    "perceptual_hash": "ffff9f9f9e8cbc3f",
+    "temporary_url": "/media/temporary/8e386b63-7eb6-48fb-ab69-3e63645073ea.bin",
+    "expires_at": "2026-07-31T10:47:15.395Z",
+    "analysis": {
+      "tags": [
+        "user interface",
+        "chat input",
+        "file upload",
+        "ux design",
+        "messaging"
+      ],
+      "category": "User Interface Design",
+      "originality_score": 10
+    },
+    "created_at": "2026-07-24T10:47:15.395Z"
+  }
+},
+{
+  "model": "ip.assistantaction",
+  "pk": 5,
+  "fields": {
+    "creator": 14,
+    "source_message": 14,
+    "action_name": "prepare_registration",
+    "status": "awaiting_input",
+    "request_payload": {},
+    "result_payload": {
+      "required_input": "file_upload",
+      "requested_title": ""
+    },
+    "verification_passed": false,
+    "verified_at": null,
+    "created_at": "2026-07-24T06:15:23.176Z"
+  }
+},
+{
+  "model": "ip.subscriptionplan",
+  "pk": 3,
+  "fields": {
+    "code": "local-demo-catalog",
+    "name": "Local demo catalog",
+    "monthly_fee_usdc": "0.000000",
+    "included_registrations": 15,
+    "is_active": true,
+    "created_at": "2026-07-24T06:12:09.672Z"
+  }
+},
+{
+  "model": "ip.creatorsubscription",
+  "pk": 4,
+  "fields": {
+    "creator": 14,
+    "plan": 3,
+    "status": "expired",
+    "payment_tx_sig": "mock:demo-catalog-subscription:1784873529.673608",
+    "period_start": "2026-07-24T06:12:09.674Z",
+    "period_end": "2026-08-23T06:12:09.674Z",
+    "registrations_used": 15,
+    "created_at": "2026-07-24T06:12:09.674Z"
+  }
+},
+{
+  "model": "ip.creatorsubscription",
+  "pk": 5,
+  "fields": {
+    "creator": 14,
+    "plan": 3,
+    "status": "active",
+    "payment_tx_sig": "mock:demo-catalog-subscription:1784873588.97318",
+    "period_start": "2026-07-24T06:13:08.973Z",
+    "period_end": "2026-08-23T06:13:08.973Z",
+    "registrations_used": 0,
+    "created_at": "2026-07-24T06:13:08.974Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 3,
+  "fields": {
+    "subscription": 4,
+    "asset": "b5d1e195-ee85-4e73-a933-f6176e840fe6",
+    "created_at": "2026-07-24T06:12:14.444Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 4,
+  "fields": {
+    "subscription": 4,
+    "asset": "1bf29536-67dc-4cba-9991-522cc179b4df",
+    "created_at": "2026-07-24T06:12:17.765Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 5,
+  "fields": {
+    "subscription": 4,
+    "asset": "4666b047-1025-4b58-b52a-f5fbcf7b5231",
+    "created_at": "2026-07-24T06:12:21.170Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 6,
+  "fields": {
+    "subscription": 4,
+    "asset": "4c117612-6f3f-498c-97ea-08ca628b7ca6",
+    "created_at": "2026-07-24T06:12:24.978Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 7,
+  "fields": {
+    "subscription": 4,
+    "asset": "426ca7a1-182f-4720-b1b9-50281b6dc3eb",
+    "created_at": "2026-07-24T06:12:28.883Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 8,
+  "fields": {
+    "subscription": 4,
+    "asset": "018433c1-763e-4111-ba8c-cd4a1e58bfbc",
+    "created_at": "2026-07-24T06:12:32.815Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 9,
+  "fields": {
+    "subscription": 4,
+    "asset": "e0068c30-f3fd-463f-b444-252bac82c6d6",
+    "created_at": "2026-07-24T06:12:36.485Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 10,
+  "fields": {
+    "subscription": 4,
+    "asset": "a449ab12-ebb1-40f4-9ac1-a64de70117d6",
+    "created_at": "2026-07-24T06:12:40.698Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 11,
+  "fields": {
+    "subscription": 4,
+    "asset": "9953a2d0-ff22-4824-a384-a08516012a4a",
+    "created_at": "2026-07-24T06:12:44.206Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 12,
+  "fields": {
+    "subscription": 4,
+    "asset": "d8845fef-df78-42b6-ae47-6779f2d02966",
+    "created_at": "2026-07-24T06:12:48.600Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 13,
+  "fields": {
+    "subscription": 4,
+    "asset": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+    "created_at": "2026-07-24T06:12:52.423Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 14,
+  "fields": {
+    "subscription": 4,
+    "asset": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+    "created_at": "2026-07-24T06:12:56.211Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 15,
+  "fields": {
+    "subscription": 4,
+    "asset": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+    "created_at": "2026-07-24T06:12:59.918Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 16,
+  "fields": {
+    "subscription": 4,
+    "asset": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+    "created_at": "2026-07-24T06:13:03.508Z"
+  }
+},
+{
+  "model": "ip.registrationcharge",
+  "pk": 17,
+  "fields": {
+    "subscription": 4,
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "created_at": "2026-07-24T06:13:07.473Z"
+  }
+},
+{
+  "model": "ip.registrationdraft",
+  "pk": "95c052e5-90ae-49f3-bd56-4cc1ff770509",
+  "fields": {
+    "creator": 14,
+    "status": "collecting",
+    "file_name": "video_20260715_010502_7f5a7fa635cf.mp4",
+    "file_sha256": "8210e6f78de7601e8ab79cd9d974344e88ede231131b1bdde04264f4f7fb0d2a",
+    "fields": {
+      "asset_type": "image",
+      "title": "video_20260715_010502_7f5a7fa635cf",
+      "description": "",
+      "min_price": "1.00",
+      "target_price": "3.00",
+      "visibility": "private"
+    },
+    "confirmation_token": null,
+    "confirmed_at": null,
+    "executed_asset": null,
+    "created_at": "2026-07-24T12:03:51.327Z",
+    "updated_at": "2026-07-24T12:03:51.327Z"
+  }
+},
+{
+  "model": "negotiation.negotiationsession",
+  "pk": "811ab5e4-fdcd-492d-b29a-3f6935cee661",
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "buyer_agent_id": "external-e2e-agent",
+    "usage_type": "commercial",
+    "initial_offer_usdc": "9.000000",
+    "final_price_usdc": null,
+    "status": "negotiating",
+    "rounds": [
+      {
+        "offer": "9",
+        "counter": "11.000000",
+        "status": "COUNTER_OFFER",
+        "reason": "The offer is below the target price of 11 USDC for commercial usage.",
+        "ts": "2026-07-24T06:16:57.268427+00:00"
+      }
+    ],
+    "pay_address": null,
+    "ap2_cart_mandate": null,
+    "created_at": "2026-07-24T06:16:55.798Z",
+    "updated_at": "2026-07-24T06:16:57.268Z"
+  }
+},
+{
+  "model": "negotiation.negotiationsession",
+  "pk": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "buyer_agent_id": "external-e2e-agent-2",
+    "usage_type": "commercial",
+    "initial_offer_usdc": "9.000000",
+    "final_price_usdc": "9.000000",
+    "status": "accepted",
+    "rounds": [
+      {
+        "offer": "9",
+        "counter": "9.000000",
+        "status": "ACCEPT",
+        "reason": "The offer meets the minimum threshold and is reasonably close to the target price for a commercial license.",
+        "ts": "2026-07-24T06:17:10.368343+00:00"
+      }
+    ],
+    "pay_address": "11111111111111111111111111111111",
+    "ap2_cart_mandate": null,
+    "created_at": "2026-07-24T06:17:08.992Z",
+    "updated_at": "2026-07-24T06:17:10.368Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "08360caf-74e0-4e2f-87b0-63663c25bbaf",
+  "fields": {
+    "asset": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0201Preview",
+    "price_usdc": "11.250000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:2:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:2:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-21T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "0b5c0eda-6780-4333-8cdd-613db39785de",
+  "fields": {
+    "asset": "e0068c30-f3fd-463f-b444-252bac82c6d6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0801Preview",
+    "price_usdc": "21.750000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:8:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:8:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-09T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "15e46802-6565-46eb-abf7-aa4a78eca0cd",
+  "fields": {
+    "asset": "d8845fef-df78-42b6-ae47-6779f2d02966",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0502Preview",
+    "price_usdc": "18.750000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:5:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:5:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-10T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "170cb3e0-0a29-405c-8f53-f2526b83ca7a",
+  "fields": {
+    "asset": "4666b047-1025-4b58-b52a-f5fbcf7b5231",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1201Preview",
+    "price_usdc": "28.750000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:12:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:12:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-01T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "41c87cd0-57d5-4118-9a07-f73811ed7575",
+  "fields": {
+    "asset": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0102Preview",
+    "price_usdc": "11.750000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:1:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:1:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-18T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "4f242698-01fb-4c37-99a4-1f6db461c133",
+  "fields": {
+    "asset": "426ca7a1-182f-4720-b1b9-50281b6dc3eb",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1001Preview",
+    "price_usdc": "25.250000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:10:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:10:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-05T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "56dea8a2-1515-4a16-a262-8aa5bb90f654",
+  "fields": {
+    "asset": "a449ab12-ebb1-40f4-9ac1-a64de70117d6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0702Preview",
+    "price_usdc": "22.250000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:7:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:7:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-06T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "5e07aba3-fcb5-49e5-9681-b8797372acd1",
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": null,
+    "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "price_usdc": "11.000000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "mock:browser-detail-e2e-20260724",
+    "certificate_tx_sig": "mock:solana:certificate:b1dc63b78fe0dd1d617b6f0338ec6d29",
+    "download_token": "VX1VJoPw4-Wh2njw5-Cuq-TAn_utZukV",
+    "download_expires_at": "2026-07-24T07:33:49.977Z",
+    "granted_at": "2026-07-24T06:33:49.977Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "65890d71-0563-4ccc-9293-c6aa749e389d",
+  "fields": {
+    "asset": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+    "session": null,
+    "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "price_usdc": "12.000000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-preview:202607:2",
+    "certificate_tx_sig": null,
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-19T14:40:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "65c2a506-2bb4-4478-95f1-0c2e52e9463a",
+  "fields": {
+    "asset": "4c117612-6f3f-498c-97ea-08ca628b7ca6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1102Preview",
+    "price_usdc": "29.250000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:11:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:11:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-06-28T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "6a4a158f-dc5b-43a7-9480-ec83c503287f",
+  "fields": {
+    "asset": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+    "session": null,
+    "buyer_wallet": "SysvarRent111111111111111111111111111111111",
+    "price_usdc": "7.250000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-preview:202607:3",
+    "certificate_tx_sig": null,
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-15T08:30:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "7e67f30f-8a28-4ac2-8ffc-20d1594bf8ed",
+  "fields": {
+    "asset": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+    "session": null,
+    "buyer_wallet": "So11111111111111111111111111111111111111112",
+    "price_usdc": "18.500000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-preview:202607:1",
+    "certificate_tx_sig": null,
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-22T10:15:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "865d0f8e-7a57-426b-a14d-b3022b0573fd",
+  "fields": {
+    "asset": "a449ab12-ebb1-40f4-9ac1-a64de70117d6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0701Preview",
+    "price_usdc": "20.000000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:7:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:7:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-11T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "8905cc63-c0dd-47fe-9db9-72b3edfcf7a7",
+  "fields": {
+    "asset": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+    "session": null,
+    "buyer_wallet": "Vote111111111111111111111111111111111111111",
+    "price_usdc": "24.750000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-preview:202607:4",
+    "certificate_tx_sig": null,
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-09T16:05:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "9b0e4206-1202-4296-9e41-2f90cc7a9eae",
+  "fields": {
+    "asset": "9953a2d0-ff22-4824-a384-a08516012a4a",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0602Preview",
+    "price_usdc": "20.500000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:6:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:6:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-08T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "a04d70af-0744-466e-a00e-e8122dd52f38",
+  "fields": {
+    "asset": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0402Preview",
+    "price_usdc": "17.000000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:4:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:4:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-12T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "a3caa055-d9cd-494d-8289-a74965380563",
+  "fields": {
+    "asset": "018433c1-763e-4111-ba8c-cd4a1e58bfbc",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0901Preview",
+    "price_usdc": "23.500000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:9:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:9:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-07T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "ac63be41-2897-4d32-b777-e15163f1a764",
+  "fields": {
+    "asset": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+    "session": "8be3cf27-8e15-48f6-b795-56ce34e12dc4",
+    "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+    "price_usdc": "9.000000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "mock:external-e2e-payment-2",
+    "certificate_tx_sig": "mock:solana:certificate:b1dc63b78fe0dd1d617b6f0338ec6d29",
+    "download_token": "T4oxuz7BzuuYf2MpVnyE0RaE0KjFwvHe",
+    "download_expires_at": "2026-07-24T07:17:10.371Z",
+    "granted_at": "2026-07-24T06:17:10.371Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "aff78846-1a36-42a1-8c28-2daf72aecab1",
+  "fields": {
+    "asset": "9953a2d0-ff22-4824-a384-a08516012a4a",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0601Preview",
+    "price_usdc": "18.250000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:6:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:6:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-13T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "b8a4d1da-31f5-45fe-a52b-4c284409adb2",
+  "fields": {
+    "asset": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0302Preview",
+    "price_usdc": "15.250000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:3:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:3:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-14T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "b9f4d7a6-91ef-4a87-bb18-ffb09040c1e8",
+  "fields": {
+    "asset": "d8845fef-df78-42b6-ae47-6779f2d02966",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0501Preview",
+    "price_usdc": "16.500000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:5:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:5:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-15T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "bb6b51a8-1673-41bf-af5b-79687c18c1d9",
+  "fields": {
+    "asset": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0301Preview",
+    "price_usdc": "13.000000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:3:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:3:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-19T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "bd2d7187-0eed-4751-9a41-c8b96a295080",
+  "fields": {
+    "asset": "4c117612-6f3f-498c-97ea-08ca628b7ca6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1101Preview",
+    "price_usdc": "27.000000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:11:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:11:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-03T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "c11e4371-7f18-42cb-b7c6-84a74907788a",
+  "fields": {
+    "asset": "e0068c30-f3fd-463f-b444-252bac82c6d6",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0802Preview",
+    "price_usdc": "24.000000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:8:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:8:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-04T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "c5523a52-da20-42f3-b194-ae8057982eb3",
+  "fields": {
+    "asset": "018433c1-763e-4111-ba8c-cd4a1e58bfbc",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0902Preview",
+    "price_usdc": "25.750000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:9:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:9:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-02T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "d966667e-bb51-44ae-8dc1-bd571efed20b",
+  "fields": {
+    "asset": "426ca7a1-182f-4720-b1b9-50281b6dc3eb",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1002Preview",
+    "price_usdc": "27.500000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:10:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:10:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-06-30T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "e23b5619-3689-4baf-b6c9-5d89b29964b8",
+  "fields": {
+    "asset": "4666b047-1025-4b58-b52a-f5fbcf7b5231",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet1202Preview",
+    "price_usdc": "31.000000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:12:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:12:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-06-26T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "eee2f6ad-75f6-48b9-8170-11c73164efb9",
+  "fields": {
+    "asset": "d8845fef-df78-42b6-ae47-6779f2d02966",
+    "session": null,
+    "buyer_wallet": "Stake11111111111111111111111111111111111111",
+    "price_usdc": "15.000000",
+    "usage_type": "editorial",
+    "payment_tx_sig": "demo:sales-dashboard-preview:202607:5",
+    "certificate_tx_sig": null,
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-01T11:20:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "f072a5ae-d392-46b9-80c5-6cf8512f3614",
+  "fields": {
+    "asset": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0202Preview",
+    "price_usdc": "13.500000",
+    "usage_type": "personal",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:2:2",
+    "certificate_tx_sig": "demo:certificate-volume:202607:2:2",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-16T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "f6a22821-fb03-4255-9f35-e792f12c7c31",
+  "fields": {
+    "asset": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0101Preview",
+    "price_usdc": "9.500000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:1:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:1:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-23T14:00:00Z"
+  }
+},
+{
+  "model": "settlement.license",
+  "pk": "f827e4c6-3017-4e95-9b2d-70435b3737e8",
+  "fields": {
+    "asset": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+    "session": null,
+    "buyer_wallet": "DemoBuyerWallet0401Preview",
+    "price_usdc": "14.750000",
+    "usage_type": "commercial",
+    "payment_tx_sig": "demo:sales-dashboard-volume:202607:4:1",
+    "certificate_tx_sig": "demo:certificate-volume:202607:4:1",
+    "download_token": null,
+    "download_expires_at": null,
+    "granted_at": "2026-07-17T14:00:00Z"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add log entry",
+    "content_type": [
+      "admin",
+      "logentry"
+    ],
+    "codename": "add_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change log entry",
+    "content_type": [
+      "admin",
+      "logentry"
+    ],
+    "codename": "change_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete log entry",
+    "content_type": [
+      "admin",
+      "logentry"
+    ],
+    "codename": "delete_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view log entry",
+    "content_type": [
+      "admin",
+      "logentry"
+    ],
+    "codename": "view_logentry"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add permission",
+    "content_type": [
+      "auth",
+      "permission"
+    ],
+    "codename": "add_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change permission",
+    "content_type": [
+      "auth",
+      "permission"
+    ],
+    "codename": "change_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete permission",
+    "content_type": [
+      "auth",
+      "permission"
+    ],
+    "codename": "delete_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view permission",
+    "content_type": [
+      "auth",
+      "permission"
+    ],
+    "codename": "view_permission"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add group",
+    "content_type": [
+      "auth",
+      "group"
+    ],
+    "codename": "add_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change group",
+    "content_type": [
+      "auth",
+      "group"
+    ],
+    "codename": "change_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete group",
+    "content_type": [
+      "auth",
+      "group"
+    ],
+    "codename": "delete_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view group",
+    "content_type": [
+      "auth",
+      "group"
+    ],
+    "codename": "view_group"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add user",
+    "content_type": [
+      "auth",
+      "user"
+    ],
+    "codename": "add_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change user",
+    "content_type": [
+      "auth",
+      "user"
+    ],
+    "codename": "change_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete user",
+    "content_type": [
+      "auth",
+      "user"
+    ],
+    "codename": "delete_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view user",
+    "content_type": [
+      "auth",
+      "user"
+    ],
+    "codename": "view_user"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add content type",
+    "content_type": [
+      "contenttypes",
+      "contenttype"
+    ],
+    "codename": "add_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change content type",
+    "content_type": [
+      "contenttypes",
+      "contenttype"
+    ],
+    "codename": "change_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete content type",
+    "content_type": [
+      "contenttypes",
+      "contenttype"
+    ],
+    "codename": "delete_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view content type",
+    "content_type": [
+      "contenttypes",
+      "contenttype"
+    ],
+    "codename": "view_contenttype"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add session",
+    "content_type": [
+      "sessions",
+      "session"
+    ],
+    "codename": "add_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change session",
+    "content_type": [
+      "sessions",
+      "session"
+    ],
+    "codename": "change_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete session",
+    "content_type": [
+      "sessions",
+      "session"
+    ],
+    "codename": "delete_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view session",
+    "content_type": [
+      "sessions",
+      "session"
+    ],
+    "codename": "view_session"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add agent event",
+    "content_type": [
+      "common",
+      "agentevent"
+    ],
+    "codename": "add_agentevent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change agent event",
+    "content_type": [
+      "common",
+      "agentevent"
+    ],
+    "codename": "change_agentevent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete agent event",
+    "content_type": [
+      "common",
+      "agentevent"
+    ],
+    "codename": "delete_agentevent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view agent event",
+    "content_type": [
+      "common",
+      "agentevent"
+    ],
+    "codename": "view_agentevent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add creator",
+    "content_type": [
+      "ip",
+      "creator"
+    ],
+    "codename": "add_creator"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change creator",
+    "content_type": [
+      "ip",
+      "creator"
+    ],
+    "codename": "change_creator"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete creator",
+    "content_type": [
+      "ip",
+      "creator"
+    ],
+    "codename": "delete_creator"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view creator",
+    "content_type": [
+      "ip",
+      "creator"
+    ],
+    "codename": "view_creator"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add ip asset",
+    "content_type": [
+      "ip",
+      "ipasset"
+    ],
+    "codename": "add_ipasset"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change ip asset",
+    "content_type": [
+      "ip",
+      "ipasset"
+    ],
+    "codename": "change_ipasset"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete ip asset",
+    "content_type": [
+      "ip",
+      "ipasset"
+    ],
+    "codename": "delete_ipasset"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view ip asset",
+    "content_type": [
+      "ip",
+      "ipasset"
+    ],
+    "codename": "view_ipasset"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add negotiation session",
+    "content_type": [
+      "negotiation",
+      "negotiationsession"
+    ],
+    "codename": "add_negotiationsession"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change negotiation session",
+    "content_type": [
+      "negotiation",
+      "negotiationsession"
+    ],
+    "codename": "change_negotiationsession"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete negotiation session",
+    "content_type": [
+      "negotiation",
+      "negotiationsession"
+    ],
+    "codename": "delete_negotiationsession"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view negotiation session",
+    "content_type": [
+      "negotiation",
+      "negotiationsession"
+    ],
+    "codename": "view_negotiationsession"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add batch order",
+    "content_type": [
+      "settlement",
+      "batchorder"
+    ],
+    "codename": "add_batchorder"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change batch order",
+    "content_type": [
+      "settlement",
+      "batchorder"
+    ],
+    "codename": "change_batchorder"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete batch order",
+    "content_type": [
+      "settlement",
+      "batchorder"
+    ],
+    "codename": "delete_batchorder"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view batch order",
+    "content_type": [
+      "settlement",
+      "batchorder"
+    ],
+    "codename": "view_batchorder"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add license",
+    "content_type": [
+      "settlement",
+      "license"
+    ],
+    "codename": "add_license"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change license",
+    "content_type": [
+      "settlement",
+      "license"
+    ],
+    "codename": "change_license"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete license",
+    "content_type": [
+      "settlement",
+      "license"
+    ],
+    "codename": "delete_license"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view license",
+    "content_type": [
+      "settlement",
+      "license"
+    ],
+    "codename": "view_license"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add batch item",
+    "content_type": [
+      "settlement",
+      "batchitem"
+    ],
+    "codename": "add_batchitem"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change batch item",
+    "content_type": [
+      "settlement",
+      "batchitem"
+    ],
+    "codename": "change_batchitem"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete batch item",
+    "content_type": [
+      "settlement",
+      "batchitem"
+    ],
+    "codename": "delete_batchitem"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view batch item",
+    "content_type": [
+      "settlement",
+      "batchitem"
+    ],
+    "codename": "view_batchitem"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add royalty distribution",
+    "content_type": [
+      "settlement",
+      "royaltydistribution"
+    ],
+    "codename": "add_royaltydistribution"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change royalty distribution",
+    "content_type": [
+      "settlement",
+      "royaltydistribution"
+    ],
+    "codename": "change_royaltydistribution"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete royalty distribution",
+    "content_type": [
+      "settlement",
+      "royaltydistribution"
+    ],
+    "codename": "delete_royaltydistribution"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view royalty distribution",
+    "content_type": [
+      "settlement",
+      "royaltydistribution"
+    ],
+    "codename": "view_royaltydistribution"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add assistant message",
+    "content_type": [
+      "ip",
+      "assistantmessage"
+    ],
+    "codename": "add_assistantmessage"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change assistant message",
+    "content_type": [
+      "ip",
+      "assistantmessage"
+    ],
+    "codename": "change_assistantmessage"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete assistant message",
+    "content_type": [
+      "ip",
+      "assistantmessage"
+    ],
+    "codename": "delete_assistantmessage"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view assistant message",
+    "content_type": [
+      "ip",
+      "assistantmessage"
+    ],
+    "codename": "view_assistantmessage"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add creator expense",
+    "content_type": [
+      "ip",
+      "creatorexpense"
+    ],
+    "codename": "add_creatorexpense"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change creator expense",
+    "content_type": [
+      "ip",
+      "creatorexpense"
+    ],
+    "codename": "change_creatorexpense"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete creator expense",
+    "content_type": [
+      "ip",
+      "creatorexpense"
+    ],
+    "codename": "delete_creatorexpense"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view creator expense",
+    "content_type": [
+      "ip",
+      "creatorexpense"
+    ],
+    "codename": "view_creatorexpense"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add agent directive",
+    "content_type": [
+      "ip",
+      "agentdirective"
+    ],
+    "codename": "add_agentdirective"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change agent directive",
+    "content_type": [
+      "ip",
+      "agentdirective"
+    ],
+    "codename": "change_agentdirective"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete agent directive",
+    "content_type": [
+      "ip",
+      "agentdirective"
+    ],
+    "codename": "delete_agentdirective"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view agent directive",
+    "content_type": [
+      "ip",
+      "agentdirective"
+    ],
+    "codename": "view_agentdirective"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add assistant action",
+    "content_type": [
+      "ip",
+      "assistantaction"
+    ],
+    "codename": "add_assistantaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change assistant action",
+    "content_type": [
+      "ip",
+      "assistantaction"
+    ],
+    "codename": "change_assistantaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete assistant action",
+    "content_type": [
+      "ip",
+      "assistantaction"
+    ],
+    "codename": "delete_assistantaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view assistant action",
+    "content_type": [
+      "ip",
+      "assistantaction"
+    ],
+    "codename": "view_assistantaction"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add subscription plan",
+    "content_type": [
+      "ip",
+      "subscriptionplan"
+    ],
+    "codename": "add_subscriptionplan"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change subscription plan",
+    "content_type": [
+      "ip",
+      "subscriptionplan"
+    ],
+    "codename": "change_subscriptionplan"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete subscription plan",
+    "content_type": [
+      "ip",
+      "subscriptionplan"
+    ],
+    "codename": "delete_subscriptionplan"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view subscription plan",
+    "content_type": [
+      "ip",
+      "subscriptionplan"
+    ],
+    "codename": "view_subscriptionplan"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add creator subscription",
+    "content_type": [
+      "ip",
+      "creatorsubscription"
+    ],
+    "codename": "add_creatorsubscription"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change creator subscription",
+    "content_type": [
+      "ip",
+      "creatorsubscription"
+    ],
+    "codename": "change_creatorsubscription"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete creator subscription",
+    "content_type": [
+      "ip",
+      "creatorsubscription"
+    ],
+    "codename": "delete_creatorsubscription"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view creator subscription",
+    "content_type": [
+      "ip",
+      "creatorsubscription"
+    ],
+    "codename": "view_creatorsubscription"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add registration charge",
+    "content_type": [
+      "ip",
+      "registrationcharge"
+    ],
+    "codename": "add_registrationcharge"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change registration charge",
+    "content_type": [
+      "ip",
+      "registrationcharge"
+    ],
+    "codename": "change_registrationcharge"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete registration charge",
+    "content_type": [
+      "ip",
+      "registrationcharge"
+    ],
+    "codename": "delete_registrationcharge"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view registration charge",
+    "content_type": [
+      "ip",
+      "registrationcharge"
+    ],
+    "codename": "view_registrationcharge"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add user preference",
+    "content_type": [
+      "accounts",
+      "userpreference"
+    ],
+    "codename": "add_userpreference"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change user preference",
+    "content_type": [
+      "accounts",
+      "userpreference"
+    ],
+    "codename": "change_userpreference"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete user preference",
+    "content_type": [
+      "accounts",
+      "userpreference"
+    ],
+    "codename": "delete_userpreference"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view user preference",
+    "content_type": [
+      "accounts",
+      "userpreference"
+    ],
+    "codename": "view_userpreference"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add registration draft",
+    "content_type": [
+      "ip",
+      "registrationdraft"
+    ],
+    "codename": "add_registrationdraft"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change registration draft",
+    "content_type": [
+      "ip",
+      "registrationdraft"
+    ],
+    "codename": "change_registrationdraft"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete registration draft",
+    "content_type": [
+      "ip",
+      "registrationdraft"
+    ],
+    "codename": "delete_registrationdraft"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view registration draft",
+    "content_type": [
+      "ip",
+      "registrationdraft"
+    ],
+    "codename": "view_registrationdraft"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add conversation attachment",
+    "content_type": [
+      "ip",
+      "conversationattachment"
+    ],
+    "codename": "add_conversationattachment"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change conversation attachment",
+    "content_type": [
+      "ip",
+      "conversationattachment"
+    ],
+    "codename": "change_conversationattachment"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete conversation attachment",
+    "content_type": [
+      "ip",
+      "conversationattachment"
+    ],
+    "codename": "delete_conversationattachment"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view conversation attachment",
+    "content_type": [
+      "ip",
+      "conversationattachment"
+    ],
+    "codename": "view_conversationattachment"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add asset component",
+    "content_type": [
+      "ip",
+      "assetcomponent"
+    ],
+    "codename": "add_assetcomponent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change asset component",
+    "content_type": [
+      "ip",
+      "assetcomponent"
+    ],
+    "codename": "change_assetcomponent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete asset component",
+    "content_type": [
+      "ip",
+      "assetcomponent"
+    ],
+    "codename": "delete_assetcomponent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view asset component",
+    "content_type": [
+      "ip",
+      "assetcomponent"
+    ],
+    "codename": "view_assetcomponent"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can add wallet configuration",
+    "content_type": [
+      "accounts",
+      "walletconfiguration"
+    ],
+    "codename": "add_walletconfiguration"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can change wallet configuration",
+    "content_type": [
+      "accounts",
+      "walletconfiguration"
+    ],
+    "codename": "change_walletconfiguration"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can delete wallet configuration",
+    "content_type": [
+      "accounts",
+      "walletconfiguration"
+    ],
+    "codename": "delete_walletconfiguration"
+  }
+},
+{
+  "model": "auth.permission",
+  "fields": {
+    "name": "Can view wallet configuration",
+    "content_type": [
+      "accounts",
+      "walletconfiguration"
+    ],
+    "codename": "view_walletconfiguration"
+  }
+},
+{
+  "model": "auth.user",
+  "fields": {
+    "password": "pbkdf2_sha256$1000000$Z2Pwrq3Rb34JfbnEnjMi5f$c6vQHu31tJqAuRuTXfYWEG8nFbaWt6NnJQPbiSsBePo=",
+    "last_login": "2026-07-24T14:03:07.766Z",
+    "is_superuser": true,
+    "username": "admin@test.com",
+    "first_name": "",
+    "last_name": "",
+    "email": "admin@test.com",
+    "is_staff": true,
+    "is_active": true,
+    "date_joined": "2026-07-24T06:12:09.556Z",
+    "groups": [],
+    "user_permissions": []
+  }
+},
+{
+  "model": "accounts.userpreference",
+  "pk": 6,
+  "fields": {
+    "user": [
+      "admin@test.com"
+    ],
+    "display_name": "admin@test.com",
+    "language": "ko",
+    "recovery_email": "",
+    "contact_phone": "",
+    "creator_wallet": "11111111111111111111111111111111",
+    "updated_at": "2026-07-24T14:00:40.995Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "018433c1-763e-4111-ba8c-cd4a1e58bfbc",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Sunday objects",
+    "description": "A graphic pop-art still life with everyday objects.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "still life",
+      "minimalist",
+      "coffee pot",
+      "mug",
+      "lemon",
+      "primary colors",
+      "pop art",
+      "contemporary painting",
+      "vibrant"
+    ],
+    "ai_tags": [],
+    "category": "Fine Art",
+    "originality_score": 75,
+    "min_price_usdc": "6.000000",
+    "target_price_usdc": "13.000000",
+    "image_sha256": "4ecb445a6f94ac11b5693cc258c598858cc41a68edd30e6d6ffb73b675643e40",
+    "perceptual_hash": "000060001898f9ff",
+    "thumbnail_url": "/media/permanent/thumbnail/018433c1-763e-4111-ba8c-cd4a1e58bfbc.bin",
+    "watermark_url": "/media/permanent/watermark/018433c1-763e-4111-ba8c-cd4a1e58bfbc.bin",
+    "original_url": "/media/temporary/018433c1-763e-4111-ba8c-cd4a1e58bfbc.bin",
+    "original_expires_at": "2026-07-31T06:12:32.813Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:66d8de10a26e466d1607ecaea7d9fe9b",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:50f7d93ec10b021f5d6b5cae8ce9b9e6",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:32.813Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "1bf29536-67dc-4cba-9991-522cc179b4df",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Stoneware morning cup",
+    "description": "A studio photograph of a hand-thrown stoneware cup.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "mug",
+      "ceramic",
+      "pottery",
+      "minimalist",
+      "kitchenware",
+      "speckled",
+      "handmade",
+      "tableware"
+    ],
+    "ai_tags": [],
+    "category": "Home Goods",
+    "originality_score": 35,
+    "min_price_usdc": "4.000000",
+    "target_price_usdc": "8.000000",
+    "image_sha256": "ea5538ff6ceba61aad0f3baf9f6b989e4eb02a91667e42a047cdf20dea7b6812",
+    "perceptual_hash": "0f1f07078f0f0307",
+    "thumbnail_url": "/media/permanent/thumbnail/1bf29536-67dc-4cba-9991-522cc179b4df.bin",
+    "watermark_url": "/media/permanent/watermark/1bf29536-67dc-4cba-9991-522cc179b4df.bin",
+    "original_url": "/media/temporary/1bf29536-67dc-4cba-9991-522cc179b4df.bin",
+    "original_expires_at": "2026-07-31T06:12:17.764Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:5de881871a56d14f8a4ad29ad1448932",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:e9d0b32ba95b85de5bf636673cf7e6e3",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:17.764Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "426ca7a1-182f-4720-b1b9-50281b6dc3eb",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Chromatic profile",
+    "description": "A contemporary pop-art portrait with graphic color fields.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "minimalist",
+      "pop art",
+      "vibrant",
+      "portrait",
+      "high contrast",
+      "monochromatic style",
+      "contemporary digital art",
+      "fashion",
+      "expressive"
+    ],
+    "ai_tags": [],
+    "category": "Digital Illustration",
+    "originality_score": 85,
+    "min_price_usdc": "7.000000",
+    "target_price_usdc": "16.000000",
+    "image_sha256": "a5095ab3526fe7d645c13f324cedc97f19835777ed5cac9f7bd078d0e2ede09e",
+    "perceptual_hash": "e0e0e0c0c4c5f3ff",
+    "thumbnail_url": "/media/permanent/thumbnail/426ca7a1-182f-4720-b1b9-50281b6dc3eb.bin",
+    "watermark_url": "/media/permanent/watermark/426ca7a1-182f-4720-b1b9-50281b6dc3eb.bin",
+    "original_url": "/media/temporary/426ca7a1-182f-4720-b1b9-50281b6dc3eb.bin",
+    "original_expires_at": "2026-07-31T06:12:28.882Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:fedc9ad15c9a4880acc7680178f8ab4a",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:a118a157badc2c77d93926a9aa4e26ba",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:28.882Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "4666b047-1025-4b58-b52a-f5fbcf7b5231",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Brass balance mobile",
+    "description": "A small hand-built brass mobile documented as a product work.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "mobile",
+      "sculpture",
+      "brass",
+      "minimalist",
+      "kinetic art",
+      "decor",
+      "hanging"
+    ],
+    "ai_tags": [],
+    "category": "Home Decor",
+    "originality_score": 85,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "11.000000",
+    "image_sha256": "ed79d1961a44d90c69c92aa320ce4d7821369c1d870a8e487e2652a988c1f3ab",
+    "perceptual_hash": "80c0b0f0fcecefef",
+    "thumbnail_url": "/media/permanent/thumbnail/4666b047-1025-4b58-b52a-f5fbcf7b5231.bin",
+    "watermark_url": "/media/permanent/watermark/4666b047-1025-4b58-b52a-f5fbcf7b5231.bin",
+    "original_url": "/media/temporary/4666b047-1025-4b58-b52a-f5fbcf7b5231.bin",
+    "original_expires_at": "2026-07-31T06:12:21.169Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:415ec8652e499849197c1cebefe0b4f9",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:0eacd093ceb03bbd62105d588b14ce8f",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:21.169Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "4c117612-6f3f-498c-97ea-08ca628b7ca6",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Electric flowers",
+    "description": "A bold contemporary pop-art flower composition.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "flowers",
+      "botanical",
+      "vibrant",
+      "digital art",
+      "modern",
+      "floral",
+      "pop art",
+      "vivid colors"
+    ],
+    "ai_tags": [],
+    "category": "Digital Fine Art",
+    "originality_score": 75,
+    "min_price_usdc": "6.000000",
+    "target_price_usdc": "14.000000",
+    "image_sha256": "fbc8e8d1ff4b0b8dd4c6335a0dced09d195f2655fa070b332568a438e1c2d204",
+    "perceptual_hash": "160000f3f3f0f030",
+    "thumbnail_url": "/media/permanent/thumbnail/4c117612-6f3f-498c-97ea-08ca628b7ca6.bin",
+    "watermark_url": "/media/permanent/watermark/4c117612-6f3f-498c-97ea-08ca628b7ca6.bin",
+    "original_url": "/media/temporary/4c117612-6f3f-498c-97ea-08ca628b7ca6.bin",
+    "original_expires_at": "2026-07-31T06:12:24.977Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:d500a4eb0037b263d52aa4917cec362a",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:96c48c242f1fd2e36262bc5c5ed2621a",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:24.977Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "8850645e-2bde-4ed7-becf-23d2fcc9a084",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Long shadow",
+    "description": "An architectural street photograph with long shadows.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "architecture",
+      "minimalism",
+      "shadows",
+      "urban",
+      "street photography",
+      "brutalist",
+      "contrast"
+    ],
+    "ai_tags": [],
+    "category": "Photography",
+    "originality_score": 85,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "11.000000",
+    "image_sha256": "7aff916941c638a37c4700892c4dab2f3e8f6e07747c6a622f1f9794681342a2",
+    "perceptual_hash": "0030381e1fff3f0f",
+    "thumbnail_url": "/media/permanent/thumbnail/8850645e-2bde-4ed7-becf-23d2fcc9a084.bin",
+    "watermark_url": "/media/permanent/watermark/8850645e-2bde-4ed7-becf-23d2fcc9a084.bin",
+    "original_url": "/media/temporary/8850645e-2bde-4ed7-becf-23d2fcc9a084.bin",
+    "original_expires_at": "2026-07-31T06:13:07.472Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:4d5e78861fcb0096ca9054348236291d",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:85dee7418c4ecddf0fa55f40e4e591e4",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:13:07.472Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "8853700a-2a44-4038-b2f9-9c25d7d945a9",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Red crossing",
+    "description": "An editorial street photograph with a red architectural detail.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "urban",
+      "street photography",
+      "architecture",
+      "minimalism",
+      "contrast",
+      "city life"
+    ],
+    "ai_tags": [],
+    "category": "Fine Art Photography",
+    "originality_score": 82,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "11.000000",
+    "image_sha256": "04a5bd5912e470e865fcb456b7cd770fbdaa5d423043adff403cc4f9aed1cc10",
+    "perceptual_hash": "e0e060400078ffff",
+    "thumbnail_url": "/media/permanent/thumbnail/8853700a-2a44-4038-b2f9-9c25d7d945a9.bin",
+    "watermark_url": "/media/permanent/watermark/8853700a-2a44-4038-b2f9-9c25d7d945a9.bin",
+    "original_url": "/media/temporary/8853700a-2a44-4038-b2f9-9c25d7d945a9.bin",
+    "original_expires_at": "2026-07-31T06:12:59.915Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:819d56aefd80bfad7887abbd5cc5292a",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:fb314af47933222010d299d98e6793e7",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:59.915Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "9953a2d0-ff22-4824-a384-a08516012a4a",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Mountain lake",
+    "description": "A landscape photograph of a high mountain lake.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "mountains",
+      "lake",
+      "reflection",
+      "landscape",
+      "nature",
+      "twilight",
+      "alps",
+      "scenic"
+    ],
+    "ai_tags": [],
+    "category": "Landscape Photography",
+    "originality_score": 65,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "12.000000",
+    "image_sha256": "cd61c9f16bcbb2fc4983d8bd18a507b9eb67caf98824aece482a63b27f27c097",
+    "perceptual_hash": "7f7f3e0000343c60",
+    "thumbnail_url": "/media/permanent/thumbnail/9953a2d0-ff22-4824-a384-a08516012a4a.bin",
+    "watermark_url": "/media/permanent/watermark/9953a2d0-ff22-4824-a384-a08516012a4a.bin",
+    "original_url": "/media/temporary/9953a2d0-ff22-4824-a384-a08516012a4a.bin",
+    "original_expires_at": "2026-07-31T06:12:44.205Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:4083ae4c6ae92714e0d07f0f08164c9f",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:736f1546a28d4fa42ff044dbdadf4093",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:44.205Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "a449ab12-ebb1-40f4-9ac1-a64de70117d6",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Forest mist",
+    "description": "A fine-art landscape photograph of a misty forest.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "fog",
+      "mist",
+      "forest",
+      "pine trees",
+      "moody",
+      "nature",
+      "landscape",
+      "coniferous",
+      "atmospheric",
+      "evergreen"
+    ],
+    "ai_tags": [],
+    "category": "Nature Photography",
+    "originality_score": 75,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "12.000000",
+    "image_sha256": "3d54d0de6922672b16ad398a125a76aa854d7173e943768cc06731a1a9c1913e",
+    "perceptual_hash": "ffff3f1f07000000",
+    "thumbnail_url": "/media/permanent/thumbnail/a449ab12-ebb1-40f4-9ac1-a64de70117d6.bin",
+    "watermark_url": "/media/permanent/watermark/a449ab12-ebb1-40f4-9ac1-a64de70117d6.bin",
+    "original_url": "/media/temporary/a449ab12-ebb1-40f4-9ac1-a64de70117d6.bin",
+    "original_expires_at": "2026-07-31T06:12:40.697Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:612e21b7398045fc2bce1f853dc17595",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:0784d0983abe8b6f3b64925d459b9fc7",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:40.697Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "b5d1e195-ee85-4e73-a933-f6176e840fe6",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Ceramic incense holder",
+    "description": "Hand-crafted ceramic object photographed for a product license.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "incense",
+      "minimalist",
+      "homeware",
+      "ceramic",
+      "meditation",
+      "interior decor"
+    ],
+    "ai_tags": [],
+    "category": "Home Decor",
+    "originality_score": 75,
+    "min_price_usdc": "4.000000",
+    "target_price_usdc": "9.000000",
+    "image_sha256": "e8a97c61bcc812fdeae3170427ebe2d4036902000358d09158b47e81e9ea71a7",
+    "perceptual_hash": "c0c0c0e0e0ef1f07",
+    "thumbnail_url": "/media/permanent/thumbnail/b5d1e195-ee85-4e73-a933-f6176e840fe6.bin",
+    "watermark_url": "/media/permanent/watermark/b5d1e195-ee85-4e73-a933-f6176e840fe6.bin",
+    "original_url": "/media/temporary/b5d1e195-ee85-4e73-a933-f6176e840fe6.bin",
+    "original_expires_at": "2026-07-31T06:12:14.443Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:f69c7586aa753bd0fdb077cbdc74da17",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:82fc4ee2d7f51ca6896a67230515bbbf",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:14.443Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "c87e91cb-ee33-4993-9d5a-41d4947c9c61",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Market interval",
+    "description": "An editorial photograph of a local market scene.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "market",
+      "street vendor",
+      "produce",
+      "fresh vegetables",
+      "people",
+      "shopping",
+      "Guatemala",
+      "community"
+    ],
+    "ai_tags": [],
+    "category": "Street Photography",
+    "originality_score": 78,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "11.000000",
+    "image_sha256": "843736279d40c0aa4c45b62f9aa63834f31917dd8b924c679569085cebee2ffb",
+    "perceptual_hash": "7eff8000081b1b10",
+    "thumbnail_url": "/media/permanent/thumbnail/c87e91cb-ee33-4993-9d5a-41d4947c9c61.bin",
+    "watermark_url": "/media/permanent/watermark/c87e91cb-ee33-4993-9d5a-41d4947c9c61.bin",
+    "original_url": "/media/temporary/c87e91cb-ee33-4993-9d5a-41d4947c9c61.bin",
+    "original_expires_at": "2026-07-31T06:13:03.507Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:9198efdb186efa9ee0c8b66cf9e9be54",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:c064a5ce40fb6b080abec5d5cb0d9557",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:13:03.507Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "ccd4ecff-0793-4b47-855b-c8f02e65ef9f",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Window sitter",
+    "description": "An oil portrait painted in soft afternoon light.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "portrait",
+      "oil painting",
+      "fine art",
+      "woman",
+      "window light",
+      "painterly style",
+      "classic",
+      "serene"
+    ],
+    "ai_tags": [],
+    "category": "Fine Art",
+    "originality_score": 75,
+    "min_price_usdc": "8.000000",
+    "target_price_usdc": "18.000000",
+    "image_sha256": "4388cdfd3e3c16e8be086296994c4f29204d4379fe62e7a7f380a36f8c3083d7",
+    "perceptual_hash": "f1f1f0fcfeda1800",
+    "thumbnail_url": "/media/permanent/thumbnail/ccd4ecff-0793-4b47-855b-c8f02e65ef9f.bin",
+    "watermark_url": "/media/permanent/watermark/ccd4ecff-0793-4b47-855b-c8f02e65ef9f.bin",
+    "original_url": "/media/temporary/ccd4ecff-0793-4b47-855b-c8f02e65ef9f.bin",
+    "original_expires_at": "2026-07-31T06:12:56.210Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:1150c3c0bc8422cce70677ce38adcc51",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:604c5f62d76e9533d83def88e0bffea4",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:56.210Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "d6e0efdc-98c8-4bd6-97d9-4f959debf9b3",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Gold collar",
+    "description": "An oil-painted portrait with warm gold accents.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "oil painting",
+      "portrait",
+      "fine art",
+      "renaissance style",
+      "classical",
+      "woman",
+      "elegant",
+      "golden attire"
+    ],
+    "ai_tags": [],
+    "category": "Digital Fine Art",
+    "originality_score": 85,
+    "min_price_usdc": "8.000000",
+    "target_price_usdc": "18.000000",
+    "image_sha256": "01d15e4ee155375a34cf92094426194244b0ef9a7fe696876abe8644cfc95c30",
+    "perceptual_hash": "20323b3b3f391800",
+    "thumbnail_url": "/media/permanent/thumbnail/d6e0efdc-98c8-4bd6-97d9-4f959debf9b3.bin",
+    "watermark_url": "/media/permanent/watermark/d6e0efdc-98c8-4bd6-97d9-4f959debf9b3.bin",
+    "original_url": "/media/temporary/d6e0efdc-98c8-4bd6-97d9-4f959debf9b3.bin",
+    "original_expires_at": "2026-07-31T06:12:52.422Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:bb594d243d2442f1f0389a2da0e3cef0",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:e979820c33776e2a83943a9df15c50f3",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:52.422Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "d8845fef-df78-42b6-ae47-6779f2d02966",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Blue study",
+    "description": "An oil-painted portrait study in a restrained palette.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "portrait",
+      "oil painting",
+      "figurative art",
+      "male",
+      "blue",
+      "textured",
+      "classical style",
+      "fine art"
+    ],
+    "ai_tags": [],
+    "category": "Fine Art",
+    "originality_score": 85,
+    "min_price_usdc": "8.000000",
+    "target_price_usdc": "18.000000",
+    "image_sha256": "8f20dec81232bba14e4551a3f2feb2e0c8360227b1c1365158b7865563fa9f33",
+    "perceptual_hash": "c293f3fb77038000",
+    "thumbnail_url": "/media/permanent/thumbnail/d8845fef-df78-42b6-ae47-6779f2d02966.bin",
+    "watermark_url": "/media/permanent/watermark/d8845fef-df78-42b6-ae47-6779f2d02966.bin",
+    "original_url": "/media/temporary/d8845fef-df78-42b6-ae47-6779f2d02966.bin",
+    "original_expires_at": "2026-07-31T06:12:48.599Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:a73dd302741b282807a06660c9997bcb",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:60a344214242f8f44a7cde60bbddc8df",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:48.600Z"
+  }
+},
+{
+  "model": "ip.ipasset",
+  "pk": "e0068c30-f3fd-463f-b444-252bac82c6d6",
+  "fields": {
+    "creator": 14,
+    "account_owner": [
+      "admin@test.com"
+    ],
+    "title": "Coast at dawn",
+    "description": "A landscape photograph of a quiet coast at sunrise.",
+    "ai_description": null,
+    "asset_type": "image",
+    "visibility": "public",
+    "content_mime_type": "image/png",
+    "tags": [
+      "landscape",
+      "sunset",
+      "coastal",
+      "ocean",
+      "rocks",
+      "scenic",
+      "nature",
+      "tranquil"
+    ],
+    "ai_tags": [],
+    "category": "Photography",
+    "originality_score": 75,
+    "min_price_usdc": "5.000000",
+    "target_price_usdc": "12.000000",
+    "image_sha256": "9fb85f46bdf6052f61dc7ae2e47e28c9b4da0d2a3db50e1e49a1aaf6ccf9b3fd",
+    "perceptual_hash": "ffff7f1f0f070000",
+    "thumbnail_url": "/media/permanent/thumbnail/e0068c30-f3fd-463f-b444-252bac82c6d6.bin",
+    "watermark_url": "/media/permanent/watermark/e0068c30-f3fd-463f-b444-252bac82c6d6.bin",
+    "original_url": "/media/temporary/e0068c30-f3fd-463f-b444-252bac82c6d6.bin",
+    "original_expires_at": "2026-07-31T06:12:36.484Z",
+    "original_purged": false,
+    "anchor_tx_sig": "mock:solana:anchor:c96ff8ac57ddc9a3478e6faccedc731a",
+    "registration_certificate_tx_sig": "mock:solana:registration-certificate:871a24ed0ef8c290d9a64eb9292ae4d6",
+    "parent_asset": null,
+    "royalty_share_bps": null,
+    "status": "anchored",
+    "created_at": "2026-07-24T06:12:36.484Z"
+  }
+}
+]

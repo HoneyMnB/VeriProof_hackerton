@@ -42,6 +42,10 @@
 
     function isSupported(lang) { return SUPPORTED.indexOf(lang) !== -1; }
 
+    /**
+     * 언어 코드를 정규화한다. 지원 코드(en/ko)면 그대로 두고, "en-US"/"ko-KR" 같은
+     * 지역 태그는 기본 언어로 매핑하며, 어느 쪽도 아니면 null을 반환한다.
+     */
     function normalize(lang) {
         if (typeof lang !== "string") { return null; }
         lang = lang.trim().toLowerCase();
@@ -51,11 +55,19 @@
         return isSupported(base) ? base : null;
     }
 
+    /**
+     * 문서 쿠키에서 지정한 이름의 값을 읽어온다. 값이 없으면 null을 반환한다.
+     * @param {string} name - 쿠키 이름.
+     * @returns {string|null} - URL 디코딩한 쿠키 값, 또는 null.
+     */
     function readCookie(name) {
         var match = document.cookie.match(new RegExp("(?:^|; )" + name + "=([^;]*)"));
         return match ? decodeURIComponent(match[1]) : null;
     }
 
+    /**
+     * 지정한 이름/값/수명(days)으로 쿠키를 기록한다. SameSite=Lax, path=/ 를 적용한다.
+     */
     function writeCookie(name, value, days) {
         var maxAge = days * 86400;
         var expires = "";
@@ -82,6 +94,10 @@
         return DEFAULT;
     }
 
+    /**
+     * "{var}" 형태의 자리표시를 vars 객체의 값으로 치환한다.
+     * vars에 존재하지 않는 키는 원래 자리표시 문자열 그대로 둔다.
+     */
     function interpolate(str, vars) {
         if (!vars) { return str; }
         return str.replace(/\{(\w+)\}/g, function (whole, key) {
@@ -97,11 +113,21 @@
         }
     }
 
+    /**
+     * 지정한 로케일 테이블에서 번역 키를 찾는다. 키가 없으면 null을 반환한다.
+     */
     function lookup(key, locale) {
         var table = dict()[locale];
         return (table && Object.prototype.hasOwnProperty.call(table, key)) ? table[key] : null;
     }
 
+    /**
+     * 현재 로케일로 번역 키를 해석하여 {var} 보간까지 마친 문자열을 반환한다.
+     * 현재 로케일에 키가 없으면 기본 로케일(en)로 폴백하고, 그래도 없으면 키 자체를 반환한다.
+     * @param {string} key - 번역 키.
+     * @param {Object} [vars] - {var} 보간에 사용할 변수 객체.
+     * @returns {string} - 번역된 문자열.
+     */
     function t(key, vars) {
         var val = lookup(key, currentLocale);
         if (val == null) {
@@ -113,11 +139,21 @@
         return interpolate(val, vars);
     }
 
+    /**
+     * data-i18n-*-vars 속성의 JSON 문자열을 객체로 파싱한다. 빈 값이거나 파싱 실패 시 null.
+     */
     function parseVars(raw) {
         if (!raw) { return null; }
         try { return JSON.parse(raw); } catch (e) { return null; }
     }
 
+    /**
+     * 단일 data-i18n 계열 속성에 대해 root 하위 노드를 순회하며 번역을 적용한다.
+     * textContent/innerHTML은 직접 할당하고, 그 외(placeholder/aria-label/...)는 setAttribute로 반영한다.
+     * @param {Element} root - 탐색 루트 요소.
+     * @param {string} dataAttr - data-i18n 계열 속성명(예: "data-i18n-placeholder").
+     * @param {string} prop - 적용할 DOM 속성/특성명(예: "placeholder").
+     */
     function applyOne(root, dataAttr, prop) {
         var nodes = root.querySelectorAll("[" + dataAttr + "]");
         for (var i = 0; i < nodes.length; i++) {
@@ -134,6 +170,11 @@
         }
     }
 
+    /**
+     * root 하위의 모든 data-i18n* 속성 노드에 현재 로케일 번역을 일괄 적용한다.
+     * textContent/innerHTML/placeholder/aria-label/title/alt/content 속성을 각각 처리한다.
+     * @param {Element} [root=document] - 탐색 루트. 생략 시 문서 전체.
+     */
     function applyTranslations(root) {
         root = root || document;
         applyOne(root, "data-i18n", "textContent");
@@ -145,6 +186,12 @@
         applyOne(root, "data-i18n-content", "content");
     }
 
+    /**
+     * 활성 로케일을 전환한다. 정규화 → 쿠키 저장 → <html lang> 갱신 → 전체 번역 재적용 →
+     * vp:language-change 이벤트 발생 순으로 처리한다. 같은 로케일이거나 지원되지 않으면 false.
+     * DB 영속화는 여기서 하지 않고 계정 모달의 /accounts/preferences/ POST가 담당한다.
+     * @returns {boolean} - 실제로 로케일이 변경되었는지 여부.
+     */
     function setLocale(lang) {
         var next = normalize(lang);
         if (!next) { return false; }
@@ -180,6 +227,9 @@
         });
     }
 
+    /**
+     * 초기 로케일을 확정하고 <html lang>을 설정한 뒤 최초 번역 적용과 키 누락 점검을 수행한다.
+     */
     function init() {
         currentLocale = resolveLocale();
         document.documentElement.lang = currentLocale;

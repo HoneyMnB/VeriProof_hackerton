@@ -46,6 +46,7 @@ class BigQuerySink:
         return None
 
     def _get_client(self) -> Any:
+        """주입된 클라이언트 또는 지연 생성한 bigquery.Client를 반환한다. SDK가 없으면 None."""
         if self._client is not None:
             return self._client
         try:  # pragma: no cover

@@ -14,8 +14,11 @@ from __future__ import annotations
 import decimal
 import hashlib
 import hmac
+import io
 import json
 import logging
+from pathlib import Path
+import zipfile
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, JsonResponse
@@ -211,10 +214,33 @@ def download(request: HttpRequest, token: str) -> HttpResponse:
     if asset.original_purged or original is None:
         return _error("purged", "original has been purged", status=410)
 
-    # R9: serve the original bytes.
-    response = HttpResponse(original, content_type="application/octet-stream")
-    response["Content-Disposition"] = 'attachment; filename="original.bin"'
+    gallery_images = list(asset.gallery_images.all())
+    if not gallery_images:
+        response = HttpResponse(original, content_type="application/octet-stream")
+        response["Content-Disposition"] = 'attachment; filename="original.bin"'
+        return response
+
+    files = [("original-1", original)]
+    for image in gallery_images:
+        image_bytes = storage.read_temporary(image.id)
+        if image_bytes is None:
+            return _error("purged", "an original work image has been purged", status=410)
+        files.append((_safe_download_name(image.file_name, image.position + 1), image_bytes))
+
+    # R9: one license delivers the entire multi-image work as a single archive.
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as bundle:
+        for name, image_bytes in files:
+            bundle.writestr(name, image_bytes)
+    response = HttpResponse(archive.getvalue(), content_type="application/zip")
+    response["Content-Disposition"] = 'attachment; filename="work-images.zip"'
     return response
+
+
+def _safe_download_name(file_name: str, position: int) -> str:
+    """ZIP 항목이 경로 이탈 없이 원래 파일명을 최대한 보존하도록 정규화한다."""
+    name = Path(file_name or "").name
+    return name or f"image-{position}"
 
 
 # === View helpers ===========================================================

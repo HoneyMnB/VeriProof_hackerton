@@ -15,6 +15,8 @@ class SubscriptionRequiredError(ValueError):
 
 
 class SubscriptionService:
+    """창작자 구독 활성화·권한 검증·사용 차감을 담당하는 유스케이스."""
+
     def activate_mock_subscription(self, wallet: str, plan_code: str, payment_tx_sig: str) -> Any:
         """로컬 데모 결제 증빙으로 플랜을 활성화한다."""
         from apps.ip.models import Creator, CreatorSubscription, SubscriptionPlan
@@ -64,4 +66,5 @@ class SubscriptionService:
 
 
 def get_subscription_service() -> SubscriptionService:
+    """구독 유스케이스 인스턴스를 생성한다."""
     return SubscriptionService()

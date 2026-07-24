@@ -51,6 +51,12 @@
         return (i18n && i18n.t) ? i18n.t(opt.shortKey) : code.toUpperCase();
     }
 
+    /**
+     * 언어 전환 위젯(글로브 버튼 + 드롭다운 메뉴)을 생성해 root에 마운트한다.
+     * 버튼/메뉴 DOM을 조립하고 키보드 탐색·외부 클릭 닫기·로케일 변경 동기화를 바인딩한다.
+     * VP.i18n 엔진이 준비되지 않았으면 아무것도 하지 않는다.
+     * @param {Element} root - [data-vp-lang-switch] 컨테이너 요소.
+     */
     function buildSwitcher(root) {
         var i18n = global.VP && global.VP.i18n;
         if (!i18n) { return; }
@@ -95,6 +101,9 @@
         widget.appendChild(menu);
         root.appendChild(widget);
 
+        /**
+         * 현재 로케일에 맞춰 라벨 텍스트와 메뉴 항목의 활성(aria-checked) 상태를 갱신한다.
+         */
         function syncActive() {
             var current = i18n.getLocale();
             label.textContent = shortLabel(current);
@@ -105,6 +114,9 @@
             });
         }
 
+        /**
+         * 드롭다운 메뉴를 열고 현재 로케일 항목(또는 첫 항목)으로 포커스를 옮긴다.
+         */
         function open() {
             menu.hidden = false;
             btn.setAttribute("aria-expanded", "true");
@@ -112,6 +124,9 @@
             var active = items.filter(function (b) { return b.dataset.lang === i18n.getLocale(); })[0];
             (active || items[0]).focus();
         }
+        /**
+         * 드롭다운 메뉴를 닫는다. returnFocus가 참이면 토글 버튼으로 포커스를 되돌린다.
+         */
         function close(returnFocus) {
             menu.hidden = true;
             btn.setAttribute("aria-expanded", "false");
@@ -143,6 +158,10 @@
         syncActive();
     }
 
+    /**
+     * 문서의 모든 [data-vp-lang-switch] 컨테이너에 위젯을 마운트한다.
+     * 이미 자식 요소가 있으면(중복 마운트) 건너뛰고, VP.i18n이 없으면 실행하지 않는다.
+     */
     function mountAll() {
         if (!(global.VP && global.VP.i18n)) { return; }
         var mounts = document.querySelectorAll("[" + MOUNT_ATTR + "]");

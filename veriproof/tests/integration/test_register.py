@@ -12,6 +12,7 @@ Covers the SPEC §5 integration list (AC-1..AC-10 + R7):
 from __future__ import annotations
 
 import datetime
+import hashlib
 import uuid
 
 import pytest
@@ -56,9 +57,17 @@ def _patch_services(
 
 def _post(client, image, **extra):
     """POST to /register with the given image upload + form fields."""
+    _login_registrant(client)
     data = {"image": image, "creator_wallet": VALID_WALLET, "min_price": "1.5", "target_price": "2.25"}
     data.update(extra)
     return client.post(REGISTER_URL, data, format="multipart")
+
+
+def _login_registrant(client) -> None:
+    from django.contrib.auth.models import User
+
+    user, _ = User.objects.get_or_create(username="registrant@test.com")
+    client.force_login(user)
 
 
 # --- Happy path --------------------------------------------------------------
@@ -86,6 +95,8 @@ def test_register_happy_path_returns_201_with_asset(client, png_bytes, monkeypat
 @pytest.mark.django_db
 def test_register_persists_asset_fields(client, png_bytes, monkeypatch):
     """AC-2: DB row has 64-char sha256 + thumbnail/watermark URLs + expiry."""
+    from django.contrib.auth.models import User
+
     from apps.ip.models import IpAsset
 
     _patch_services(
@@ -99,6 +110,7 @@ def test_register_persists_asset_fields(client, png_bytes, monkeypatch):
         body = _post(client, _upload(png_bytes)).json()
 
     asset = IpAsset.objects.get(id=body["asset_id"])
+    assert asset.account_owner == User.objects.get(username="registrant@test.com")
     assert len(asset.image_sha256) == 64
     assert asset.thumbnail_url
     assert asset.watermark_url
@@ -107,6 +119,33 @@ def test_register_persists_asset_fields(client, png_bytes, monkeypatch):
     assert asset.original_expires_at == datetime.datetime(
         2026, 3, 8, 0, 0, 0, tzinfo=datetime.UTC
     )
+
+
+@pytest.mark.django_db
+def test_registers_multiple_images_as_one_certified_work(client, png_bytes, rgba_png_bytes, monkeypatch):
+    """추가 이미지는 별도 작품이 아니라 하나의 작품 매니페스트·증명에 포함된다."""
+    from apps.ip.models import AssetImage, IpAsset
+    from tests.fakes import FakeSolanaService
+
+    solana = FakeSolanaService()
+    _patch_services(monkeypatch, gemini=FakeGeminiService(), solana=solana, storage=FakeStorageService())
+    response = _post(
+        client,
+        _upload(png_bytes, "cover.png"),
+        gallery_images=[_upload(rgba_png_bytes, "detail.png")],
+    )
+
+    assert response.status_code == 201, response.content
+    asset = IpAsset.objects.get(id=response.json()["asset_id"])
+    gallery_image = AssetImage.objects.get(asset=asset)
+    primary_hash = hashlib.sha256(png_bytes).hexdigest()
+    detail_hash = hashlib.sha256(rgba_png_bytes).hexdigest()
+    expected_manifest_hash = hashlib.sha256(f"{primary_hash}\n{detail_hash}".encode("ascii")).hexdigest()
+    assert asset.image_sha256 == expected_manifest_hash
+    assert gallery_image.position == 1
+    assert gallery_image.content_sha256 == detail_hash
+    assert len([call for call in solana.calls if call[0] == "anchor_hash"]) == 1
+    assert len([call for call in solana.calls if call[0] == "issue_registration_certificate"]) == 1
 
 
 @pytest.mark.django_db
@@ -218,6 +257,7 @@ def test_register_rejects_oversize(client, png_bytes, monkeypatch, settings):
 def test_register_rejects_invalid_wallet(client, png_bytes, monkeypatch):
     """AC-6: invalid wallet string -> 400 (R10)."""
     _patch_services(monkeypatch, gemini=FakeGeminiService())  # not reached
+    _login_registrant(client)
     bad = SimpleUploadedFile("t.png", png_bytes, content_type="image/png")
     response = client.post(
         REGISTER_URL,
@@ -231,6 +271,7 @@ def test_register_rejects_invalid_wallet(client, png_bytes, monkeypatch):
 def test_register_rejects_negative_min_price(client, png_bytes, monkeypatch):
     """R11: min_price < 0 -> 400."""
     _patch_services(monkeypatch, gemini=FakeGeminiService())  # not reached
+    _login_registrant(client)
     bad = SimpleUploadedFile("t.png", png_bytes, content_type="image/png")
     response = client.post(
         REGISTER_URL,
@@ -252,6 +293,7 @@ def test_register_rejects_non_finite_min_price(client, png_bytes, monkeypatch, a
 @pytest.mark.django_db
 def test_register_rejects_missing_image(client, monkeypatch):
     """No image file at all -> 400."""
+    _login_registrant(client)
     response = client.post(
         REGISTER_URL,
         {"creator_wallet": VALID_WALLET, "min_price": "1.5"},
@@ -358,6 +400,7 @@ def test_register_requires_explicit_target_price(client, png_bytes, monkeypatch)
         solana=FakeSolanaService(),
         storage=FakeStorageService(),
     )
+    _login_registrant(client)
 
     response = client.post(
         REGISTER_URL,

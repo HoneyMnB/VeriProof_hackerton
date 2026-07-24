@@ -21,7 +21,7 @@
 ### 정상 흐름
 - **R1** WHEN 창작자가 `POST /api/v1/ip/register`로 이미지 파일·`creator_wallet`·`min_price`(+선택 `parent_asset_id`·`royalty_share_bps`)를 전송하면, the system SHALL 파일을 검증하고 신규 `IpAsset`을 생성한 뒤 `asset_id`, `anchor_tx`, `analysis`, `x402_endpoint`를 201로 반환한다. (선택 파라미터 `parent_asset_id`/`royalty_share_bps`를 통한 2차 창작물 등록 규칙은 **SPEC-008 R1~R3** 참조)
 - **R2** WHEN 이미지가 수신되면, the system SHALL `ImageProcessor.sha256()`로 원본 해시를 계산하고 `IpAsset.image_sha256`에 영구 저장한다.
-- **R3** WHEN 이미지가 수신되면, the system SHALL `GeminiService.analyze_image()`를 호출하여 `tags`, `category`, `originality_score`, `recommended_min_price_usdc`를 도출·저장한다.
+- **R3** WHEN 분석 가능한 파일이 수신되면, the system SHALL `GeminiService.analyze_asset(file_bytes, mime_type)`를 호출하여 `tags`, `category`, `originality_score`, `recommended_min_price_usdc`를 도출·저장한다.
 - **R4** WHEN 해시가 계산되면, the system SHALL `SolanaService.anchor_hash(image_sha256, creator_wallet)`로 Memo 앵커링 트랜잭션을 생성하고 `anchor_tx_sig`를 저장한다.
 - **R5** WHEN 자산이 저장되면, the system SHALL 썸네일과 워터마크 프리뷰를 생성하여 `StorageService.save_permanent()`로 영구 저장하고, 원본은 `save_temporary()`로 `ORIGINAL_RETENTION_DAYS` 만료 시각과 함께 임시 저장한다.
 - **R6** WHEN 등록이 완료되면, the system SHALL `min_price` 미지정 시 `target_price_usdc = min_price × 1.5`를 기본 산정한다.
@@ -33,7 +33,7 @@
 - **R10** IF `creator_wallet`이 유효한 Solana pubkey(base58, 32bytes) 형식이 아니면 THEN the system SHALL 400을 반환한다.
 - **R11** IF `min_price` < 0 이거나 숫자가 아니면 THEN the system SHALL 400을 반환한다.
 - **R12** IF 동일 `image_sha256`가 이미 존재하면 THEN the system SHALL 409(중복 등록)와 기존 `asset_id`를 반환한다.
-- **R13** IF `GeminiService.analyze_image()`가 3회 재시도 후에도 실패하면 THEN the system SHALL 규칙기반 기본 메타데이터(태그=[], score=50)로 저장을 진행하고 `analysis.degraded=true`를 표기한다.
+- **R13** IF `GeminiService.analyze_asset()`가 3회 재시도 후에도 실패하면 THEN the system SHALL 등록을 실패 처리하고 필수 외부 분석 의존성 오류를 반환한다. 임의 메타데이터나 `analysis.degraded` fallback을 만들지 않는다.
 - **R14** IF `SolanaService.anchor_hash()`가 3회 재시도 후 실패하면 THEN the system SHALL `status="draft"`로 저장하고 `anchor_tx_sig=null`로 두며 202(등록됨, 앵커링 보류)를 반환한다.
 
 ### 저장 정책

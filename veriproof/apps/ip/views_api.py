@@ -59,6 +59,8 @@ def register(request: HttpRequest) -> JsonResponse:
     """HTTP 입력을 검증한 뒤 등록 유스케이스에만 위임한다."""
     if request.method != "POST":
         return _error("method_not_allowed", "POST required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to register an IP asset", status=401)
 
     upload = request.FILES.get("image")
     if upload is None:
@@ -66,15 +68,25 @@ def register(request: HttpRequest) -> JsonResponse:
     metadata, error = _registration_metadata(request, upload)
     if error is not None:
         return error
+    gallery_uploads = tuple(request.FILES.getlist("gallery_images"))
+    gallery_error = _validate_gallery_uploads(metadata, gallery_uploads)
+    if gallery_error is not None:
+        return gallery_error
     draft_id = (request.POST.get("draft_id") or "").strip()
     if draft_id:
         try:
             confirmed = get_registration_draft_service().consume(
-                metadata.creator_wallet, draft_id, request.POST.get("confirmation_token") or "", upload
+                metadata.creator_wallet,
+                draft_id,
+                request.POST.get("confirmation_token") or "",
+                (upload, *gallery_uploads),
             )
             metadata = _metadata_from_draft(metadata.creator_wallet, confirmed.fields, upload)
         except DraftValidationError as exc:
             return _error("invalid_registration_confirmation", str(exc), status=422)
+    gallery_error = _validate_gallery_uploads(metadata, gallery_uploads)
+    if gallery_error is not None:
+        return gallery_error
     try:
         supporting_uploads = tuple(request.FILES.getlist("supporting_files"))
         if any(item.size > settings.MAX_UPLOAD_BYTES for item in supporting_uploads):
@@ -84,7 +96,13 @@ def register(request: HttpRequest) -> JsonResponse:
             supported_component_mimes.update(mime_set)
         if any(item.content_type not in supported_component_mimes for item in supporting_uploads):
             return _error("unsupported_media_type", "a supporting file type is not allowed", 415)
-        outcome = get_registration_service().register(upload, metadata, supporting_uploads)
+        outcome = get_registration_service().register(
+            upload,
+            metadata,
+            supporting_uploads,
+            gallery_uploads=gallery_uploads,
+            account_owner=request.user,
+        )
     except SubscriptionRequiredError as exc:
         logger.warning("registration subscription rejected creator_wallet=%s", metadata.creator_wallet)
         return _error("subscription_required", str(exc), status=402)
@@ -121,6 +139,23 @@ def register(request: HttpRequest) -> JsonResponse:
     )
 
 
+def _validate_gallery_uploads(
+    metadata: RegistrationMetadata, gallery_uploads: tuple
+) -> JsonResponse | None:
+    """추가 이미지는 이미지 작품에만, 같은 제한으로 허용한다."""
+    if not gallery_uploads:
+        return None
+    if metadata.asset_type != IpAsset.IMAGE:
+        return _error("invalid_gallery", "gallery images are only supported for image works", 422)
+    if len(gallery_uploads) > settings.MAX_WORK_IMAGES - 1:
+        return _error("too_many_gallery_images", "too many images for one work", 422)
+    if any(item.content_type not in ALLOWED_IMAGE_MIMES for item in gallery_uploads):
+        return _error("unsupported_media_type", "gallery images must be PNG, JPEG, or WebP", 415)
+    if any(item.size > settings.MAX_UPLOAD_BYTES for item in gallery_uploads):
+        return _error("payload_too_large", "a gallery image exceeds the configured upload limit", 413)
+    return None
+
+
 def _metadata_from_draft(wallet: str, fields: dict, upload) -> RegistrationMetadata:
     """확정 초안 값만 실제 등록 메타데이터로 변환해 클라이언트 재조립을 막는다."""
     asset_type = str(fields.get("asset_type") or "").strip().lower()
@@ -150,17 +185,18 @@ def _error(code: str, detail: str, status: int = 400) -> JsonResponse:
 
 @csrf_exempt
 def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
-    """소유 창작자가 자산별 가격·공개 범위만 바꾸도록 검증한다."""
+    """소유 창작자가 작품 메타데이터와 판매 조건을 함께 수정한다."""
     if request.method != "POST":
         return _error("method_not_allowed", "POST required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to manage an IP asset", status=401)
     try:
         data = json.loads(request.body or b"{}")
     except (TypeError, ValueError, json.JSONDecodeError):
         return _error("invalid_json", "JSON body required", status=422)
-    wallet = str(data.get("creator_wallet") or "").strip()
-    asset = IpAsset.objects.filter(id=asset_id, creator__wallet_address=wallet).first()
+    asset = IpAsset.objects.filter(id=asset_id, account_owner=request.user).first()
     if asset is None:
-        logger.warning("asset terms rejected creator_wallet=%s asset_id=%s", wallet, asset_id)
+        logger.warning("asset terms rejected user=%s asset_id=%s", request.user.get_username(), asset_id)
         return _error("asset_not_found", "asset not found", status=404)
     minimum = _parse_money(data.get("min_price_usdc"))
     target = _parse_money(data.get("target_price_usdc"))
@@ -169,8 +205,8 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         return _error("invalid_asset_terms", "invalid pricing or visibility", status=422)
     if visibility == IpAsset.PUBLIC and not asset.registration_certificate_tx_sig:
         logger.warning(
-            "public listing rejected without registration certificate creator_wallet=%s asset_id=%s",
-            wallet,
+            "public listing rejected without registration certificate user=%s asset_id=%s",
+            request.user.get_username(),
             asset_id,
         )
         return _error(
@@ -178,12 +214,37 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
             "a registration certificate is required before public listing",
             status=409,
         )
+    title_raw = data.get("title", asset.title or "")
+    description_raw = data.get("description", asset.description or "")
+    tags = data.get("tags", asset.tags or [])
+    if not isinstance(title_raw, str) or not isinstance(description_raw, str):
+        return _error("invalid_asset_metadata", "title and description must be text values", status=422)
+    if not isinstance(tags, list) or any(not isinstance(tag, str) for tag in tags):
+        return _error("invalid_asset_metadata", "tags must be a list of text values", status=422)
+    title = title_raw.strip()
+    description = description_raw.strip()
+    tags = [tag.strip() for tag in tags if tag.strip()]
+    if len(title) > 120:
+        return _error("invalid_asset_metadata", "title must be 120 characters or fewer", status=422)
     asset.min_price_usdc = minimum
     asset.target_price_usdc = target
     asset.visibility = visibility
-    asset.save(update_fields=["min_price_usdc", "target_price_usdc", "visibility"])
-    logger.info("asset terms updated creator_wallet=%s asset_id=%s", wallet, asset_id)
-    return JsonResponse({"asset_id": str(asset.id), "min_price_usdc": str(asset.min_price_usdc), "target_price_usdc": str(asset.target_price_usdc), "visibility": asset.visibility})
+    asset.title = title or None
+    asset.description = description or None
+    asset.tags = tags
+    asset.save(update_fields=[
+        "min_price_usdc", "target_price_usdc", "visibility", "title", "description", "tags"
+    ])
+    logger.info("asset terms updated user=%s asset_id=%s", request.user.get_username(), asset_id)
+    return JsonResponse({
+        "asset_id": str(asset.id),
+        "title": asset.title or "",
+        "description": asset.description or "",
+        "tags": asset.tags,
+        "min_price_usdc": str(asset.min_price_usdc),
+        "target_price_usdc": str(asset.target_price_usdc),
+        "visibility": asset.visibility,
+    })
 
 
 def _is_valid_pubkey(value: str) -> bool:
@@ -221,6 +282,7 @@ def _parse_money(raw: str | None) -> decimal.Decimal | None:
 
 
 def _parse_int(raw: str | None) -> int | None:
+    """문자열을 정수로 변환한다. 빈 값이거나 변환 실패 시 None을 반환한다."""
     if raw is None or raw == "":
         return None
     try:
@@ -465,33 +527,21 @@ def transactions(
     return JsonResponse({"asset_id": str(asset.id), "items": items}, status=200)
 
 
-# === GET /api/v1/assets?creator= (SPEC-005) =================================
-# R11: list assets for a creator wallet. R8 edge: excludes original bytes/url.
+# === GET /api/v1/assets (SPEC-005) ===========================================
+# R11: list assets for the authenticated account. R8 excludes original bytes/url.
 
 
 def asset_list(request: HttpRequest) -> JsonResponse:
-    """List IpAssets for a creator wallet. SPEC-005 R11.
+    """List the authenticated account's IpAssets. SPEC-005 R11.
 
-    ``?creator=<wallet_address>`` filters by ``creator__wallet_address``. The
-    listing payload excludes original bytes/urls (R8 edge) and surfaces proof +
-    preview data the library grid consumes.
+    Creator wallets remain item metadata. Request parameters cannot narrow or
+    switch the account library, which prevents a URL from selecting another
+    account's private assets.
     """
     if not request.user.is_authenticated:
         return _error("authentication_required", "sign in to view a creator library", status=401)
-    preference = getattr(request.user, "veriproof_preferences", None)
-    creator_wallet = (request.GET.get("creator") or "").strip()
-    if not creator_wallet:
-        creator_wallet = (getattr(preference, "creator_wallet", "") or "").strip()
-    if not creator_wallet or preference is None or preference.creator_wallet != creator_wallet:
-        logger.warning(
-            "library API denied user=%s creator_wallet=%s",
-            request.user.get_username(),
-            creator_wallet,
-        )
-        return _error("creator_access_denied", "creator library access is denied", status=403)
-
     qs = IpAsset.objects.select_related("creator").filter(
-        creator__wallet_address=creator_wallet
+        account_owner=request.user
     ).order_by("-created_at")
 
     items = [

@@ -52,18 +52,6 @@ class FakeGeminiService:
     def _record(self, name: str, args: tuple, kwargs: dict) -> None:
         self.calls.append((name, args, kwargs))
 
-    def analyze_image(self, image_bytes: bytes) -> AnalysisResult:
-        self._record("analyze_image", (image_bytes,), {})
-        if self.fail_analyze:
-            raise RuntimeError("FakeGeminiService: forced analyze failure")
-        return self.analyze_result
-
-    def analyze_asset(self, file_bytes: bytes, mime_type: str) -> AnalysisResult:
-        self._record("analyze_asset", (file_bytes, mime_type), {})
-        if self.fail_analyze:
-            raise RuntimeError("FakeGeminiService: forced analyze failure")
-        return self.analyze_result
-
     def assist_with_attachments(self, context, message, files) -> str:
         self._record("assist_with_attachments", (context, message, files), {})
         return "Reviewed the attached file(s)."

@@ -23,6 +23,12 @@ class CreatorChatOutcome:
 
 
 class CreatorAssistantService:
+    """검증된 작업 공간 데이터만 근거로 삼아 창작자 비서 대화·도구 실행을 조율한다.
+
+    Gemini 응답과 첨부 분석, 도구 실행을 한 곳에서 묶되 스스로 실행 권한은
+    가지지 않으며, 실제 변경은 검증 가능한 하위 서비스들에 위임한다.
+    """
+
     def __init__(
         self,
         gemini: Any,
@@ -34,6 +40,11 @@ class CreatorAssistantService:
         self.attachment_service = attachment_service
 
     def overview(self, wallet: str) -> dict[str, Any] | None:
+        """창작자 자산·수익·판매·파이프라인 요약을 DB에서 조립해 반환한다.
+
+        외부 AI 호출 없이 검증된 데이터만 사용하며, 알 수 없는 지갑이면 None을
+        반환한다.
+        """
         from apps.ip.models import AgentDirective, Creator, IpAsset
         from services.cashflow_service import get_cashflow_service
         from services.sales_service import get_sales_service
@@ -426,7 +437,7 @@ class CreatorAssistantService:
             "updated_at": directive.updated_at.isoformat(),
         }
 
-    def sales(self, wallet: str) -> dict[str, Any]:
+    def sales(self, wallet: str, **filters: Any) -> dict[str, Any]:
         """창작자가 확인하는 판매 결과와 수수료 정책을 반환한다."""
         from apps.ip.models import Creator
         from services.sales_service import get_sales_service
@@ -435,18 +446,7 @@ class CreatorAssistantService:
         if creator is None:
             raise LookupError("creator_not_found")
         service = get_sales_service()
-        summary = service.summary(creator)
-        return {
-            "summary": {
-                "sale_count": summary.sale_count,
-                "gross_usdc": str(summary.gross_usdc),
-                "platform_fee_bps": summary.platform_fee_bps,
-                "platform_fee_usdc": str(summary.platform_fee_usdc),
-                "creator_proceeds_usdc": str(summary.creator_proceeds_usdc),
-            },
-            "items": service.list_sales(creator),
-            "dashboard": service.dashboard(creator),
-        }
+        return service.report(creator, **filters)
 
     def actions(self, wallet: str, limit: int = 100) -> list[dict[str, Any]]:
         """사용자가 확인할 수 있는 실행·검증 감사 기록을 반환한다."""
@@ -469,6 +469,7 @@ class CreatorAssistantService:
 
 
 def get_creator_assistant_service() -> CreatorAssistantService:
+    """실제 Gemini 어댑터를 연결한 창작자 비서 서비스 팩토리."""
     from .gemini_service import get_gemini_service
 
     return CreatorAssistantService(gemini=get_gemini_service())

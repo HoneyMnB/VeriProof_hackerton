@@ -136,6 +136,7 @@ class StorageService:
     # --- Local backend ------------------------------------------------------
 
     def _save_permanent_local(self, kind: str, asset_id: Any, data: bytes) -> str:
+        """영구 아티팩트를 로컬 MEDIA_ROOT에 저장하고 공개 ``/media/...`` URL을 반환한다."""
         root = self._require_media_root()
         path = root / "permanent" / kind / f"{asset_id}.bin"
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,6 +144,7 @@ class StorageService:
         return f"/media/permanent/{kind}/{asset_id}.bin"
 
     def _save_temporary(self, asset_id: Any, data: bytes) -> str:
+        """원본을 로컬 임시 경로에 저장한다. media_root가 없으면 URL만 기록용으로 반환한다."""
         if self.media_root is None:
             # No filesystem configured: still record expiry for callers.
             return f"/media/temporary/{asset_id}.bin"
@@ -152,6 +154,7 @@ class StorageService:
         return f"/media/temporary/{asset_id}.bin"
 
     def _purge_temporary(self, asset_id: Any) -> None:
+        """보존 기간이 만료된 임시 원본을 로컬 디스크에서 삭제한다."""
         if self.media_root is None:
             return
         path = self._temporary_path(asset_id)
@@ -164,6 +167,7 @@ class StorageService:
         return self._require_media_root() / "temporary" / f"{asset_id}.bin"
 
     def _require_media_root(self) -> Path:
+        """로컬 백엔드에 media_root가 필수임을 보장하고, 없으면 RuntimeError를 발생시킨다."""
         if self.media_root is None:
             raise RuntimeError(
                 "StorageService local backend requires a media_root"
@@ -173,6 +177,7 @@ class StorageService:
     # --- GCS backend (import-guarded stub for cloud runs) -------------------
 
     def _save_permanent_gcs(self, kind: str, asset_id: Any, data: bytes) -> str:
+        """영구 아티팩트를 GCS 버킷에 업로드하고 공개 URL을 반환한다 (클라우드 전용)."""
         if kind not in PERMANENT_KINDS:
             raise ValueError(f"unknown permanent kind: {kind!r}")
         client = self._get_gcs_client()
@@ -185,6 +190,7 @@ class StorageService:
         return f"https://storage.googleapis.com/{self.gcs_bucket}/{blob_name}"
 
     def _save_temporary_gcs(self, asset_id: Any, data: bytes) -> str:
+        """임시 원본을 GCS 버킷에 업로드하고 공개 URL을 반환한다 (클라우드 전용)."""
         client = self._get_gcs_client()
         if client is None:
             raise RuntimeError("GCS storage client is unavailable")
@@ -207,6 +213,7 @@ class StorageService:
             return None
 
     def _get_gcs_client(self) -> Any:
+        """주입된 클라이언트 또는 지연 생성한 storage.Client를 반환한다. SDK가 없으면 None."""
         if self._client is not None:
             return self._client
         try:

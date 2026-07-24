@@ -52,6 +52,8 @@ DEMO_WORKS = (
 
 
 class Command(BaseCommand):
+    """데모 카탈로그 자산을 실제 등록 파이프라인으로 시딩하는 관리 명령이다."""
+
     help = "Register the generated local demo works through the normal pipeline."
 
     def handle(self, *args, **options):
@@ -69,6 +71,9 @@ class Command(BaseCommand):
         preference, _ = UserPreference.objects.get_or_create(user=user)
         preference.creator_wallet = DEMO_WALLET
         preference.save(update_fields=["creator_wallet", "updated_at"])
+        # 데모 작품도 실제 라이브러리와 동일하게 계정 소유권을 가진다. 이미
+        # 등록된 자산까지 연결해 seed 재실행이 현재 로컬 DB를 복구할 수 있게 한다.
+        IpAsset.objects.filter(creator__wallet_address=DEMO_WALLET).update(account_owner=user)
         plan, _ = SubscriptionPlan.objects.update_or_create(
             code=DEMO_PLAN_CODE,
             defaults={"name": "Local demo catalog", "monthly_fee_usdc": "0", "included_registrations": len(DEMO_WORKS), "is_active": True},
@@ -102,6 +107,7 @@ class Command(BaseCommand):
                     title=work.title,
                     description=work.description,
                 ),
+                account_owner=user,
             )
             created += 1
             self.stdout.write(f"registered: {outcome.asset.id} {work.filename}")

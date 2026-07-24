@@ -5,9 +5,18 @@
 <article class="asset-detail" data-asset-detail data-asset-id="{{ asset.asset_id }}" data-settle-url="{{ asset.x402_endpoint }}/settle">
     <a class="asset-detail__back" href="/discover" data-i18n="detail.back">← Back to Discover</a>
     <div class="asset-detail__grid">
-        <section class="asset-detail__visual" aria-label="Protected work preview" data-i18n-aria-label="detail.preview_aria">
-            <img src="{{ asset.watermark_url }}" alt="Protected preview of {{ asset.title }}" data-i18n-alt="detail.preview_alt" data-i18n-vars='{"title":"{{ asset.title|escapejs }}"}' width="960" height="720">
+        <section class="asset-detail__visual" aria-label="Protected work preview" data-i18n-aria-label="detail.preview_aria" data-gallery>
+            <img data-gallery-main src="{{ gallery_images.0.watermark_url }}" alt="Protected preview of {{ asset.title }}" data-i18n-alt="detail.preview_alt" data-i18n-vars='{"title":"{{ asset.title|escapejs }}"}' width="960" height="720">
             <span class="asset-detail__watermark" data-i18n="detail.protected">Protected preview · watermark applied</span>
+            {% if gallery_images|length > 1 %}
+            <div class="asset-detail__thumbnails" role="group" aria-label="Work images" data-i18n-aria-label="detail.gallery_aria">
+                {% for image in gallery_images %}
+                <button class="asset-detail__thumbnail{% if forloop.first %} is-active{% endif %}" type="button" data-gallery-thumbnail data-image-src="{{ image.watermark_url }}" data-image-alt="Protected preview of {{ asset.title }} · image {{ forloop.counter }}" aria-current="{% if forloop.first %}true{% else %}false{% endif %}" aria-label="View image {{ forloop.counter }}" data-i18n-aria-label="detail.gallery_image_aria" data-i18n-vars='{"n":"{{ forloop.counter }}"}'>
+                    <img src="{{ image.watermark_url }}" alt="" width="96" height="72" loading="lazy">
+                </button>
+                {% endfor %}
+            </div>
+            {% endif %}
         </section>
         <section class="asset-detail__info">
             <p class="asset-detail__eyebrow" data-i18n="detail.eyebrow">VERIFIED LICENSABLE WORK</p>
@@ -44,4 +53,4 @@
     </div>
 </article>
 {% endblock %}
-{% block page_scripts %}<script src="{% static 'js/payment.js' %}"></script>{% endblock %}
+{% block page_scripts %}<script src="{% static 'js/asset-detail.js' %}"></script><script src="{% static 'js/payment.js' %}"></script>{% endblock %}

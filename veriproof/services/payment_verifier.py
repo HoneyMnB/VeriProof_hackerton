@@ -20,7 +20,9 @@ class PaymentVerifier(Protocol):
         expected_recipient: str,
         expected_amount: decimal.Decimal,
         mint: str,
-    ) -> PaymentVerification: ...
+    ) -> PaymentVerification:
+        """USDC 결제 트랜잭션을 검증하고 수신자·금액·커밋먼트를 반환하는 계약."""
+        ...
 
 
 class LocalMockPaymentVerifier:
@@ -38,6 +40,7 @@ class LocalMockPaymentVerifier:
         expected_amount: decimal.Decimal,
         mint: str,
     ) -> PaymentVerification:
+        """``mock:`` 접두사 거래만 승인하고 그 외 거래는 거짓 결과로 거절한다."""
         if not tx_sig.startswith("mock:"):
             logger.warning("local mock payment rejected tx_sig=%s", tx_sig)
             return PaymentVerification(

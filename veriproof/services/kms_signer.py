@@ -91,10 +91,12 @@ class KmsSigner:
             ) from exc
 
     def _public_key_local(self) -> str:
+        """로컬 키페어에서 공개키(base58)를 반환한다 (Devnet 폴백 경로)."""
         kp = self._keypair_local()
         return str(kp.pubkey())  # pragma: no cover (needs solders)
 
     def _sign_local(self, message_bytes: bytes) -> bytes:
+        """로컬 키페어로 메시지에 서명하고 원시 서명 바이트를 반환한다 (Devnet 폴백)."""
         kp = self._keypair_local()
         sig = kp.sign_message(message_bytes)  # pragma: no cover (needs solders)
         return bytes(sig)  # pragma: no cover

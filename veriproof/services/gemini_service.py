@@ -178,29 +178,6 @@ class GeminiService:
         # Optional injected client (tests/fakes pass a stub here).
         self._client = client
 
-    # --- Architecture 4 methods (SPEC-001 implements analyze_image) ---------
-    def analyze_image(self, image_bytes: bytes) -> AnalysisResult:
-        """Multimodal analysis -> tags, category, originality, min price.
-
-        실제 호출이 불가능하거나 응답이 유효하지 않으면 명시적으로 실패한다.
-        """
-        client = self._get_client()
-        if client is None:
-            raise GeminiUnavailableError("Gemini vision client is unavailable")
-
-        last_error: Exception | None = None
-        for _ in range(ANALYZE_MAX_RETRIES):
-            try:
-                text = self._call_vision(client, image_bytes)
-                return self._parse_vision_response(text)
-            except Exception as exc:  # noqa: BLE001 (SDK errors are broad)
-                last_error = exc
-                logger.warning("gemini analyze_image attempt failed: %s", exc)
-
-        raise GeminiResponseError(
-            f"Gemini vision failed after {ANALYZE_MAX_RETRIES} attempts"
-        ) from last_error
-
     def analyze_asset(self, file_bytes: bytes, mime_type: str) -> AnalysisResult:
         """멀티모달 자산 분석 -> 태그·카테고리·독창성·최소가·설명.
 
@@ -414,7 +391,7 @@ class GeminiService:
         try:
             from google import genai  # import-guarded (architecture 4)
         except ImportError:
-            logger.info("google-genai not installed; gemini analyze_image degrades")
+            logger.info("google-genai not installed; Gemini client is unavailable")
             return None
         try:  # pragma: no cover
             if self.vertex_enabled and self.vertex_project and self.vertex_location:
@@ -482,21 +459,6 @@ class GeminiService:
             },
         )
         return getattr(response, "text", "") or ""
-
-    def _call_vision(self, client: Any, image_bytes: bytes) -> str:
-        """이미지 전용 경로(하위호환): 서명으로 mime을 정한 뒤 멀티모달 호출."""
-        return self._call_multimodal(client, image_bytes, self._image_mime_type(image_bytes))
-
-    @staticmethod
-    def _image_mime_type(image_bytes: bytes) -> str:
-        """지원 이미지의 실제 서명으로 Gemini Part MIME을 결정한다."""
-        if image_bytes.startswith(b"\x89PNG\r\n\x1a\n"):
-            return "image/png"
-        if image_bytes.startswith(b"\xff\xd8\xff"):
-            return "image/jpeg"
-        if image_bytes.startswith(b"RIFF") and image_bytes[8:12] == b"WEBP":
-            return "image/webp"
-        raise GeminiResponseError("unsupported image signature for Gemini analysis")
 
     def _vision_model_for_call(self) -> str:
         """Resolve the model id for the vision call (has a sane default)."""
