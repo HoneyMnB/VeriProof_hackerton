@@ -1,0 +1,22 @@
+{% load static %}<!DOCTYPE html>
+<html lang="{{ vp_active_lang|default:'en' }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {% comment %}Child pages provide the optional i18n key for the document title.{% endcomment %}
+    <title data-i18n="{% block title_i18n %}{% endblock %}">{% block title %}VeriProof AI{% endblock %}</title>
+    <meta name="description" data-i18n-content="{% block meta_i18n %}{% endblock %}" content="{% block meta_description %}…{% endblock %}">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="service-desc" type="application/json" href="/.well-known/ai-plugin.json">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% comment %}Load the server-selected locale before page scripts render UI.{% endcomment %}
+    <script>window.__VP_LANG__ = "{{ vp_active_lang|default:'en' }}"; window.__VP_AUTHED__ = {{ request.user.is_authenticated|yesno:"true,false" }};</script>
+    <script src="{% static 'i18n/messages.js' %}"></script>
+    <script src="{% static 'js/vp-i18n.js' %}"></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+    <a class="skip-link" href="#main" data-i18n="base.skip_link">Skip to content</a>
+    {% block content %}{% endblock %}
+    {% block scripts %}{% endblock %}
+</body>
+</html>

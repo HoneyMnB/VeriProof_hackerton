@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Create account | VeriProof{% endblock %}
+{% block body_class %}vp-auth-page{% endblock %}
+{% block content %}
+<main class="vp-auth" aria-labelledby="auth-title">
+    <a class="vp-auth__brand" href="/discover">VeriProof</a>
+    <section class="vp-auth__card">
+        <p class="vp-auth__eyebrow">Creator workspace</p>
+        <h1 id="auth-title">Create account</h1>
+        <p>Start a private workspace for registration, proof, and licensing.</p>
+        <form method="post" class="vp-auth__form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ next }}">
+            {% for field in form %}
+                <label>{{ field.label }}{{ field }}{% for error in field.errors %}<span class="vp-field-error">{{ error }}</span>{% endfor %}</label>
+            {% endfor %}
+            {% for error in form.non_field_errors %}<p class="vp-field-error">{{ error }}</p>{% endfor %}
+            <button type="submit">Create account</button>
+        </form>
+        <p class="vp-auth__foot">Already have an account? <a href="{% url 'accounts:login' %}?next={{ next|urlencode }}">Sign in</a></p>
+    </section>
+</main>
+{% endblock %}

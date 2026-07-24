@@ -1,0 +1,73 @@
+{% extends "creator_shell.html" %}
+{% load static %}
+{% block title %}Negotiation Sandbox | VeriProof AI{% endblock %}
+{% block title_i18n %}sandbox.title{% endblock %}
+{% block main_label %}A2A negotiation sandbox{% endblock %}
+{% block main_label_i18n %}sandbox.main_label{% endblock %}
+{% block main %}
+<div class="vp-page">
+    <header class="vp-page__head">
+        <p class="vp-page__eyebrow" data-i18n="sandbox.head.eyebrow">Developer verification tool</p>
+        <h1 data-i18n="sandbox.head.title">Negotiation Sandbox</h1>
+        <p data-i18n="sandbox.head.body">Submit a confirmed Devnet payment to verify the full 402 → negotiation → settlement path. The asset ID is auto-filled when you arrive from the library or a freshly registered work.</p>
+    </header>
+
+    <section class="sandbox-guide" aria-labelledby="sandbox-guide-title">
+        <div><h2 id="sandbox-guide-title" data-i18n="sandbox.guide.title">How to use this tool</h2><p data-i18n="sandbox.guide.audience">For staff development verification only. It does not create a production sale.</p></div>
+        <ol>
+            <li data-i18n="sandbox.guide.step_one">Choose a registered asset and enter its asset ID.</li>
+            <li data-i18n="sandbox.guide.step_two">Provide a confirmed Solana Devnet payment signature and the buyer public wallet.</li>
+            <li data-i18n="sandbox.guide.step_three">Run verification and inspect the seller AI, buyer AI, and network panels in order.</li>
+        </ol>
+        <p class="sandbox-guide__result" data-i18n="sandbox.guide.result">A successful run shows the 402 request, negotiated terms, verified transaction, and settlement result. Failed runs identify the failing stage.</p>
+    </section>
+
+    <form id="sandbox-form" class="sandbox-controls">
+        <label><span data-i18n="sandbox.asset_id">Asset ID</span>
+            <input id="sandbox-asset-id" name="sandbox-asset-id" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000…" data-i18n-placeholder="sandbox.asset_id_placeholder" required>
+        </label>
+        <label><span data-i18n="sandbox.offer">Initial offer (USDC)</span>
+            <input id="sandbox-offer" name="sandbox-offer" type="number" autocomplete="off" min="0.01" step="0.01" value="1.50" required>
+        </label>
+        <label><span data-i18n="sandbox.usage">Usage</span>
+            <select id="sandbox-usage">
+                <option value="commercial" data-i18n="sandbox.usage.commercial">commercial</option>
+                <option value="non-commercial" data-i18n="sandbox.usage.non-commercial">non-commercial</option>
+                <option value="editorial" data-i18n="sandbox.usage.editorial">editorial</option>
+            </select>
+        </label>
+        <label><span data-i18n="sandbox.payment">Payment transaction signature</span>
+            <input id="sandbox-payment-tx" name="sandbox-payment-tx" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Confirmed Solana transaction signature…" data-i18n-placeholder="sandbox.payment_placeholder" required>
+        </label>
+        <label><span data-i18n="sandbox.buyer">Buyer wallet</span>
+            <input id="sandbox-buyer-wallet" name="sandbox-buyer-wallet" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Base58 public key, e.g. 7Np41…" data-i18n-placeholder="sandbox.buyer_placeholder" required>
+        </label>
+        <button type="submit" id="sandbox-start" data-i18n="sandbox.run">Run verification</button>
+        <span id="sandbox-status" class="sandbox-status" role="status" aria-live="polite"></span>
+    </form>
+
+    <section class="sandbox-grid">
+        <!-- R4: seller AI (Gemini) reasoning / counter log -->
+        <div class="pane" id="pane-seller" aria-label="Seller AI" data-i18n-aria-label="sandbox.pane.seller_aria">
+            <h2><span data-i18n="sandbox.pane.seller">Seller AI</span> <small data-i18n="sandbox.pane.seller_sub">(creator)</small></h2>
+            <ul class="stream" data-pane="seller"></ul>
+        </div>
+
+        <!-- R5: buyer AI offer / accept actions -->
+        <div class="pane" id="pane-buyer" aria-label="Buyer AI" data-i18n-aria-label="sandbox.pane.buyer_aria">
+            <h2><span data-i18n="sandbox.pane.buyer">Buyer AI</span> <small data-i18n="sandbox.pane.buyer_sub">(purchaser)</small></h2>
+            <ul class="stream" data-pane="buyer"></ul>
+        </div>
+
+        <!-- R6: network inspector — 402 -> JSON negotiation -> USDC tx -->
+        <div class="pane pane-inspector" id="pane-inspector" aria-label="Network inspector" data-i18n-aria-label="sandbox.pane.inspector_aria">
+            <h2><span data-i18n="sandbox.pane.inspector">Network Inspector</span> <small data-i18n="sandbox.pane.inspector_sub">(402 &rarr; negotiate &rarr; tx)</small></h2>
+            <ul class="stream" data-pane="inspector"></ul>
+        </div>
+    </section>
+</div>
+{% endblock %}
+{% block page_scripts %}
+{# SPEC-005 shared pure helpers (explorerUrl) loaded via creator_shell; sandbox.js extends window.VP #}
+<script src="{% static 'js/sandbox.js' %}"></script>
+{% endblock %}

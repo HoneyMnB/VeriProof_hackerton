@@ -1,0 +1,149 @@
+# VeriProof AI DB 변경 이력
+
+## 2026-07-24 — 다중 지갑 수령 구성 (migration `accounts.0003`)
+
+- `WalletConfiguration`: 계정이 보관하는 공개 Solana 주소, 표시 이름, 입금 수령 여부,
+  판매대금 수령 여부, 현재 워크스페이스 활성 주소를 기록한다. 시드 구문·개인키·서명·지갑
+  공급자 세션은 저장하지 않는다.
+- 영향 범위: 활성 주소만 기존 `UserPreference.creator_wallet`에 동기화되어 작품 등록,
+  라이브러리, 판매 집계의 기존 소유자 경로를 유지한다. 판매대금 수령 주소는 계정당 하나로
+  제한하며, 입금 주소는 복수 등록할 수 있다.
+- 검증: 로그인 사용자만 자신의 주소를 등록·활성화할 수 있으며, 주소 형식과 중복을 서버에서
+  검증한다. 실제 외부 지갑 연결은 본 변경 범위 밖이며 연결 직전의 설정만 제공한다.
+- Alembic 필요 여부: 불필요. Django migration `apps/accounts/migrations/0003_walletconfiguration.py`를 적용한다.
+
+## 2026-07-24 — 계정 복구 연락처 (migration `accounts.0002`)
+
+- `UserPreference.recovery_email` (nullable email): 로그인 이메일과 분리된 계정 복구
+  연락처다. 형식을 서버에서 검증하며, 로그인 식별자나 비밀번호를 대체하지 않는다.
+- `UserPreference.contact_phone` (nullable varchar 30): 사용자가 자발적으로 저장하는
+  지원 연락처다. 판매자 정산·온체인 지갑에는 사용하지 않는다.
+- 영향 범위: 인증된 계정의 설정 API만 두 값을 수정한다. 비밀번호는 DB 필드 추가 없이
+  Django의 기존 password hash를 현재 비밀번호 검증 후 갱신하며 세션을 유지한다.
+- 검증: 설정 저장, 복구 이메일 형식 거부, 비밀번호 현재값·확인값 검증 통합 테스트를 실행한다.
+- Alembic 필요 여부: 불필요. Django migration `apps/accounts/migrations/0002_userpreference_recovery_contact.py`를 적용한다.
+
+## 2026-07-24 — 대화 사용자 제목 (migration `ip.0013`)
+
+- `AssistantMessage.conversation_title` (nullable, varchar 120): 대화의 첫 사용자
+  메시지에만 저장하는 사용자가 지정한 표시 제목이다. 원문 `content`는 변경하지 않으며,
+  기존 대화는 첫 사용자 메시지의 첫 줄을 제목으로 계속 사용한다.
+- 영향 범위: 로그인 계정의 설정 지갑과 일치하는 창작자만 대화 제목을 변경하거나 대화
+  메시지를 삭제할 수 있다. 삭제는 해당 `conversation_id`의 메시지에만 적용하며, 별도
+  감사 기록은 기존 FK 정책에 따라 보존된다.
+- 검증: 제목 변경·삭제 소유권 및 기존 대화 제목 폴백 통합 테스트를 실행한다.
+- Alembic 필요 여부: 불필요. 이 프로젝트의 Django migration `apps/ip/migrations/0013_assistant_message_conversation_title.py`를 적용한다.
+
+## 2026-07-24 — 등록 인증서와 공개 게시 경계 (migration `ip.0010`)
+
+- `IpAsset.registration_certificate_tx_sig` (nullable, indexed, varchar 90):
+  창작물 등록 후 발급되는 온체인 등록 인증서 식별자다. 구매자에게 발급되는
+  `settlement.License.certificate_tx_sig`와 별개의 기록이다.
+- 공개 게시 조건: `visibility=public`, 앵커 완료 상태, 그리고 이 등록 인증서가
+  모두 존재해야 공개 카탈로그·상세·에이전트 결제 조건에 나타난다.
+- 기존 로컬 데모는 `seed_demo_catalog`이 인증서 누락분을 보완한다. 실체인 전환 시
+  동일 어댑터 메서드가 실제 Memo 거래를 반환해야 한다.
+
+## 2026-07-24 — 대화 첨부 분석 (migration `ip.0009`)
+
+- `ConversationAttachment.creator_id` (FK): 파일 소유 창작자. 다른 창작자 대화에
+  재사용할 수 없다.
+- `source_message_id` (nullable FK): 실제 사용자 메시지에 연결된 첨부 감사 관계.
+- `content_sha256`, `perceptual_hash`, `analysis`: 업로드 원본 지문과 Gemini가 반환한
+  분석 결과이다. 분석 실패 시 레코드를 만들지 않는다.
+- `temporary_url`, `expires_at`: 등록 전 대화 첨부의 제한 보관 위치와 만료 시각이다.
+  공개 API·브라우저에는 원본 URL을 반환하지 않는다.
+
+## 2026-07-24 — 이미지 유사 검색 지문 (migration `ip.0008`)
+
+- `IpAsset.perceptual_hash` (nullable, indexed, varchar 16): 이미지 등록 파이프라인이
+  생성하는 64-bit 명암 지문이다.
+- 검색 후보 선별 전용이며, 동일 원본 판정과 Solana 앵커의 권위 값은 계속
+  `image_sha256`이다.
+- 비이미지 자산에는 값을 만들지 않는다.
+
+## 2026-07-24 — `ip.AssistantAction` (migration `ip.0005`)
+
+- `creator_id` (FK to `ip.Creator`, cascade): 실행을 요청한 창작자.
+- `source_message_id` (nullable FK to `ip.AssistantMessage`, set null): 자연어 요청의
+  감사 연결. 원 대화 삭제 시 실행 기록은 보존한다.
+- `action_name`, `request_payload`, `result_payload`: 허용 도구명과 서버가 검증한
+  입력·결과. 비밀값이나 결제 자격증명은 저장하지 않는다.
+- `status`: `completed`, `awaiting_input`, `rejected`, `failed` 중 하나.
+- `verification_passed`, `verified_at`: DB 재조회 기반 사후 검증 결과와 시각.
+- Index: `(creator_id, created_at)` for creator action audit reads.
+
+Natural-language requests do not directly mutate business data. This record is
+created before tool execution so rejected and failed attempts remain auditable.
+
+## 2026-07-24 — `ip.AgentDirective` (migration `ip.0004`)
+
+- `creator_id` (FK to `ip.Creator`, cascade): 행동 지침 소유자.
+- `title` (varchar 120), `instruction` (text 2000): 창작자가 확인·수정하는 비서 행동 지침.
+- `is_active`: 활성 지침만 Gemini 창작자 비서 컨텍스트에 전달한다.
+- `created_at`, `updated_at`: 감사 및 최신 지침 정렬 기준.
+- Index: `(creator_id, is_active, updated_at)` for workspace directive reads.
+
+Conversation text remains in `ip.AssistantMessage`; directives are deliberately
+separate so a chat transcript cannot silently become an agent instruction.
+
+## 2026-07-24 — 공개 발견·대화형 창작자 워크스페이스
+
+- 변경: `IpAsset`에 `asset_type`, `visibility`, `content_mime_type`, `description`을 추가하고, 이미지 전용 미리보기·독창성 필드를 비이미지 저작물에도 안전하도록 nullable로 변경했다.
+- 변경: `AssistantMessage`를 추가해 창작자와 Gemini 기반 저작권 비서 간 대화를 감사 가능하게 저장한다.
+- 영향: 공개 자산은 명시적으로 `visibility=public`이며 앵커링 완료 상태일 때만 외부 발견 API에 나타난다. 원본 URL/바이너리는 어떤 공개 응답에도 포함하지 않는다.
+- 검증: Django migration drift 검사, 공개/비공개 카탈로그 통합 테스트, 전체 pytest 실행.
+- 마이그레이션: Django migration `apps/ip/migrations/0002_public_catalog_and_assistant.py` 필요. Alembic은 이 Django 프로젝트에 적용하지 않는다.
+# Database change log
+
+## 2026-07-24 — 대화형 등록 초안 (migration `ip.0007`)
+
+- `RegistrationDraft.creator_id` (FK to `ip.Creator`, cascade): 초안 소유 창작자.
+- `file_name`, `file_sha256`: 등록 확정 전 첨부 파일의 이름과 SHA-256. 실제 업로드 시
+  서버가 다시 계산한 해시와 일치해야 한다.
+- `fields` (JSON): 사용자/에이전트가 수집한 유형·제목·설명·가격·공개 범위 초안.
+- `status`, `confirmation_token`, `confirmed_at`: collecting → confirmed → executed 상태와
+  사용자 최종 확인을 보장한다. 확정 토큰 없이 등록 유스케이스는 초안을 소비하지 않는다.
+- `executed_asset_id` (one-to-one, protect): 성공한 실제 자산과 초안을 연결한다.
+- 영향: 새 대화형 UI는 등록 전에 초안을 저장하고 확인하지만, 기존 외부/레거시 등록 API
+  계약은 호환성을 위해 유지한다.
+- 검증: Django migration 적용, 초안 생성·확정·해시 불일치 거부·등록 성공 흐름을 테스트한다.
+- 마이그레이션: Django migration `apps/ip/migrations/0007_registrationdraft.py` 필요.
+  Alembic은 이 Django 프로젝트에 적용하지 않는다.
+
+## 2026-07-24 — 창작자 등록 구독 (migration `ip.0006`)
+
+- `SubscriptionPlan`: 활성화 가능한 등록 구독 플랜의 코드, 월 USDC 금액, 포함 등록 횟수.
+- `CreatorSubscription`: 창작자별 결제 식별자, 유효 기간, 사용한 등록 횟수. 플랜 삭제는
+  보호하고 창작자 삭제 시에만 함께 삭제한다.
+- `RegistrationCharge`: 등록 완료 자산과 사용한 구독 크레딧을 1:1로 연결해 동일 자산의
+  중복 차감을 막는다.
+- 영향: 등록 유스케이스는 활성 구독의 잔여 횟수를 트랜잭션으로 확인·차감한다.
+- 검증: migration 적용 및 구독 없음/활성화/한도 소진 등록 흐름을 런타임 확인했다.
+- 마이그레이션: Django migration `apps/ip/migrations/0006_subscription_billing.py` 필요.
+  Alembic은 이 Django 프로젝트에 적용하지 않는다.
+
+## 2026-07-24 — 사용자 계정 환경설정 (migration `accounts.0001`)
+
+- `accounts.UserPreference.user` (1:1 FK to Django user, cascade): 로그인 계정의 소유자.
+- `display_name`, `language`, `creator_wallet`: 좌측 하단 계정 모달에서 수정하는 표시명,
+  언어, 창작자 지갑이다. 지갑 서명·비밀키는 저장하지 않는다.
+- 영향: 로그인 계정은 지갑 선택을 브라우저 로컬 저장소가 아닌 계정 설정에서 복원한다.
+  기존 해커톤 데모/외부 검증용 비로그인 워크스페이스 경로는 유지한다.
+- 검증: Django migration 적용, 세션 로그인과 CSRF 보호 설정 저장 흐름을 확인한다.
+- 마이그레이션: Django migration `apps/accounts/migrations/0001_initial.py` 필요.
+  Alembic은 이 Django 프로젝트에 적용하지 않는다.
+
+## 2026-07-24 — `ip.CreatorExpense` (migration `ip.0003`)
+
+- `creator_id` (FK to `ip.Creator`, cascade): expense owner.
+- `amount_usdc` (decimal 12,6): positive creator-entered operating expense.
+- `memo` (varchar 200): required expense purpose.
+- `occurred_at`, `created_at`: event and record timestamps.
+- Index: `(creator_id, occurred_at)` for creator workspace cashflow queries.
+
+Income is not copied into this table: it is calculated from verified
+`settlement.License.price_usdc` records to avoid a second source of truth.
+# 2026-07-24 — `ip_asset_component`
+
+`AssetComponent` stores the private source-file manifest for a packaged work. Required fields are the parent asset, original file name, MIME type, SHA-256, and internal storage URL. Components are never exposed through public catalog or preview responses; the primary asset hash remains the on-chain registration anchor.

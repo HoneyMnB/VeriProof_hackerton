@@ -1,0 +1,91 @@
+[project]
+name = "veriproof"
+version = "0.1.0"
+description = "VeriProof AI — Agentic IP Licensing protocol (Google Cloud x Solana)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Proprietary" }
+authors = [{ name = "VeriProof AI Team" }]
+dependencies = [
+    "Django>=5.0,<6.0",
+    "Pillow>=10.0",
+    "dj-database-url>=2.0",
+    "python-dotenv>=1.0",
+    "gunicorn>=22.0",
+    "packaging>=23.0",
+]
+
+[project.optional-dependencies]
+# All external SDKs are optional: the project imports with NONE of them
+# installed (import-guarded). They are pulled in for live/cloud runs.
+ai = ["google-genai>=0.3"]
+solana = ["solana>=0.34", "solders>=0.21"]
+gcp = [
+    "protobuf>=3.20.2,<6",
+    "google-cloud-firestore>=2.14,<2.22",
+    "google-cloud-bigquery>=3.18,<3.30",
+    "google-cloud-pubsub>=2.19,<2.26",
+    "google-cloud-kms>=2.21,<2.25",
+    "google-cloud-storage>=2.16,<2.19",
+]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.8",
+    "pytest-cov>=5",
+    "pytest-mock>=3.12",
+    "factory-boy>=3.3",
+    "freezegun>=1.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["apps*", "services*", "config*"]
+
+# --- pytest -----------------------------------------------------------------
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+DJANGO_SETTINGS_MODULE = "config.settings"
+# -p no:cacheprovider: deterministic, no .pytest_cache side effects.
+# --strict-markers: unknown markers are errors (catch typos early).
+addopts = "-p no:cacheprovider --strict-markers"
+python_files = ["test_*.py", "*_test.py"]
+pythonpath = ["."]
+testpaths = ["tests"]
+markers = [
+    "django_db: (auto-registered by pytest-django) marks DB-requiring tests",
+]
+
+# --- coverage ---------------------------------------------------------------
+# Target: services/ >= 85% once SPEC-001..008 land (test-plan 3).
+# The gate (fail_under) is intentionally 0 during the SPEC-000 scaffold; it is
+# raised to 85 in the services coverage gate when implementation begins.
+
+[tool.coverage.run]
+source = ["services", "apps"]
+omit = ["*/migrations/*", "*/tests/*", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
+
+# --- lint / format ----------------------------------------------------------
+
+[tool.ruff]
+line-length = 88
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B"]
+ignore = ["E501"]  # line length handled by formatter
+
+[tool.black]
+line-length = 88
+target-version = ["py313"]

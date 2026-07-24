@@ -1,0 +1,38 @@
+<aside id="creator-sidebar" class="vp-sidebar" aria-label="Creator navigation" data-i18n-aria-label="sidebar.aside_aria">
+    <div class="vp-sidebar__top">
+        <a class="vp-brand" href="/" translate="no">VeriProof</a>
+        <button id="sidebar-toggle" class="vp-icon-button" type="button" aria-expanded="false" aria-controls="creator-sidebar" aria-label="Collapse sidebar" data-i18n-aria-label="sidebar.collapse" title="Collapse sidebar" data-i18n-title="sidebar.collapse">☰</button>
+    </div>
+
+    {% if active_nav == "assistant" %}
+    <button id="new-chat" class="vp-new-chat" type="button" title="New chat" data-i18n-title="sidebar.new_chat"><span class="vp-nav__icon">✎</span><span class="vp-sidebar-label" data-i18n="sidebar.new_chat">New chat</span></button>
+    {% else %}
+    <a class="vp-new-chat" href="/"><span class="vp-nav__icon">✎</span><span class="vp-sidebar-label" data-i18n="sidebar.new_chat">New chat</span></a>
+    {% endif %}
+
+    <nav class="vp-nav" aria-label="Main menu" data-i18n-aria-label="sidebar.nav.label">
+        <button id="open-history" class="vp-nav__item" type="button" aria-haspopup="dialog" aria-controls="history-modal"><span class="vp-nav__icon">▤</span><span class="vp-sidebar-label" data-i18n="sidebar.history.all">Conversation history</span></button>
+        <a class="vp-nav__item {% if active_nav == 'library' %}is-active{% endif %}" {% if active_nav == 'library' %}aria-current="page"{% endif %} href="/library"><span class="vp-nav__icon">▣</span><span class="vp-sidebar-label" data-i18n="sidebar.nav.library">My library</span></a>
+        <section id="recent-history" class="vp-recent-history" hidden aria-label="Recent conversations" data-i18n-aria-label="sidebar.history.recent_aria">
+            <p class="vp-sidebar__label" data-i18n="sidebar.history.recent">Recent</p>
+            <ul id="recent-history-list"></ul>
+        </section>
+    </nav>
+
+    <div class="vp-sidebar__account">
+        <a class="vp-nav__item vp-nav__marketplace" href="/discover"><span class="vp-nav__icon">⌕</span><span class="vp-sidebar-label" data-i18n="sidebar.nav.marketplace">Public marketplace</span></a>
+        {% if request.user.is_authenticated %}
+        <button id="account-menu-button" class="vp-account-button" type="button" aria-haspopup="dialog" aria-controls="account-modal">
+            <span class="vp-account-button__avatar" aria-hidden="true">{{ account_preferences.display_name|default:request.user.username|slice:':1'|upper }}</span>
+            <span class="vp-sidebar-label"><strong>{{ account_preferences.display_name|default:request.user.username }}</strong><small>{{ request.user.username }}</small></span>
+            <span aria-hidden="true">•••</span>
+        </button>
+        {% else %}
+        <a class="vp-account-button" href="/accounts/login/?next={{ request.get_full_path|urlencode }}">
+            <span class="vp-account-button__avatar" aria-hidden="true">V</span>
+            <span class="vp-sidebar-label"><strong data-i18n="sidebar.account.signin">Sign in</strong><small data-i18n="sidebar.account.signin_sub">Save your workspace</small></span>
+            <span aria-hidden="true">›</span>
+        </a>
+        {% endif %}
+    </div>
+</aside>

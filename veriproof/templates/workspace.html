@@ -1,0 +1,55 @@
+{% extends "creator_shell.html" %}
+{% load static %}
+{% block title %}Creator Workspace | VeriProof AI{% endblock %}
+{% block title_i18n %}workspace.title{% endblock %}
+{% block main_label %}Creator assistant conversation{% endblock %}
+{% block main_label_i18n %}workspace.main_label{% endblock %}
+{% block shell_attrs %}data-register-url="{{ register_url }}" data-max-upload-bytes="{{ max_upload_bytes }}"{% endblock %}
+{% block main %}
+<div class="vp-chat">
+    <section id="assistant-messages" class="vp-messages" aria-live="polite" aria-label="Conversation">
+        <div class="vp-empty-state" id="chat-empty-state">
+            <p class="vp-empty-state__mark">✦</p>
+            <h1 data-i18n="workspace.empty.title">What would you like to create or protect?</h1>
+            <p data-i18n="workspace.empty.body">Talk through a work, explore your library, or start a registration when you are ready.</p>
+        </div>
+    </section>
+    <form id="assistant-form" class="vp-composer">
+        <div id="composer-attachments" class="vp-composer__attachments" hidden aria-live="polite"></div>
+        <button id="composer-add" class="vp-composer__add" type="button" aria-label="Add a file or start registration" data-i18n-aria-label="workspace.composer.add_aria" aria-expanded="false">＋</button>
+        <div id="composer-add-menu" class="vp-composer-menu" hidden>
+            <button id="attach-file" type="button" data-i18n="workspace.composer.attach">File attachment</button>
+            <button id="start-registration" type="button" data-i18n="workspace.composer.register">Start work registration</button>
+        </div>
+        <input id="conversation-file" type="file" hidden>
+        <textarea id="assistant-message" maxlength="2000" rows="1" required placeholder="Type a message or attach a file…" data-i18n-placeholder="workspace.composer.placeholder" aria-label="Message VeriProof" data-i18n-aria-label="workspace.composer.aria"></textarea>
+        <button class="vp-composer__send" type="submit" aria-label="Send message" data-i18n-aria-label="workspace.composer.send_aria">↑</button>
+        <div class="vp-composer__dropveil" aria-hidden="true">
+            <span class="vp-composer__dropveil-inner"><span class="vp-composer__dropveil-icon" aria-hidden="true">⬇</span><span data-i18n="workspace.composer.drop">Drop files to attach</span></span>
+        </div>
+    </form>
+    <p id="assistant-status" class="vp-status" role="status"></p>
+</div>
+<aside id="registration-canvas" class="vp-registration-canvas" hidden aria-label="Registration draft" data-i18n-aria-label="workspace.canvas.aria">
+    <div class="vp-registration-canvas__head"><div><p data-i18n="workspace.canvas.eyebrow">Registration draft</p><h2 data-i18n="workspace.canvas.title">Prepare your work</h2></div><button id="close-registration" class="vp-text-button vp-registration-canvas__close" type="button" aria-label="Close registration panel" data-i18n-aria-label="workspace.canvas.close" title="Close registration panel" data-i18n-title="workspace.canvas.close"><span aria-hidden="true">×</span></button></div>
+    <p class="vp-registration-canvas__hint" data-i18n="workspace.canvas.hint">The assistant can suggest details. You can edit every field before confirming.</p>
+    <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Choose a work to register" data-i18n-aria-label="workspace.canvas.drop_aria"><p class="dropzone__hint" data-i18n="workspace.canvas.drop_hint">Choose files to register</p><label class="dropzone__file"><input id="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,audio/mpeg,audio/wav,video/mp4,video/webm,application/zip,application/x-tar" hidden><span data-i18n="workspace.canvas.choose">Choose files</span></label></div>
+    <div class="vp-registration__fields">
+        <label><span data-i18n="workspace.canvas.unit">Registration unit</span><select id="registration-unit"><option value="individual" data-i18n="workspace.canvas.unit_individual">Each file is a separate work</option><option value="package" data-i18n="workspace.canvas.unit_package">One packaged work</option></select></label>
+        <label><span data-i18n="workspace.canvas.type">Type</span><select id="asset-type">{% for value, label in asset_types %}<option value="{{ value }}" data-i18n="common.asset_type.{{ value }}">{{ label }}</option>{% endfor %}</select></label>
+        <label class="vp-registration__field--wide"><span data-i18n="workspace.canvas.title_label">Title</span><input id="asset-title" maxlength="120" placeholder="Title" data-i18n-placeholder="workspace.canvas.title_ph"></label>
+        <label class="vp-registration__field--wide"><span data-i18n="workspace.canvas.desc_label">Description</span><textarea id="asset-description" maxlength="3000" rows="5" placeholder="What can be licensed?" data-i18n-placeholder="workspace.canvas.desc_ph" aria-describedby="asset-description-guide"></textarea><small id="asset-description-guide" data-i18n="workspace.canvas.desc_guide">Describe what the work is, what a buyer may license, and any important limits or deliverables.</small></label>
+        <label class="vp-registration__field--wide"><span data-i18n="workspace.canvas.tags_label">Tags</span><input id="asset-tags" maxlength="600" placeholder="e.g. coastal landscape, sunrise, editorial" data-i18n-placeholder="workspace.canvas.tags_ph" aria-describedby="asset-tags-guide"><small id="asset-tags-guide" data-i18n="workspace.canvas.tags_guide">Separate tags with commas. Tags help people find this work and are saved only for this file.</small></label>
+        <label class="vp-registration__price-field"><span data-i18n="workspace.canvas.min_label">Minimum price</span><div class="vp-registration__currency"><input id="min-price" type="number" min="0" step="0.01" value="1.00"><span>USDC</span></div><small data-i18n="workspace.canvas.min_guide">Lowest price you will accept for a license. Offers below this amount are not accepted.</small></label>
+        <label class="vp-registration__price-field"><span data-i18n="workspace.canvas.target_label">Target price</span><div class="vp-registration__currency"><input id="target-price" type="number" min="0" step="0.01" value="3.00"><span>USDC</span></div><small data-i18n="workspace.canvas.target_guide">Your preferred license price. It helps guide negotiations and must be at least the minimum price.</small></label>
+        <label class="share-control"><input id="asset-share" type="checkbox"> <span data-i18n="workspace.canvas.share">Show in the public marketplace after registration proof is created</span></label>
+    </div>
+    <p id="registration-unit-hint" class="vp-registration-canvas__hint" data-i18n="workspace.canvas.unit_hint">Each selected file receives its own review and certificate. For one work with multiple source files, upload a single ZIP package.</p>
+    <ul id="registration-file-queue" class="vp-registration-file-queue" aria-live="polite"></ul>
+    <div class="vp-registration-canvas__actions"><button id="ask-registration-advice" type="button" class="vp-canvas-secondary" data-i18n="workspace.canvas.ask_advice">Get AI feedback on this information</button><button id="confirm-registration" type="button" data-i18n="workspace.canvas.confirm">Register selected file</button></div>
+    <ul id="analysis-feed" class="analysis-feed" aria-live="polite"></ul>
+</aside>
+{% endblock %}
+{% block page_scripts %}
+<script src="{% static 'js/workspace.js' %}"></script>
+{% endblock %}

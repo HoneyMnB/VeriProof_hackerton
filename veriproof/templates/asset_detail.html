@@ -1,0 +1,47 @@
+{% extends "public_shell.html" %}
+{% load static %}
+{% block title %}{{ asset.title }} | VeriProof{% endblock %}
+{% block main %}
+<article class="asset-detail" data-asset-detail data-asset-id="{{ asset.asset_id }}" data-settle-url="{{ asset.x402_endpoint }}/settle">
+    <a class="asset-detail__back" href="/discover" data-i18n="detail.back">← Back to Discover</a>
+    <div class="asset-detail__grid">
+        <section class="asset-detail__visual" aria-label="Protected work preview" data-i18n-aria-label="detail.preview_aria">
+            <img src="{{ asset.watermark_url }}" alt="Protected preview of {{ asset.title }}" data-i18n-alt="detail.preview_alt" data-i18n-vars='{"title":"{{ asset.title|escapejs }}"}' width="960" height="720">
+            <span class="asset-detail__watermark" data-i18n="detail.protected">Protected preview · watermark applied</span>
+        </section>
+        <section class="asset-detail__info">
+            <p class="asset-detail__eyebrow" data-i18n="detail.eyebrow">VERIFIED LICENSABLE WORK</p>
+            <h1>{{ asset.title }}</h1>
+            {% if asset.description %}<p class="asset-detail__description">{{ asset.description }}</p>{% endif %}
+            {% if asset.tags %}<ul class="asset-detail__tags">{% for tag in asset.tags %}<li>{{ tag }}</li>{% endfor %}</ul>{% endif %}
+            <dl class="asset-detail__facts">
+                <div><dt data-i18n="detail.type">Work type</dt><dd data-i18n="common.asset_type.{{ asset.asset_type }}">{{ asset.asset_type }}</dd></div>
+                <div><dt data-i18n="detail.originality">Originality</dt><dd>{% if asset.originality_score %}{{ asset.originality_score }}/100{% else %}—{% endif %}</dd></div>
+                <div><dt data-i18n="detail.proof">Proof</dt><dd data-i18n="detail.proof_value">On-chain certificate after payment</dd></div>
+            </dl>
+        </section>
+        <aside class="asset-detail__purchase" aria-labelledby="purchase-title">
+            <p data-i18n="detail.buy_eyebrow">BUY-IT-NOW LICENSE</p>
+            <h2 id="purchase-title" data-i18n="detail.buy_title">License this work</h2>
+            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ payment.solana_pay.amount_usdc }} USDC</strong></p>
+            <dl class="asset-detail__payment-summary">
+                <div><dt data-i18n="detail.delivery">After verification</dt><dd data-i18n="detail.delivery_value">License certificate and time-bound original download</dd></div>
+                <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · USDC</dd></div>
+            </dl>
+            <a class="asset-detail__pay" href="{{ payment.solana_pay.uri }}" data-i18n="detail.pay_now">Pay now with Solana Pay</a>
+            <p class="asset-detail__note" data-i18n="detail.no_cart">No cart. Payment grants one license and an expiry-bound original download.</p>
+            <details class="asset-detail__verify">
+                <summary data-i18n="detail.verify_summary">I have completed the payment</summary>
+                <form id="payment-proof-form" class="asset-detail__payment-form">
+                    <label><span data-i18n="detail.wallet">Buyer wallet</span><input id="buyer-wallet" name="buyer_wallet" maxlength="44" required autocomplete="off" spellcheck="false"></label>
+                    <label><span data-i18n="detail.tx">Solana transaction signature</span><input id="payment-tx" name="tx_signature" maxlength="90" required autocomplete="off" spellcheck="false"></label>
+                    <button type="submit" data-i18n="detail.verify_payment">Verify payment and issue license</button>
+                </form>
+                {% if local_mock_payment %}<button id="local-demo-pay" class="asset-detail__demo-pay" type="button" data-i18n="detail.demo_pay">Run local demo payment</button>{% endif %}
+                <p id="payment-status" class="vp-status" role="status"></p>
+            </details>
+        </aside>
+    </div>
+</article>
+{% endblock %}
+{% block page_scripts %}<script src="{% static 'js/payment.js' %}"></script>{% endblock %}

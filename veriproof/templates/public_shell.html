@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load static %}
+{% comment %}Public marketplace shell is intentionally independent from the creator workspace.{% endcomment %}
+{% block body_class %}marketplace-page{% endblock %}
+{% block content %}
+<div class="marketplace-shell">
+    <header class="marketplace-nav">
+        <a href="/discover" class="marketplace-nav__brand" translate="no">VeriProof</a>
+        <div class="marketplace-nav__tools">
+            {# Language switcher mount point — vp-lang-switcher.js renders the globe dropdown here. #}
+            <div class="marketplace-nav__lang" data-vp-lang-switch></div>
+        </div>
+    </header>
+    <main id="main" tabindex="-1" class="marketplace-main">
+        {% block main %}{% endblock %}
+    </main>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'js/vp-lang-switcher.js' %}"></script>
+{% block page_scripts %}{% endblock %}
+{% endblock %}

@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% load static %}
+{% comment %}Internal creator shell with one shared sidebar and a page slot.{% endcomment %}
+{% block body_class %}chat-page{% endblock %}
+{% block content %}
+<div class="vp-chat-shell" data-chat-shell data-page="{{ active_nav|default:'assistant' }}"
+     data-creator-wallet="{{ account_preferences.creator_wallet|default:'' }}"
+     {% block shell_attrs %}{% endblock %}>
+    {% include "_creator_sidebar.html" %}
+    <main id="main" tabindex="-1" class="vp-main" aria-label="{% block main_label %}Creator workspace{% endblock %}" data-i18n-aria-label="{% block main_label_i18n %}{% endblock %}">
+        {% block main %}{% endblock %}
+    </main>
+</div>
+<div id="history-modal" class="vp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="history-title">
+    <div class="vp-modal__backdrop" data-history-close></div>
+    <section class="vp-modal__panel vp-history-modal">
+        <div class="vp-modal__head"><div><p class="vp-modal__eyebrow" data-i18n="sidebar.history.eyebrow">Conversation history</p><h2 id="history-title" data-i18n="sidebar.history.all">All conversations</h2></div><button class="vp-icon-button" type="button" data-history-close aria-label="Close history">×</button></div>
+        <form id="history-search-form" class="vp-history-search" role="search"><label class="sr-only" for="history-search" data-i18n="sidebar.history.search_aria">Search conversation titles</label><input id="history-search" type="search" maxlength="120" autocomplete="off" data-i18n-placeholder="sidebar.history.search_placeholder" placeholder="Search conversations"><button type="submit" data-i18n="sidebar.history.search">Search</button></form>
+        <ul id="history-list" class="vp-history-list" aria-live="polite"></ul>
+    </section>
+</div>
+{% if request.user.is_authenticated %}
+<div id="account-modal" class="vp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+    <div class="vp-modal__backdrop" data-account-close></div>
+    <section class="vp-modal__panel">
+        <div class="vp-modal__head"><h2 id="account-modal-title" class="sr-only" data-i18n="account.title">Your workspace</h2><button class="vp-icon-button" type="button" data-account-close aria-label="Close settings" data-i18n-aria-label="account.close_aria">×</button></div>
+        <div class="vp-settings-layout">
+            <nav class="vp-settings-nav" aria-label="Account sections" data-i18n-aria-label="account.sections_aria"><button type="button" class="is-active" data-settings-tab="account" data-i18n="account.tab.account">Account</button><button type="button" data-settings-tab="wallet" data-i18n="account.tab.wallet">Wallet</button><button type="button" data-settings-tab="sales" data-i18n="account.tab.sales">Sales</button>{% if request.user.is_staff and debug %}<a class="vp-settings-nav__developer" href="/sandbox"><span class="vp-nav__icon" aria-hidden="true">⌘</span><span data-i18n="account.tab.sandbox">Negotiation sandbox</span></a>{% endif %}</nav>
+            <div class="vp-settings-content">
+        <section data-settings-panel="account">
+        <div class="vp-account-identity"><span class="vp-settings-summary__avatar" aria-hidden="true">{{ account_preferences.display_name|default:request.user.username|slice:':1'|upper }}</span><div><strong>{{ account_preferences.display_name|default:request.user.username }}</strong><small>{{ request.user.username }}</small></div></div>
+        <form id="account-settings-form" class="vp-settings-form">
+            {% csrf_token %}
+            <label><span data-i18n="account.display_name">Display name</span><input id="account-display-name" maxlength="80" value="{{ account_preferences.display_name|default:request.user.username }}" autocomplete="name"></label>
+            <label><span data-i18n="account.language">Language</span><select id="account-language"><option value="ko" {% if account_preferences.language == 'ko' %}selected{% endif %}>한국어</option><option value="en" {% if account_preferences.language == 'en' %}selected{% endif %}>English</option></select></label>
+            <label><span data-i18n="account.recovery_email">Recovery email</span><input id="account-recovery-email" type="email" maxlength="254" value="{{ account_preferences.recovery_email|default:'' }}" autocomplete="email" data-i18n-placeholder="account.recovery_email_placeholder" placeholder="name@example.com"></label>
+            <label><span data-i18n="account.contact_phone">Contact phone</span><input id="account-contact-phone" type="tel" maxlength="30" value="{{ account_preferences.contact_phone|default:'' }}" autocomplete="tel" data-i18n-placeholder="account.contact_phone_placeholder" placeholder="+82 10 1234 5678"></label>
+            <button type="submit" data-i18n="account.save">Save account</button>
+            <p id="account-settings-status" class="vp-status" role="status"></p>
+        </form>
+        <form id="account-password-form" class="vp-settings-form vp-password-form">
+            {% csrf_token %}
+            <h3 data-i18n="account.password_title">Password</h3>
+            <label><span data-i18n="account.current_password">Current password</span><input id="account-current-password" type="password" autocomplete="current-password"></label>
+            <label><span data-i18n="account.new_password">New password</span><input id="account-new-password" type="password" autocomplete="new-password"></label>
+            <label><span data-i18n="account.confirm_password">Confirm new password</span><input id="account-confirm-password" type="password" autocomplete="new-password"></label>
+            <button type="submit" data-i18n="account.password_save">Update password</button>
+            <p id="account-password-status" class="vp-status" role="status"></p>
+        </form>
+        </section>
+            <section class="vp-settings-wallet" data-settings-panel="wallet" hidden>
+                <p class="vp-page__eyebrow" data-i18n="account.wallet_eyebrow">Wallet configuration</p><h3 data-i18n="account.wallet_title">Receiving wallets</h3><p class="vp-settings-wallet__description" data-i18n="account.wallet_description">Register public addresses before connecting a wallet. Choose addresses for incoming transfers and seller payouts; no private key is stored.</p>
+                <form id="account-wallet-form" class="vp-settings-form vp-wallet-add-form"><label><span data-i18n="account.wallet_name">Wallet name</span><input id="account-wallet-label" maxlength="40" autocomplete="off" data-i18n-placeholder="account.wallet_name_placeholder" placeholder="e.g. Studio treasury"></label><label><span data-i18n="account.wallet">Solana public address</span><input id="account-creator-wallet" maxlength="64" value="" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="Solana public key" data-i18n-placeholder="account.wallet_placeholder"></label><div class="vp-wallet-options"><label><input id="account-wallet-deposits" type="checkbox" checked><span data-i18n="account.wallet_deposits">Accept incoming transfers</span></label><label><input id="account-wallet-payouts" type="checkbox"><span data-i18n="account.wallet_payouts">Receive sales payouts</span></label></div><button type="submit" data-i18n="account.wallet_save">Add wallet</button><p id="account-wallet-status" class="vp-status" role="status"></p></form>
+                <div id="settings-wallet-monitor"><div id="settings-wallet-list" class="vp-settings-wallet__list" aria-live="polite"></div></div>
+            </section>
+            <section class="vp-settings-sales" data-settings-panel="sales" hidden aria-live="polite">
+                <p class="vp-page__eyebrow" data-i18n="dashboard.eyebrow">Seller operations</p>
+                <h3 data-i18n="dashboard.title">Sales and payout overview</h3>
+                <p class="vp-settings-sales__description" data-i18n="dashboard.body">Only settled license records are included in these figures.</p>
+                <p id="settings-sales-status" class="vp-settings-sales__status"></p>
+                <div id="settings-sales-wallet" class="vp-settings-sales__wallet" hidden></div>
+                <div id="settings-sales-metrics" class="vp-settings-sales__metrics"></div>
+                <div id="settings-sales-period" class="vp-settings-sales__period"></div>
+                <div id="settings-sales-by-work" class="vp-settings-sales__by-work" hidden><h4 data-i18n="dashboard.by_work">Sales by work</h4><ul id="settings-sales-work-list"></ul></div>
+                <div id="settings-sales-recent" class="vp-settings-sales__recent" hidden>
+                    <h4 data-i18n="dashboard.recent_sales">Recent completed sales</h4>
+                    <ul id="settings-sales-list"></ul>
+                </div>
+            </section>
+            </div>
+        </div>
+        <footer class="vp-modal__footer"><button class="vp-modal__close" type="button" data-account-close data-i18n="account.close">Close</button><form method="post" action="{% url 'accounts:logout' %}" class="vp-modal__logout-form">{% csrf_token %}<button class="vp-modal__logout" type="submit"><span class="vp-nav__icon" aria-hidden="true">↪</span><span data-i18n="account.signout">Sign out</span></button></form></footer>
+    </section>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'js/dashboard.js' %}"></script>
+<script src="{% static 'js/shell.js' %}"></script>
+{% block page_scripts %}{% endblock %}
+{% endblock %}

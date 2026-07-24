@@ -1,0 +1,28 @@
+# VeriProof AI — Settlement orchestration (Google Cloud Workflows).
+# Documentation / scaffold only. NOT executed by the Django app or pytest.
+#
+# In cloud deployment, a Pub/Sub payment event triggers this Workflow via
+# Eventarc (architecture 2.1, step [4]). The Workflow calls the SAME Django
+# service methods as the synchronous /settle fallback path (single logic SSOT):
+#   A. SolanaService.verify_usdc_payment
+#   B. LicenseService.grant
+#   C. SolanaService.issue_certificate (Memo, KMS-signed)
+#   D. FirestoreMirror.set (status=LICENSED, download_url)
+#   E. BigQuerySink.insert (transaction audit row)
+#
+# Local/TDD does NOT run this Workflow: POST /api/v1/ip/{id}/settle performs
+# steps A-E synchronously in-process. Both paths reuse the service layer.
+#
+# Full Workflow YAML is written in SPEC-004 once the service methods exist.
+
+main:
+  params: [event]
+  steps:
+    - log_event:
+        call: sys.log
+        args:
+          severity: INFO
+          text: ${"settlement workflow triggered: " + json.encode_to_string(event)}
+    # TODO(SPEC-004): map event -> call Django service endpoints A..E via HTTP.
+    - return_ok:
+        return: {status: "SCAFFOLD_PLACEHOLDER"}

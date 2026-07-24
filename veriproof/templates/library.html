@@ -1,0 +1,122 @@
+{% extends "creator_shell.html" %}
+{% load static %}
+{% block title %}IP Library | VeriProof AI{% endblock %}
+{% block title_i18n %}library.title{% endblock %}
+{% block main_label %}Creator IP library{% endblock %}
+{% block main_label_i18n %}library.main_label{% endblock %}
+{% block main %}
+<div class="vp-page vp-library-page">
+    <header class="vp-page__head vp-library-page__head">
+        <div class="vp-library-page__head-titles">
+            <p class="vp-page__eyebrow" data-i18n="library.head.eyebrow">Creator workspace</p>
+            <h1 data-i18n="library.head.title">Your work library</h1>
+        </div>
+        <p class="vp-library-page__head-desc" data-i18n="library.head.body">Review registration certificates, publication settings, and sales activity for each work.</p>
+    </header>
+
+    {% comment %}The server resolves the account wallet; URL input remains only for A2A verification compatibility.{% endcomment %}
+    <div id="library-state" data-wallet="{{ wallet }}" data-assets-count="{{ assets|length }}">
+        {% if not wallet %}
+        <p class="no-assets" data-i18n="library.empty.nowallet">Connect your creator wallet in the sidebar to view your registered IP assets.</p>
+        {% elif not assets %}
+        {# 6 edge: zero assets -> empty-state guidance. #}
+        <p class="no-assets"><span data-i18n="library.empty.noassets">No IP assets registered for this wallet yet. </span><a href="/" data-i18n="library.empty.register">Register your first asset</a></p>
+        {% else %}
+        <p class="library__meta"><span data-i18n="library.meta" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} works · wallet</span> <code translate="no">{{ wallet|slice:":6" }}…{{ wallet|slice:"-4:" }}</code></p>
+        <ul class="asset-grid"
+            data-events-url="{{ events_url }}"
+            data-firestore-enabled="{{ firestore_enabled|yesno:'true,false' }}"
+            data-assets-api-url="{{ assets_api_url }}">
+            {% for asset in assets %}
+            <li class="asset-card" id="asset-{{ asset.asset_id }}"
+                data-asset-id="{{ asset.asset_id }}"
+                data-min-price="{{ asset.min_price_usdc }}"
+                data-target-price="{{ asset.target_price_usdc }}"
+                data-visibility="{{ asset.visibility }}"
+                data-explorer-url="{{ asset.explorer_url|default:'' }}">
+
+                {# R6 / AC-5: preview toggle (watermark <-> thumbnail, never original). #}
+                <div class="asset-card__preview">
+                    <img class="asset-card__img" src="{{ asset.thumbnail_url }}"
+                         alt="Preview of {{ asset.title }}"
+                         data-i18n-alt="library.asset.alt" data-i18n-vars='{"title": "{{ asset.title|escapejs }}"}'
+                         loading="lazy" decoding="async" width="400" height="176"
+                         data-watermark-url="{{ asset.watermark_url }}"
+                         data-thumbnail-url="{{ asset.thumbnail_url }}">
+                    <button type="button" class="asset-card__toggle" aria-pressed="false" data-i18n="library.asset.show_protected_preview">Show protected preview</button>
+                </div>
+                <div class="asset-card__content">
+                    <header class="asset-card__head">
+                        <div>
+                            <p class="asset-card__category">{{ asset.category }}</p>
+                            <h3>{{ asset.title }}</h3>
+                        </div>
+                        <span class="asset-card__status badge badge--{{ asset.status }}">{{ asset.status }}</span>
+                    </header>
+
+                    <div class="asset-card__proof {% if not asset.certificate.certificate_tx_sig %}asset-card__proof--pending{% endif %}">
+                        <span class="asset-card__proof-mark" aria-hidden="true">✓</span>
+                        {% if asset.certificate.certificate_tx_sig %}
+                        <span data-i18n="library.asset.registration_certified">Registration certificate verified</span>
+                        {% else %}
+                        <span data-i18n="library.asset.registration_pending">Registration certificate pending</span>
+                        {% endif %}
+                    </div>
+
+                    <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_price_usdc }} USDC</strong></p>
+
+                    <div class="asset-card__actions">
+                    {# 인증서와 설정만 카드에서 바로 연다. 부가 관리 UI는 카드에서 분리한다. #}
+                    <button type="button" class="btn btn--certificate"
+                            data-asset-id="{{ asset.certificate.asset_id }}"
+                            data-image-sha256="{{ asset.certificate.image_sha256 }}"
+                            data-anchor-tx-sig="{{ asset.certificate.anchor_tx_sig|default:'' }}"
+                            data-certificate-tx-sig="{{ asset.certificate.certificate_tx_sig|default:'' }}"
+                            data-creator-wallet="{{ asset.certificate.creator_wallet }}"
+                            data-explorer-url="{{ asset.certificate.explorer_url|default:'' }}" data-i18n="library.asset.certificate">View certificate</button>
+                    <button type="button" class="btn btn--asset-settings" data-i18n="library.asset.manage">Manage</button>
+                    </div>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</div>
+
+<div id="asset-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="asset-settings-title">
+    <div class="modal__backdrop" data-asset-settings-close></div>
+    <section class="modal__panel asset-settings-modal__panel">
+        <header><div><p class="vp-page__eyebrow" data-i18n="library.terms.eyebrow">Work management</p><h2 id="asset-settings-title" data-i18n="library.terms.title">Listing settings</h2></div><button type="button" data-asset-settings-close data-i18n="library.modal.close">Close</button></header>
+        <p id="asset-settings-name" class="asset-settings-modal__name"></p>
+        <form id="asset-settings-form" class="asset-card__terms">
+            <label><span data-i18n="library.terms.minimum">Minimum USDC</span><input name="min_price_usdc" type="number" min="0" step="0.01" required></label>
+            <label><span data-i18n="library.terms.target">Target USDC</span><input name="target_price_usdc" type="number" min="0" step="0.01" required></label>
+            <label><span data-i18n="library.terms.visibility">Visibility</span><select name="visibility"><option value="private" data-i18n="library.terms.private">Private</option><option value="public" data-i18n="library.terms.public">Public</option></select></label>
+            <a id="asset-settings-explorer" class="asset-settings-modal__explorer" target="_blank" rel="noopener" hidden data-i18n="library.asset.explorer">Solana Explorer verify</a>
+            <button type="submit" data-i18n="library.terms.save">Save listing settings</button><span class="asset-card__terms-status" role="status"></span>
+        </form>
+    </section>
+</div>
+
+{# R8 / AC-7: QR modal shell (library.js renders the QR / scan block into it). #}
+<div id="certificate-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal__backdrop" data-modal-close></div>
+    <div class="modal__panel">
+        <header><h2 id="modal-title" data-i18n="library.modal.title">On-chain Certificate</h2>
+            <button type="button" data-modal-close data-i18n="library.modal.close">Close</button>
+        </header>
+        <div id="certificate-qr" class="modal__qr"></div>
+        <dl id="certificate-fields" class="modal__fields"></dl>
+    </div>
+</div>
+
+<script id="library-config" type="application/json">{
+    "firestore_enabled": {{ firestore_enabled|yesno:'true,false' }},
+    "events_url": "{{ events_url }}",
+    "assets_api_url": "{{ assets_api_url }}"
+}</script>
+{% endblock %}
+{% block page_scripts %}
+<script src="{% static 'js/library.js' %}"></script>
+{% endblock %}

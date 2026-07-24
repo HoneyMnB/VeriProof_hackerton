@@ -1,0 +1,9 @@
+# GCP 파이프라인을 활성화하는 환경에서만 설치한다.
+# Gemini 보조 라이브러리와 공존하도록 protobuf 6 미만을 유지한다.
+-r requirements.txt
+protobuf>=3.20.2,<6
+google-cloud-firestore>=2.14,<2.22
+google-cloud-bigquery>=3.18,<3.30
+google-cloud-pubsub>=2.19,<2.26
+google-cloud-kms>=2.21,<2.25
+google-cloud-storage>=2.16,<2.19

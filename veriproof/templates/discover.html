@@ -1,0 +1,77 @@
+{% extends "public_shell.html" %}
+{% load static %}
+{% block title %}Discover licensable work | VeriProof{% endblock %}
+{% block title_i18n %}discover.title{% endblock %}
+{% block meta_i18n %}discover.meta{% endblock %}
+{% block meta_description %}Browse creator-approved works you can license on Solana with x402 payment and verifiable on-chain proof.{% endblock %}
+{% block main %}
+<section class="marketplace-hero">
+    <div class="marketplace-hero__visuals" aria-hidden="true">
+        <img class="marketplace-hero__visual marketplace-hero__visual--one" src="{% static 'images/discover-hero-creative-01.webp' %}" alt="" fetchpriority="high">
+        <img class="marketplace-hero__visual marketplace-hero__visual--two" src="{% static 'images/discover-hero-creative-02.webp' %}" alt="">
+        <img class="marketplace-hero__visual marketplace-hero__visual--three" src="{% static 'images/discover-hero-creative-03.webp' %}" alt="">
+    </div>
+    <div class="marketplace-hero__content">
+        <p class="marketplace-hero__eyebrow" data-i18n="discover.hero.eyebrow">VERIFIED CREATIVE MARKETPLACE</p>
+        <h1 data-i18n="discover.hero.title">License original work, with proof.</h1>
+        <p data-i18n="discover.hero.body">Explore protected work from independent creators. Clear terms, secure payment, verifiable ownership.</p>
+    <form class="marketplace-search" method="get" role="search">
+        <label class="sr-only" for="marketplace-query" data-i18n="discover.search.label">Search shared works</label>
+        <span class="marketplace-search__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><circle cx="10.8" cy="10.8" r="6.3"></circle><path d="m16 16 4.2 4.2"></path></svg>
+        </span>
+        <input id="marketplace-query" name="q" value="{{ query }}" placeholder="Search works, creators, or styles" data-i18n-placeholder="discover.search.placeholder">
+        <label class="sr-only" for="marketplace-type" data-i18n="discover.type.label">Work type</label>
+        <select id="marketplace-type" name="asset_type">
+            <option value="" data-i18n="discover.type.all">All work types</option>
+            {% for value, label in asset_types %}<option value="{{ value }}" {% if value == asset_type %}selected{% endif %} data-i18n="common.asset_type.{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+        <label class="sr-only" for="marketplace-sort" data-i18n="discover.sort.label">Sort by</label>
+        <select id="marketplace-sort" name="sort">
+            {% for value, label in sort_options %}<option value="{{ value }}" {% if value == sort %}selected{% endif %} data-i18n="discover.sort.{{ value }}">{{ label }}</option>{% endfor %}
+        </select>
+        <button type="submit" data-i18n="common.search">Search</button>
+    </form>
+    <div class="marketplace-chips" role="group" aria-label="Price range" data-i18n-aria-label="discover.price.group">
+        {% for bucket in price_buckets %}<a class="marketplace-chip{% if bucket.is_active %} is-active{% endif %}" href="?{{ bucket.qs }}" data-i18n="discover.price.{{ bucket.value }}">{{ bucket.label }}</a>{% endfor %}
+    </div>
+    </div>
+</section>
+
+<section class="marketplace-results" aria-labelledby="marketplace-results-title">
+    <header class="marketplace-results__header">
+        <div><p class="marketplace-results__eyebrow" data-i18n="discover.results.eyebrow">PUBLICLY SHARED</p><h2 id="marketplace-results-title" data-i18n="discover.results.title">Licensable works</h2></div>
+        <p>
+            {% if query %}
+            <span data-i18n="discover.results.for_query" data-i18n-vars='{"n": "{{ assets|length }}", "q": "{{ query|escapejs }}"}'>{{ assets|length }} results for “{{ query }}”</span>
+            {% elif asset_type %}
+            <span data-i18n="discover.results.count" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} results</span> · <span data-i18n="common.asset_type.{{ asset_type }}">{{ asset_type }}</span>
+            {% else %}
+            <span data-i18n="discover.results.count" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} results</span>
+            {% endif %}
+        </p>
+    </header>
+    <ul class="marketplace-grid">
+        {% for asset in assets %}
+        <li class="marketplace-card">
+            <a class="marketplace-card__link" href="/discover/{{ asset.asset_id }}" aria-label="View {{ asset.title }}" data-i18n-aria-label="discover.card.open_aria" data-i18n-vars='{"title": "{{ asset.title|escapejs }}"}'>
+                <img src="{{ asset.watermark_url }}" alt="Protected preview of {{ asset.title }}" data-i18n-alt="discover.card.preview_alt" data-i18n-vars='{"title": "{{ asset.title|escapejs }}"}' loading="lazy" decoding="async" width="600" height="400">
+                <span class="marketplace-card__type" data-i18n="common.asset_type.{{ asset.asset_type }}">{{ asset.asset_type }}</span>
+                {% if asset.min_price_usdc %}<span class="marketplace-card__price"><strong>{{ asset.min_price_usdc }}</strong> USDC</span>{% endif %}
+                <div class="marketplace-card__overlay">
+                    <span class="marketplace-card__protected" data-i18n="discover.card.protected">Watermarked preview</span>
+                    <h3>{{ asset.title }}</h3>
+                    <div class="marketplace-card__stats">
+                        {% if asset.originality_score %}<span class="marketplace-card__orig"><span data-i18n="discover.card.originality">Originality</span> <strong>{{ asset.originality_score }}</strong></span>{% else %}<span></span>{% endif %}
+                        <span class="marketplace-card__view"><span data-i18n="discover.card.view_access">View licence</span> <span aria-hidden="true">→</span></span>
+                    </div>
+                </div>
+            </a>
+        </li>
+        {% empty %}
+        <li class="marketplace-empty"><p data-i18n="discover.empty.text">No shared works match this search.</p><a href="/discover" data-i18n="discover.empty.clear">Clear search</a></li>
+        {% endfor %}
+    </ul>
+</section>
+
+{% endblock %}
