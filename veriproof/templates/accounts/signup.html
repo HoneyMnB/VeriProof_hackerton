@@ -2,12 +2,14 @@
 {% block title %}Create account | VeriProof{% endblock %}
 {% block body_class %}vp-auth-page{% endblock %}
 {% block content %}
+{# 회원가입 페이지 본문: 마켓플레이스 브랜드 링크 + 계정 생성 카드 #}
 <main class="vp-auth" aria-labelledby="auth-title">
     <a class="vp-auth__brand" href="/discover">VeriProof</a>
     <section class="vp-auth__card">
         <p class="vp-auth__eyebrow">Creator workspace</p>
         <h1 id="auth-title">Create account</h1>
         <p>Start a private workspace for registration, proof, and licensing.</p>
+        {# 회원가입 폼: CSRF 토큰, next 경로, Django form 필드와 필드/폼 에러 표시 #}
         <form method="post" class="vp-auth__form" novalidate>
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">

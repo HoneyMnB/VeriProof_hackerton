@@ -6,12 +6,14 @@
 {% block main_label_i18n %}sandbox.main_label{% endblock %}
 {% block main %}
 <div class="vp-page">
+    {# 샌드박스 페이지 헤더: 개발자 검증 도구 목적/대상 안내 #}
     <header class="vp-page__head">
         <p class="vp-page__eyebrow" data-i18n="sandbox.head.eyebrow">Developer verification tool</p>
         <h1 data-i18n="sandbox.head.title">Negotiation Sandbox</h1>
         <p data-i18n="sandbox.head.body">Submit a confirmed Devnet payment to verify the full 402 → negotiation → settlement path. The asset ID is auto-filled when you arrive from the library or a freshly registered work.</p>
     </header>
 
+    {# 사용 가이드: 402 → 협상 → 정산 경로 검증 절차와 단계별 입력 안내 #}
     <section class="sandbox-guide" aria-labelledby="sandbox-guide-title">
         <div><h2 id="sandbox-guide-title" data-i18n="sandbox.guide.title">How to use this tool</h2><p data-i18n="sandbox.guide.audience">For staff development verification only. It does not create a production sale.</p></div>
         <ol>
@@ -22,6 +24,7 @@
         <p class="sandbox-guide__result" data-i18n="sandbox.guide.result">A successful run shows the 402 request, negotiated terms, verified transaction, and settlement result. Failed runs identify the failing stage.</p>
     </section>
 
+    {# 검증 입력 폼: 작품 ID, 초기 오퍼(USDC), 사용 유형, 결제 트랜잭션 서명, 구매자 지갑 #}
     <form id="sandbox-form" class="sandbox-controls">
         <label><span data-i18n="sandbox.asset_id">Asset ID</span>
             <input id="sandbox-asset-id" name="sandbox-asset-id" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000…" data-i18n-placeholder="sandbox.asset_id_placeholder" required>
@@ -46,6 +49,7 @@
         <span id="sandbox-status" class="sandbox-status" role="status" aria-live="polite"></span>
     </form>
 
+    {# 3-패인 결과 그리드: 판매자 AI / 구매자 AI / 네트워크 인스펙터 스트림 #}
     <section class="sandbox-grid">
         <!-- R4: seller AI (Gemini) reasoning / counter log -->
         <div class="pane" id="pane-seller" aria-label="Seller AI" data-i18n-aria-label="sandbox.pane.seller_aria">

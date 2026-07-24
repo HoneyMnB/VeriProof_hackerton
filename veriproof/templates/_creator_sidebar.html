@@ -1,3 +1,4 @@
+{# 크리에이터 작업공간 공용 사이드바: 브랜드/접기 토글, 새 대화, 주 내비게이션, 계정 메뉴 #}
 <aside id="creator-sidebar" class="vp-sidebar" aria-label="Creator navigation" data-i18n-aria-label="sidebar.aside_aria">
     <div class="vp-sidebar__top">
         <a class="vp-brand" href="/" translate="no">VeriProof</a>
@@ -10,6 +11,7 @@
     <a class="vp-new-chat" href="/"><span class="vp-nav__icon">✎</span><span class="vp-sidebar-label" data-i18n="sidebar.new_chat">New chat</span></a>
     {% endif %}
 
+    {# 주 내비게이션 메뉴: 대화 기록 열기, 내 라이브러리 링크, 최근 대화 목록 #}
     <nav class="vp-nav" aria-label="Main menu" data-i18n-aria-label="sidebar.nav.label">
         <button id="open-history" class="vp-nav__item" type="button" aria-haspopup="dialog" aria-controls="history-modal"><span class="vp-nav__icon">▤</span><span class="vp-sidebar-label" data-i18n="sidebar.history.all">Conversation history</span></button>
         <a class="vp-nav__item {% if active_nav == 'library' %}is-active{% endif %}" {% if active_nav == 'library' %}aria-current="page"{% endif %} href="/library"><span class="vp-nav__icon">▣</span><span class="vp-sidebar-label" data-i18n="sidebar.nav.library">My library</span></a>
@@ -19,6 +21,7 @@
         </section>
     </nav>
 
+    {# 계정 영역: 공개 마켓플레이스 진입 + 로그인/계정 메뉴 버튼 (인증 여부로 분기) #}
     <div class="vp-sidebar__account">
         <a class="vp-nav__item vp-nav__marketplace" href="/discover"><span class="vp-nav__icon">⌕</span><span class="vp-sidebar-label" data-i18n="sidebar.nav.marketplace">Public marketplace</span></a>
         {% if request.user.is_authenticated %}

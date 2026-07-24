@@ -93,6 +93,25 @@ def test_register_happy_path_returns_201_with_asset(client, png_bytes, monkeypat
 
 
 @pytest.mark.django_db
+def test_register_normalizes_public_visibility_from_multipart(client, png_bytes, monkeypatch):
+    """대소문자가 다른 폼 값도 사용자가 요청한 공개 상태로 보존한다."""
+    from apps.ip.models import IpAsset
+
+    _patch_services(
+        monkeypatch,
+        gemini=FakeGeminiService(),
+        solana=FakeSolanaService(),
+        storage=FakeStorageService(),
+    )
+
+    response = _post(client, _upload(png_bytes), visibility="PUBLIC")
+
+    assert response.status_code == 201
+    assert response.json()["visibility"] == IpAsset.PUBLIC
+    assert IpAsset.objects.get(id=response.json()["asset_id"]).visibility == IpAsset.PUBLIC
+
+
+@pytest.mark.django_db
 def test_register_persists_asset_fields(client, png_bytes, monkeypatch):
     """AC-2: DB row has 64-char sha256 + thumbnail/watermark URLs + expiry."""
     from django.contrib.auth.models import User

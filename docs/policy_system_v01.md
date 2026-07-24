@@ -21,7 +21,7 @@
 12. [운영·로그·오류 정책](#12-운영로그오류-정책)
 13. [실행 및 로컬 검증 방법](#13-실행-및-로컬-검증-방법)
 14. [주요 코드와 함수 안내](#14-주요-코드와-함수-안내)
-15. [현재 구현 한계와 운영 전환 체크리스트](#15-현재-구현-한계와-운영-전환-체크리스트)
+15. [구현 완료 범위와 운영 전환 로드맵](#15-구현-완료-범위와-운영-전환-로드맵)
 
 ---
 
@@ -276,6 +276,7 @@ HTTP API는 `503 assistant_unavailable`을 반환한다. 따라서 요청의 존
 ```text
 visibility = public
 AND status IN (anchored, listed)
+AND registration_certificate_tx_sig IS NOT NULL
 ```
 
 공개 카탈로그에는 다음만 포함한다.
@@ -499,31 +500,41 @@ cd veriproof
 | `templates/workspace.html` / `static/js/workspace.js` | 비서 UI와 브라우저 API 어댑터 | 이력·지침·등록·지출 화면 |
 | `templates/discover.html` | 공개 마켓플레이스 | 외부 탐색 UI |
 
-## 15. 현재 구현 한계와 운영 전환 체크리스트
+## 15. 구현 완료 범위와 운영 전환 로드맵
 
-### 15.1 구현된 항목
+### 15.1 현재 구현·검증 완료 정책
 
-- 모듈형 등록·카탈로그·협상·정산·비서·현금흐름 구조
-- 공개 공유 승인과 공개 카탈로그 필터
-- 외부 에이전트 manifest/OpenAPI/x402 HTTP 계약
-- 대화 이력과 행동 지침 분리 저장 및 Gemini 컨텍스트 반영
-- Gemini 구조화 자연어 명령의 제한된 도구 실행, DB 사후 검증, 실행 감사 표시
-- 로컬 결제 목업과 실체인 검증 교체 경계
-- 시작/종료 스크립트와 자동 migration 적용
+| 영역 | 현재 보장하는 정책 | 검증 상태 |
+|---|---|---|
+| 작품 등록 | 인증된 Django 사용자의 등록 요청만 받고, hash/형식/가격/용량을 검사한다. 다중 이미지는 하나의 작품으로 원자 처리한다. | 실제 Gemini 분석·mock 앵커/등록 인증서·구독 차감 런타임 확인 |
+| 공개 여부 | 공개는 명시적 `visibility=public`이고, 대소문자 입력은 정규화한다. 공개 catalog는 공개·앵커·등록 인증서 조건을 함께 적용한다. | `PUBLIC` 실제 HTTP 등록이 `public`으로 저장되고 catalog에 노출됨 확인 |
+| 외부 에이전트 | 공개 API는 manifest/OpenAPI/x402 HTTP 계약을 제공하고, 결제 전 원본을 공개하지 않는다. | 외부 에이전트 역할 E2E에서 402·Gemini ACCEPT·정산·다운로드 성공 |
+| Gemini | 분석·협상·비서는 실제 구성된 Gemini를 사용하며, 실패 시 생성형 fallback 없이 503으로 종료한다. | 등록 대화와 협상에서 실제 응답 확인 |
+| 결제·Solana | 로컬 `mock:` 식별자만 명시적으로 허용하고, mock 결과를 실체인 거래라고 표시하지 않는다. | mock settlement와 라이선스/토큰 발급 확인 |
+| 품질 | migration drift와 Django 시스템 오류를 차단하고, 등록 가시성 회귀를 테스트한다. | `pytest -q` 329 passed, `check`, `makemigrations --check` 통과 |
 
-### 15.2 아직 운영 전 필요한 항목
+### 15.2 운영 전 P0: 차단 조건
 
-1. Vertex AI를 사용할 경우 유효한 ADC 또는 서비스 계정 파일을 제공하고 실호출을 검증한다.
-2. Solana RPC, platform signer/KMS, token account 조회 및 SPL `transfer_checked`
-   전송 어댑터를 구성한다.
-3. `PAYMENT_VERIFIER=solana`로 전환하고 devnet/testnet 거래 검증을 수행한다.
-4. 지갑 서명 기반 로그인·권한 검증을 웹과 API에 도입한다.
-5. 행동 지침의 수정·활성 전환·삭제 API/UI를 추가한다.
-6. 자연어 도구에 등록 파일 업로드, 결제 설정, 명시적 확인·idempotency key·감사
-   이벤트를 추가해 허용 도구 범위를 확장한다.
-7. 등록 앵커 성공 후 저장소 실패의 보상/재시도 정책을 정의한다.
-8. GCP Pub/Sub, Eventarc, Workflows, Firestore, BigQuery, Cloud Run 배포를
-   운영 자격증명으로 연결하고 이벤트 재처리 정책을 검증한다.
+다음 항목은 하나라도 미완료이면 실결제·실체인 운영을 시작하지 않는 차단 조건이다.
 
-이 체크리스트가 완료되기 전에는 실결제·실체인 지급·강한 사용자 인증이 완료되었다고
-표현하지 않는다.
+1. `SOLANA_ADAPTER=real`, `PAYMENT_VERIFIER=solana`에서 실제 Devnet USDC 거래의 수취자, mint, amount, commitment를 검증하고 SPL `transfer_checked` 경로를 구현한다.
+2. KMS/Secret Manager signer, RPC URL, escrow, webhook secret, Django secret/hosts를 운영용으로 구성하고 누락·mock 설정을 startup/deploy 단계에서 fail-closed 한다.
+3. DEBUG 개발자 로그인은 운영에서 제거/차단하고, 지갑 서명 기반 인증 및 API의 creator/agent 권한 검증을 도입한다.
+4. 실제 Devnet E2E에서 등록→공개→402→협상→실결제→라이선스/인증서→다운로드와 실패·재시도·중복 정산을 검증한다.
+
+### 15.3 운영 전 P1: 신뢰성·상호운용성
+
+1. 원본 purge scheduler와 등록 앵커/저장소 실패의 보상·재시도·감사 절차를 구현한다.
+2. Pub/Sub, Eventarc, Workflows, Firestore, BigQuery의 배포 IaC, DLQ, 재처리와 관측성을 완성한다.
+3. 현재 자체 HTTP envelope을 실제 `x402_a2a` transport와 서명된 AP2 VC/mandate로 확장하고 외부 호환 agent와 시험한다.
+4. PostgreSQL/Cloud SQL 이관, 백업·복원, migration/rollback과 동시성·부하 시험을 완료한다.
+
+### 15.4 후속 제품 기능 P2
+
+1. 행동 지침의 수정·활성 전환·삭제 API/UI를 추가한다.
+2. 파일 등록과 결제 설정 같은 위험 행동에는 명시적 사용자 승인, 멱등성 키, 취소/재시도 및 감사 이벤트를 추가한다.
+3. 운영자용 결제/라이선스/보상 작업 관찰 화면과 알림을 추가한다.
+
+### 15.5 금지되는 운영 표현
+
+P0이 완료되기 전에는 실결제, 실체인 지급, 서명된 AP2 mandate, 완전한 a2a runtime, 강한 사용자 인증이 구현됐다고 표현하지 않는다. 현재 Google Cloud/Cloud Run 아키텍처 문서는 목표 설계이고, 실제 기본 런타임은 SQLite·local storage·명시적 mock 결제/Solana 어댑터다.

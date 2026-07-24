@@ -4,6 +4,7 @@
 {% block body_class %}marketplace-page{% endblock %}
 {% block content %}
 <div class="marketplace-shell">
+    {# 마켓플레이스 상단 내비게이션: 브랜드 로고 + 언어 스위처 마운트 포인트 #}
     <header class="marketplace-nav">
         <a href="/discover" class="marketplace-nav__brand" translate="no">VeriProof</a>
         <div class="marketplace-nav__tools">
@@ -11,6 +12,7 @@
             <div class="marketplace-nav__lang" data-vp-lang-switch></div>
         </div>
     </header>
+    {# 마켓플레이스 메인 콘텐츠 영역 (자식 페이지가 main 블록으로 확장) #}
     <main id="main" tabindex="-1" class="marketplace-main">
         {% block main %}{% endblock %}
     </main>

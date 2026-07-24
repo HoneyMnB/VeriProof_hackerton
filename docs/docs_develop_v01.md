@@ -1,6 +1,6 @@
 # VeriProof AI 개발자 인수인계 문서 v0.1
 
-> 작성 기준: 2026-07-24. 이 문서는 현재 저장소의 실행 코드, Django 설정, 마이그레이션, 테스트 및 로컬 DB를 직접 점검해 작성했다. 기획 문서가 아니라 현재 구현을 우선하며, 계획과 구현의 차이는 별도로 표시한다.
+> 작성 기준: 2026-07-25. 이 문서는 현재 저장소의 실행 코드, Django 설정, 마이그레이션, 테스트 및 로컬 DB를 직접 점검해 작성했다. 기획 문서가 아니라 현재 구현을 우선하며, 계획과 구현의 차이는 별도로 표시한다.
 
 ## 1. 시스템 목적과 범위
 
@@ -9,7 +9,7 @@ VeriProof AI는 창작물이 등록·보호·공개되고, 외부 구매자 에�
 핵심 원칙은 다음과 같다.
 
 - 관계형 데이터의 기준 원장은 Django DB이며, `AgentEvent`는 Firestore·BigQuery에 보조 복제될 수 있다.
-- 등록은 원본 SHA-256 중복 검사, AI 분석, 미리보기/임시 원본 저장, Solana 앵커 및 등록 인증서 발급이 모두 성공할 때만 DB에 확정된다.
+- 등록은 작품 매니페스트 SHA-256 중복 검사, AI 분석, 미리보기/임시 원본 저장, Solana 앵커 및 등록 인증서 발급이 모두 성공할 때만 DB에 확정된다. 이미지 작품은 여러 장을 하나의 작품으로 등록할 수 있다.
 - 원본 파일 URL과 바이트는 공개 카탈로그 응답에 노출하지 않는다. 공개 미리보기는 서버의 `/previews/...` 경로로 읽는다.
 - 로컬 기본값은 외부 서비스를 흉내 내는 숨은 fallback이 아니라, 명시적인 `mock` Solana/결제 어댑터와 로컬 저장소다. Gemini가 설정되지 않은 경우 AI 답변·협상은 503/실패로 종료한다.
 
@@ -29,7 +29,7 @@ GoogleSolana/
 │   ├── demo_assets/                   # DEBUG 전용 데모 등록 소스
 │   ├── db.sqlite3                     # 이 점검 시점의 기본 로컬 DB
 │   └── Dockerfile                     # Cloud Run용 Gunicorn 이미지
-└── veriproof_current_db_django_fixture_2026-07-24.json
+└── veriproof_current_db_django_fixture_2026-07-25_post_runtime_e2e.json
                                       # 현재 DB 데이터 덤프(루트)
 ```
 
@@ -75,10 +75,10 @@ Browser / external agent
 
 ### 4.1 주요 유스케이스
 
-1. **등록** — `RegistrationService.register`가 업로드 바이트를 읽어 SHA-256 중복을 확인하고, 분석 가능한 MIME이면 Gemini 분석을 수행한다. 이미지에는 thumbnail/watermark와 perceptual hash를 만든다. 앵커와 등록 인증서, 저장소가 성공한 뒤 하나의 DB transaction에서 `Creator`, `IpAsset`, 보조 파일, 구독 차감, 이벤트를 확정한다. 부모 작품은 존재해야 하고 royalty share는 1–10,000 bps여야 한다.
+1. **등록** — `RegistrationService.register`가 첫 이미지와 추가 이미지의 순서 있는 SHA-256 목록을 하나의 작품 매니페스트로 해시해 중복을 확인하고, 첫 이미지에 대해 Gemini 분석을 수행한다. 모든 이미지는 워터마크 미리보기와 임시 원본으로 보관되며, 추가 이미지는 `AssetImage`로 부모 `IpAsset`에 연결된다. 앵커와 등록 인증서, 저장소가 성공한 뒤 하나의 DB transaction에서 `Creator`, `IpAsset`, `AssetImage`/보조 파일, 구독 차감, 이벤트를 확정한다. 이미지 세트에는 인증서와 라이선스가 각각 한 건만 발급된다. 부모 작품은 존재해야 하고 royalty share는 1–10,000 bps여야 한다.
 2. **발견 및 x402 접근** — `CatalogService`는 공개·앵커·등록 인증서 조건을 만족한 자산만 검색/직렬화한다. 라이선스 없는 원본 접근은 `X402Service`가 x402/HTTP 402 payment-required envelope을 생성한다.
 3. **협상** — `NegotiationEngine.run_round`가 Gemini 구조화 협상 결과를 검증하고 최소가·최대 라운드·수취 지갑 규칙을 강제한다. `NegotiationSession.rounds`에 이력을 저장하고 ACCEPT 시 payment destination을 확정한다. Gemini가 없거나 오류이면 가격을 임의 추정하지 않는다.
-4. **정산/라이선스** — settlement API가 제출 결제를 해석·검증한 뒤 `LicenseService.grant`로 라이선스를 만든다. `payment_tx_sig` unique가 멱등키다. 인증서와 다운로드 토큰/만료시각을 부여하고, 2차 창작물은 `RoyaltyService`가 원작/2차 창작자 분배 leg를 만든다.
+4. **정산/라이선스** — settlement API가 제출 결제를 해석·검증한 뒤 `LicenseService.grant`로 작품 단위 라이선스를 만든다. `payment_tx_sig` unique가 멱등키다. 인증서와 다운로드 토큰/만료시각을 부여하며, 다중 이미지 작품의 토큰은 모든 구성 이미지를 하나의 ZIP으로 전달한다. 2차 창작물은 `RoyaltyService`가 원작/2차 창작자 분배 leg를 만든다.
 5. **창작자 비서** — `CreatorAssistantService`가 Gemini 대화, 대화 이력/지침/첨부를 묶는다. 모델이 제안한 변경은 `CreatorActionService`의 allowlist(`record_expense`, `update_asset_terms`, `prepare_registration`)만 실행하며, DB 재조회로 결과를 검증하고 `AssistantAction` 감사 행을 남긴다.
 6. **이벤트 팬아웃** — `EventRecorder.record`는 먼저 `common.AgentEvent`에 저장하고, 활성화된 Firestore와 BigQuery sink로 best-effort 복제한다. 보조 sink 실패는 기준 DB transaction을 취소하지 않는다.
 
@@ -92,7 +92,7 @@ Browser / external agent
 | `settlement` | 단건/배치 정산, webhook, 다운로드 | `/api/v1/ip/{id}/settle`, `/api/v1/ip/batch/*`, `/api/v1/paysh/webhook`, `/files/{token}` |
 | `sandbox` | 샌드박스 실행과 화면 | `/api/v1/sandbox/run`, `/sandbox` |
 
-웹 진입점은 `/` 및 `/workspace`(창작자), `/discover`, `/discover/{asset_id}`, `/library`, `/library/{asset_id}/certificate.pdf`, `/previews/{asset_id}/{variant}`이다. 완전한 machine-readable 계약은 실행 중 `GET /api/v1/openapi.json`, 외부 에이전트 발견 정보는 `GET /.well-known/ai-plugin.json`에서 확인한다.
+웹 진입점은 `/` 및 `/workspace`(창작자), `/discover`, `/discover/{asset_id}`, `/library`, `/library/{asset_id}/certificate.pdf`, `/previews/{asset_id}/{variant}`, `/previews/{asset_id}/gallery/{image_id}`이다. 공개 상세는 첫 워터마크 이미지를 메인으로 표시하고, 추가 이미지는 썸네일 선택으로 전환한다. 완전한 machine-readable 계약은 실행 중 `GET /api/v1/openapi.json`, 외부 에이전트 발견 정보는 `GET /.well-known/ai-plugin.json`에서 확인한다.
 
 ## 6. 서비스와 외부 어댑터
 
@@ -101,7 +101,7 @@ Browser / external agent
 | `GeminiService` | 이미지/자산 분석, 협상, batch quote, 창작자 대화 및 액션 계획. 공식 `google-genai`를 lazy import한다. |
 | `ImageProcessor` | SHA-256, dHash, thumbnail, watermark. |
 | `StorageService` | local `MEDIA_ROOT` 또는 GCS에 영구 preview/supporting 파일과 임시 원본 저장·읽기·삭제. |
-| `RegistrationService`, `RegistrationDraftService`, `SubscriptionService` | 등록 실행, 확인 토큰이 있는 등록 초안, 구독 잔여 등록 횟수의 원자적 차감. |
+| `RegistrationService`, `RegistrationDraftService`, `SubscriptionService` | 작품 매니페스트 앵커링과 다중 이미지 등록, 확인 토큰이 있는 등록 초안, 구독 잔여 등록 횟수의 원자적 차감. `MAX_WORK_IMAGES`(기본 10)가 작품당 이미지 수를 제한한다. |
 | `X402Service`, `PaymentVerifier`, `SolanaService`, `KmsSigner` | x402 envelope, mock/실제 USDC 검증, Memo 앵커·인증서·분배 송금, 키 서명. |
 | `LicenseService`, `RoyaltyService`, `Batch*Service` | 라이선스 멱등 발급, 2차 창작 로열티, 일괄 quote/settlement. |
 | `CatalogService`, `SalesService`, `CashflowService` | 공개 카탈로그, 검증된 License 기반 판매 집계, 창작자 비용/현금흐름. |
@@ -145,7 +145,7 @@ Solana 관련 설정은 `config/settings.py`에 있으며, 기본 RPC URL은 Dev
 
 `RegistrationService.register()`는 DB 저장 전에 아래 순서로 Solana 어댑터를 호출한다.
 
-1. `anchor_hash(image_sha256, creator_wallet)` — Memo payload `veriproof:anchor:{sha256}:{creator}`로 콘텐츠 해시 앵커를 생성한다.
+1. `anchor_hash(image_sha256, creator_wallet)` — 단일 이미지면 원본 SHA-256, 다중 이미지면 순서 있는 모든 이미지 SHA-256 목록의 매니페스트 SHA-256을 Memo payload `veriproof:anchor:{sha256}:{creator}`로 앵커링한다.
 2. `issue_registration_certificate(asset_id, creator_wallet, sha256)` — 등록 완료를 나타내는 별도 Memo 인증서를 생성한다.
 3. 두 호출과 미리보기/원본 저장이 성공해야 `IpAsset`을 `anchored` 상태로 저장한다. 실패하면 등록은 503으로 실패하며 성공한 것처럼 자산을 만들지 않는다.
 
@@ -247,7 +247,7 @@ agent 402 응답에는 `X-402-Payment-Required: true`, `X-Agent-Protocol: x402`,
 
 ## 10. 데이터베이스 스키마
 
-### 7.1 관계와 삭제 정책
+### 10.1 관계와 삭제 정책
 
 ```text
 auth.User 1--1 accounts.UserPreference; 1--* accounts.WalletConfiguration
@@ -261,7 +261,7 @@ License 1--* RoyaltyDistribution / BatchItem
 BatchOrder 1--* BatchItem
 ```
 
-### 7.2 애플리케이션 테이블 상세
+### 10.2 애플리케이션 테이블 상세
 
 | 모델 | PK와 필드 | 제약·인덱스·의미 |
 |---|---|---|
@@ -290,27 +290,26 @@ Django 기본 테이블도 사용한다: `auth_*`, `django_content_type`, `djang
 
 ### 10.3 마이그레이션과 변경 규칙
 
-마이그레이션은 Alembic이 아니라 Django migration이다. 코드 점검 시작 시에는 `accounts.0001–0003`, `common.0001`, `ip.0001–0015`, `negotiation.0001`, `settlement.0001` 및 Django 내장 migration이 적용된 것을 확인했다.
-
-현재 작업 트리에는 `ip.0014_asset_image`와 `ip.0014_ipasset_ai_description_ipasset_ai_tags`라는 두 개의 `0014` leaf migration이 함께 존재한다. 이 상태에서는 `ip.0015_ipasset_account_owner`까지 포함해 migration graph 충돌이 발생하며, `migrate`와 DB를 사용하는 pytest를 실행할 수 없다. 스키마 변경의 소유자가 dependency를 확정한 뒤 Django merge migration을 추가하거나 적절히 재번호/의존성을 정리해야 한다. 이 문서는 다른 작업의 migration을 임의로 병합하지 않는다.
+마이그레이션은 Alembic이 아니라 Django migration이다. 현재 `accounts.0001–0003`, `common.0001`, `ip.0001–0016`, `negotiation.0001`, `settlement.0001` 및 Django 내장 migration이 적용돼 있다. IP 앱의 최신 선형 경로는 `0014_ipasset_ai_description_ipasset_ai_tags` → `0015_ipasset_account_owner` → `0016_asset_image`이며, `showmigrations`, `manage.py check`, `makemigrations --check --dry-run`에서 graph 또는 모델 변경 문제가 없음을 확인했다.
 
 스키마를 바꾸면 반드시 새 Django migration을 만들고 `veriproof/db_reference.md`에 변경 이유, 필수값/영향 범위, 검증 및 Alembic 불필요 사유를 누적한다. 기존 log를 덮어쓰지 않는다.
 
 ## 11. 데이터 덤프 및 PostgreSQL 이관
 
-루트의 `veriproof_current_db_django_fixture_2026-07-24.json`은 2026-07-24 현재 SQLite DB에서 `manage.py dumpdata --all --natural-foreign --natural-primary --indent 2`로 만든 Django fixture다. JSON 문법 검증을 완료했으며 252개 레코드다.
+루트에는 동일한 2026-07-25 SQLite DB를 두 형식으로 보관한다. 두 덤프에는 외부 에이전트 구매와 Gemini 등록 런타임 검증에서 생성된 구독·작품·협상·라이선스 데이터가 포함된다.
 
-| 모델군 | 덤프 레코드 |
-|---|---:|
-| Django permissions/content types/session/user | 140 |
-| `common.AgentEvent` | 37 |
-| `ip.*` | 41 |
-| `accounts.UserPreference` | 1 |
-| `negotiation.NegotiationSession` | 2 |
-| `settlement.License` | 31 |
-| 합계 | 252 |
+| 파일 | 생성 방식·내용 | 복원 대상 |
+|---|---|---|
+| `veriproof_current_db_sqlite_2026-07-25_post_runtime_e2e.sql` | SQLite `iterdump()` 결과. schema, data, index, transaction 경계 포함; 95,664 bytes, 469 lines | SQLite 전용 |
+| `veriproof_current_db_django_fixture_2026-07-25_post_runtime_e2e.json` | `manage.py dumpdata --all --natural-foreign --natural-primary --indent 2`; JSON 검증 완료, 308 records | Django가 지원하는 DB, PostgreSQL 이관용 |
 
-이 파일은 **현재 SQLite 데이터의 이관용 fixture**이지 `pg_dump`가 만든 PostgreSQL 물리/SQL 덤프가 아니다. 이 환경에는 `pg_dump`/`psql` 바이너리와 PostgreSQL 접속 설정이 없었기 때문에 존재하지 않는 PostgreSQL dump라고 표기하지 않았다. PostgreSQL에는 반드시 아래 순서로 복원한다.
+SQLite SQL 덤프는 PostgreSQL SQL 문법이 아니므로 PostgreSQL에 직접 실행하지 않는다. SQLite 복원은 다음과 같다.
+
+```bash
+sqlite3 restored-veriproof.sqlite < veriproof_current_db_sqlite_2026-07-25_post_runtime_e2e.sql
+```
+
+JSON fixture는 **현재 SQLite 데이터의 PostgreSQL 이관용 fixture**이지 `pg_dump`가 만든 PostgreSQL 물리/SQL 덤프가 아니다. 이 환경에는 `pg_dump`/`psql` 바이너리와 PostgreSQL 접속 설정이 없었기 때문에 PostgreSQL native dump는 만들지 않았다. PostgreSQL에는 반드시 아래 순서로 복원한다.
 
 ```bash
 # 1) 빈 PostgreSQL DB를 준비하고 .env 또는 환경에 DATABASE_URL을 설정한다.
@@ -321,7 +320,7 @@ cd veriproof
 python manage.py migrate --noinput
 
 # 3) 루트 fixture를 적재한다.
-python manage.py loaddata ../veriproof_current_db_django_fixture_2026-07-24.json
+python manage.py loaddata ../veriproof_current_db_django_fixture_2026-07-25_post_runtime_e2e.json
 
 # 4) 결과를 검증한다.
 python manage.py check
@@ -335,22 +334,56 @@ python manage.py showmigrations --plan
 점검에서 다음을 실행했다.
 
 ```text
-pytest -q                         정리 전 333 passed, 정리 직후 326 passed
+pytest -q                         329 passed
 python manage.py check            문제 없음
 python manage.py makemigrations --check --dry-run   변경 없음
-ruff check apps services config   14개 lint 오류
 ```
 
-pytest 경고는 `pytest-asyncio`의 loop scope 미설정과 smoke test에서 Pydantic `any` 타입 경고다. 이후 외부 작업으로 보이는 병렬 `0014` migration이 추가돼 현재 전체 pytest는 migration graph 충돌로 실행이 차단된다. Ruff 오류는 import 정렬, `getattr` 상수 속성, `zip(strict=...)`, Pub/Sub import 관련 14건이며 이번 문서 작업에서는 코드 변경 범위를 넓히지 않았다. 테스트는 unit, integration, smoke로 구성되어 등록·공개 카탈로그·협상·정산·다운로드·webhook·배치·로열티·assistant·계정 설정을 포함한다.
+현재 전체 `pytest -q`는 329 passed다. `pytest-asyncio`의 loop scope 미설정과 smoke test의 Pydantic `any` 타입 경고만 남아 있다. 테스트는 unit, integration, smoke로 구성되어 등록·공개 카탈로그·협상·정산·다운로드·webhook·배치·로열티·assistant·계정 설정을 포함한다.
 
-## 13. 운영 인수인계 체크리스트와 알려진 경계
+### 12.1 외부 에이전트 구매 및 Gemini 등록 런타임 검증 (2026-07-25)
 
-- 배포 전 `DEBUG`, secret key, allowed hosts, PostgreSQL URL, static/media/GCS 정책을 명시적으로 전환한다.
-- 실제 금전/체인 환경에서는 `mock:` 결제 및 `SOLANA_ADAPTER=mock`을 절대 사용하지 않는다. real verifier·RPC·mint·escrow signer·KMS 및 webhook secret을 검증한다.
-- Gemini/Vertex 자격증명이 없으면 등록 AI 분석과 협상/비서가 503 또는 명시 오류가 된다. 그 상태에서 결과를 조립하는 fallback은 없다.
-- `StorageService`의 임시 원본 보존은 `ORIGINAL_RETENTION_DAYS`로 기록되지만, 현재 저장소에는 별도 scheduler/worker가 없다. 운영에서는 Cloud Scheduler 또는 동등한 purge 실행 경로를 배포해야 한다.
-- Firestore/BigQuery/PubSub는 설정 시 보조 경로다. event mirror 실패는 시스템 기준 DB 기록을 막지 않으므로, 외부 sink의 재처리/관찰성은 운영 계층에서 마련해야 한다.
-- `docs/00-architecture-and-data-model.md`는 목표 Cloud Run/GCP 구조를 설명한다. 현재 코드의 사실은 이 문서와 `config/settings.py`, `requirements*.txt`, service implementation을 함께 기준으로 판단한다. 예를 들어 기본 DB는 SQLite이며, Celery/Cloud Scheduler 구현은 없다.
+- 로컬 HTTP 서버에서 DEBUG 개발자 로그인 후 `POST /api/v1/assistant/chat`을 호출했다. 실제 설정된 Gemini가 등록 준비 액션과 한국어 응답을 반환했다.
+- mock 결제 구독을 활성화한 뒤 실제 multipart 등록을 호출했다. Gemini 분석, mock Solana 앵커·등록 인증서, 구독 차감이 모두 성공했다.
+- 외부 에이전트 역할로 manifest·공개 catalog를 조회하고, `X-Agent-Protocol: x402` 요청에서 HTTP 402를 수신했다. Gemini 협상은 `ACCEPT`를 반환했고, `mock:` 결제 증명으로 settle한 뒤 라이선스와 다운로드 URL을 받아 원본 다운로드 HTTP 200을 확인했다. 이는 `PAYMENT_VERIFIER=mock`, `SOLANA_ADAPTER=mock`인 로컬 검증이며 실결제·실체인 검증은 아니다.
+- 검증 중 multipart `visibility=PUBLIC`이 `private`로 저장되는 문제를 발견했다. 등록 입력을 소문자로 정규화하고 회귀 테스트를 추가했으며, 수정 후 실제 HTTP 등록 결과가 `public`이고 catalog에 노출됨을 확인했다.
+
+### 12.2 다중 이미지 작품 런타임 검증 (2026-07-24)
+
+- AI 생성 PNG 3장(각 1448×1086)을 실제 multipart `POST /api/v1/ip/register`로 업로드했다.
+- 등록 응답은 하나의 `asset_id`, 하나의 mock Solana 앵커, 하나의 등록 인증서를 반환했다. 등록 전 활성 구독이 없을 때는 정상적으로 `subscription_required`를 반환하는 것도 확인했다.
+- 최신 서버의 `/discover/{asset_id}`는 썸네일 컨트롤 3개와 추가 워터마크 미리보기 경로 2개를 렌더링했고, 추가 미리보기 요청은 HTTP 200이었다.
+- 한 번의 mock settlement는 라이선스 인증서와 단일 다운로드 토큰을 반환했고, 그 토큰의 ZIP에는 대표 이미지와 추가 이미지 2장이 모두 포함됐다.
+
+## 13. 구현 상태와 남은 작업
+
+### 13.1 현재 구현·검증 완료 범위
+
+| 도메인 | 구현 상태 | 실제 검증 근거 |
+|---|---|---|
+| 등록·보호 | SHA-256 매니페스트, 다중 이미지, Gemini 분석, preview/임시 원본, 구독 차감, 등록 인증서를 하나의 유스케이스로 처리 | 실제 multipart 등록으로 Gemini 분석·mock Solana 앵커/인증서·구독 차감 확인 |
+| 공개·발견 | 공개/앵커/등록 인증서 조건의 catalog, 보호 preview, 원본 비노출 | 공개 catalog와 preview 응답 확인 |
+| 외부 에이전트 | manifest/OpenAPI, x402 402, Gemini 협상, settle, 라이선스/다운로드 토큰 | 외부 에이전트 HTTP E2E에서 402→ACCEPT→settle 200→download 200 확인 |
+| 창작자 비서 | 실제 Gemini 대화, 등록 준비 액션, 제한 도구 allowlist, DB 사후 검증/감사 | `assistant/chat` 실제 Gemini 한국어 응답 및 `prepare_registration` 액션 확인 |
+| 오류 보완 | multipart 가시성 대소문자 정규화 | `visibility=PUBLIC` 실제 등록이 `public` 저장 및 catalog 노출, 회귀 테스트 추가 |
+| 품질 | Django migration, check, 테스트 | migration drift 없음, 전체 pytest 329 passed |
+
+### 13.2 운영 전 반드시 구현/검증할 작업
+
+| 우선순위 | 작업과 영향 범위 | 완료 기준 |
+|---|---|---|
+| P0 | 실 Solana 검증과 SPL 전송: `SolanaService`, `PaymentVerifier`, signer/KMS, recipient/mint/amount/commitment 검사 | Devnet의 실제 USDC 거래로 402→정산→인증서→다운로드 E2E를 반복 가능하게 통과 |
+| P0 | 인증/인가: DEBUG 개발자 로그인 제거 또는 운영 차단, 지갑 서명 로그인, creator/agent 권한 검증 | 타 사용자의 자산·지침·등록 조건을 API/UI에서 읽거나 수정할 수 없음을 E2E로 증명 |
+| P0 | 운영 설정 검증: secret/RPC/escrow/KMS/webhook/allowed hosts/DB의 누락을 fail-closed | production 설정 검사와 배포 파이프라인이 누락·mock 조합을 거부 |
+| P1 | 저장소 수명주기: `ORIGINAL_RETENTION_DAYS` 실제 purge scheduler, 저장 실패 보상/재시도, 다운로드 복구 | 고아 앵커·고아 파일·만료 원본의 재처리 및 감사 절차 검증 |
+| P1 | GCP 비동기 경로: Pub/Sub, Eventarc, Workflows, Firestore/BigQuery, DLQ와 재처리 관측성 | Cloud Run 사전 환경에서 webhook→queue→정산/감사 E2E와 장애 재처리 통과 |
+| P1 | A2A/AP2: 실제 `x402_a2a` transport, 서명된 AP2 VC/mandate, 외부 agent identity | 호환 에이전트 간 manifest·mandate·settlement 상호운용 시험 통과 |
+| P2 | 비서/계정 운영 UX: 지침 수정·활성 전환·삭제, 등록·결제의 사용자 승인과 멱등성 | 권한, 취소, 재시도, 감사 로그를 포함한 UI/API 시나리오 통과 |
+| P2 | PostgreSQL/Cloud SQL 운영화: migration runbook, fixture/백업 복구, 성능·동시성 시험 | 빈 PostgreSQL 복원, 업그레이드 migration, rollback/restore 리허설 완료 |
+
+### 13.3 현재 운영 불가 선언
+
+현재 로컬에서 결제·Solana는 `mock`이며, AP2 mandate는 unsigned JSON이고 실제 a2a runtime transport는 없다. 따라서 이 코드베이스는 **실결제·실체인·강한 사용자 인증 운영에 사용할 수 없다.** Gemini가 구성되지 않은 환경에서는 분석/협상/비서도 fail-closed로 실패한다. 목표 Cloud Run/GCP 문서는 배포 설계이며 현재 기본 실행은 SQLite와 local storage다.
 
 ## 14. 자주 쓰는 운영 명령
 

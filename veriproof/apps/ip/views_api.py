@@ -323,11 +323,9 @@ def _registration_metadata(
     if target_price is None or target_price < min_price:
         return None, _error("invalid_target_price", "target_price must be at least min_price")
 
-    visibility = (
-        IpAsset.PUBLIC
-        if request.POST.get("visibility") == IpAsset.PUBLIC or request.POST.get("share") == "true"
-        else IpAsset.PRIVATE
-    )
+    visibility_value = (request.POST.get("visibility") or "").strip().lower()
+    share_requested = (request.POST.get("share") or "").strip().lower() == "true"
+    visibility = IpAsset.PUBLIC if visibility_value == IpAsset.PUBLIC or share_requested else IpAsset.PRIVATE
     return (
         RegistrationMetadata(
             creator_wallet=wallet,

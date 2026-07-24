@@ -6,6 +6,7 @@
 {% block main_label_i18n %}library.main_label{% endblock %}
 {% block main %}
 <div class="vp-page vp-library-page">
+    {# 라이브러리 페이지 헤더: 크리에이터 작업공간 라벨 + 페이지 설명 #}
     <header class="vp-page__head vp-library-page__head">
         <div class="vp-library-page__head-titles">
             <p class="vp-page__eyebrow" data-i18n="library.head.eyebrow">Creator workspace</p>
@@ -23,6 +24,7 @@
         <p class="no-assets"><span data-i18n="library.empty.noassets">No IP assets registered for this wallet yet. </span><a href="/" data-i18n="library.empty.register">Register your first asset</a></p>
         {% else %}
         <p class="library__meta"><span data-i18n="library.meta" data-i18n-vars='{"n": "{{ assets|length }}"}'>{{ assets|length }} works</span></p>
+        {# 작품 카드 그리드: 각 카드는 미리보기 토글, 등록증명 상태, 가격, 크리에이터 지갑, 인증서·관리 버튼 포함 #}
         <ul class="asset-grid"
             data-events-url="{{ events_url }}"
             data-firestore-enabled="{{ firestore_enabled|yesno:'true,false' }}"
@@ -88,6 +90,7 @@
     </div>
 </div>
 
+{# 작품 관리 모달: 등록 정보(읽기 전용) + 편집 가능한 제목/설명/태그 + 가격·공개 설정 + 판매 정보 #}
 <div id="asset-settings-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="asset-settings-title">
     <div class="modal__backdrop" data-asset-settings-close></div>
     <section class="modal__panel asset-settings-modal__panel">
@@ -135,6 +138,7 @@
     </div>
 </div>
 
+{# library.js 런타임 설정: Firestore 활성화 여부, 이벤트/자산 API URL을 JSON으로 주입 #}
 <script id="library-config" type="application/json">{
     "firestore_enabled": {{ firestore_enabled|yesno:'true,false' }},
     "events_url": "{{ events_url }}",

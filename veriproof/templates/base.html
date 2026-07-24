@@ -1,5 +1,6 @@
 {% load static %}<!DOCTYPE html>
 <html lang="{{ vp_active_lang|default:'en' }}">
+{# 문서 헤드: 문자셋/뷰포트 메타, 페이지 타이틀과 i18n 키, 테마 CSS, 언어 사전 로드 #}
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,6 +15,7 @@
     <script src="{% static 'i18n/messages.js' %}"></script>
     <script src="{% static 'js/vp-i18n.js' %}"></script>
 </head>
+{# 본문 루트: 접근성 스킵 링크 + 자식 페이지가 content/scripts 블록으로 확장 #}
 <body class="{% block body_class %}{% endblock %}">
     <a class="skip-link" href="#main" data-i18n="base.skip_link">Skip to content</a>
     {% block content %}{% endblock %}

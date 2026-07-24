@@ -5,6 +5,7 @@
 {% block meta_i18n %}discover.meta{% endblock %}
 {% block meta_description %}Browse creator-approved works you can license on Solana with x402 payment and verifiable on-chain proof.{% endblock %}
 {% block main %}
+{# 마켓플레이스 히어로 영역: 비주얼 배경, 헤드라인, 검색바, 가격대 필터 칩 #}
 <section class="marketplace-hero">
     <div class="marketplace-hero__visuals" aria-hidden="true">
         <img class="marketplace-hero__visual marketplace-hero__visual--one" src="{% static 'images/discover-hero-creative-01.webp' %}" alt="" fetchpriority="high">
@@ -15,6 +16,7 @@
         <p class="marketplace-hero__eyebrow" data-i18n="discover.hero.eyebrow">VERIFIED CREATIVE MARKETPLACE</p>
         <h1 data-i18n="discover.hero.title">License original work, with proof.</h1>
         <p data-i18n="discover.hero.body">Explore protected work from independent creators. Clear terms, secure payment, verifiable ownership.</p>
+    {# 작품 검색/필터 폼: 검색어, 작품 유형, 정렬 옵션 #}
     <form class="marketplace-search" method="get" role="search">
         <label class="sr-only" for="marketplace-query" data-i18n="discover.search.label">Search shared works</label>
         <span class="marketplace-search__icon" aria-hidden="true">
@@ -32,12 +34,14 @@
         </select>
         <button type="submit" data-i18n="common.search">Search</button>
     </form>
+    {# 가격대 빠른 필터 칩 (활성 항목은 is-active 클래스로 표시) #}
     <div class="marketplace-chips" role="group" aria-label="Price range" data-i18n-aria-label="discover.price.group">
         {% for bucket in price_buckets %}<a class="marketplace-chip{% if bucket.is_active %} is-active{% endif %}" href="?{{ bucket.qs }}" data-i18n="discover.price.{{ bucket.value }}">{{ bucket.label }}</a>{% endfor %}
     </div>
     </div>
 </section>
 
+{# 검색 결과 섹션: 결과 수 표시(검색어/유형 필터 반영) + 작품 카드 그리드 #}
 <section class="marketplace-results" aria-labelledby="marketplace-results-title">
     <header class="marketplace-results__header">
         <div><p class="marketplace-results__eyebrow" data-i18n="discover.results.eyebrow">PUBLICLY SHARED</p><h2 id="marketplace-results-title" data-i18n="discover.results.title">Licensable works</h2></div>
@@ -51,6 +55,7 @@
             {% endif %}
         </p>
     </header>
+    {# 작품 카드 그리드: 워터마크 미리보기, 가격, 독창성 점수 포함 (결과 없을 때 빈 상태 안내) #}
     <ul class="marketplace-grid">
         {% for asset in assets %}
         <li class="marketplace-card">

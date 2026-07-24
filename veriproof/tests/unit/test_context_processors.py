@@ -4,7 +4,7 @@ The processor resolves the active UI language injected as ``vp_active_lang``
 so ``base.html`` can render a correct ``<html lang>`` and seed the client
 engine (``window.__VP_LANG__``). Resolution priority:
 
-    authenticated DB preference  >  anonymous cookie  >  default "en"
+    language cookie  >  authenticated DB preference  >  default "en"
 
 These tests pin that priority so the SSR layer never disagrees with the
 client ``VP.i18n`` engine.
@@ -45,14 +45,15 @@ class TestVpLanguageResolution:
         request = _request(rf, AnonymousUser(), {"veriproof_lang": "fr"})
         assert vp_language(request)["vp_active_lang"] == "en"
 
-    def test_authenticated_db_preference_wins_over_cookie(self, rf):
+    def test_authenticated_language_cookie_wins_over_saved_preference(self, rf):
         user = User.objects.create_user(username="creator1")
         # A signal auto-creates the UserPreference on user creation, so update it
         # rather than insert (avoids a UNIQUE violation on user_id).
         UserPreference.objects.filter(user=user).update(language="ko")
-        # Cookie says "en" but the saved DB preference ("ko") is authoritative.
+        # The public language switcher records "en" in the cookie; it must
+        # survive navigation from Discover to an asset detail page.
         request = _request(rf, user, {"veriproof_lang": "en"})
-        assert vp_language(request)["vp_active_lang"] == "ko"
+        assert vp_language(request)["vp_active_lang"] == "en"
 
     def test_authenticated_new_user_uses_model_default(self, rf):
         user = User.objects.create_user(username="creator2")

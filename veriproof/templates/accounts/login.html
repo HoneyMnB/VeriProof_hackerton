@@ -2,12 +2,14 @@
 {% block title %}Sign in | VeriProof{% endblock %}
 {% block body_class %}vp-auth-page{% endblock %}
 {% block content %}
+{# 로그인 페이지 본문: 마켓플레이스 브랜드 링크 + 로그인 카드 #}
 <main class="vp-auth" aria-labelledby="auth-title">
     <a class="vp-auth__brand" href="/discover">VeriProof</a>
     <section class="vp-auth__card">
         <p class="vp-auth__eyebrow">Creator workspace</p>
         <h1 id="auth-title">Sign in</h1>
         <p>Manage your original works, certificates, and sales in one private workspace.</p>
+        {# 로그인 폼: CSRF 토큰, next 리다이렉트 경로, Django form 필드와 에러 표시 #}
         <form method="post" class="vp-auth__form" novalidate>
             {% csrf_token %}
             <input type="hidden" name="next" value="{{ next }}">
@@ -17,6 +19,7 @@
             {% for error in form.non_field_errors %}<p class="vp-field-error">{{ error }}</p>{% endfor %}
             <button type="submit">Sign in</button>
         </form>
+        {# DEBUG 모드 전용 개발자 로그인 바로가기 (운영 노출 금지) #}
         {% if debug %}
         <form method="post" action="{% url 'accounts:developer-login' %}" class="vp-auth__developer">
             {% csrf_token %}<input type="hidden" name="next" value="{{ next }}"><button type="submit">Developer login</button>

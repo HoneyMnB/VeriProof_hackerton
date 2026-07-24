@@ -7,6 +7,7 @@
 {% block shell_attrs %}data-register-url="{{ register_url }}" data-max-upload-bytes="{{ max_upload_bytes }}"{% endblock %}
 {% block main %}
 <div class="vp-chat">
+    {# 어시스턴트 대화 메시지 영역 (aria-live로 스크린리더에 실시간 안내, 빈 상태 가이드 포함) #}
     <section id="assistant-messages" class="vp-messages" aria-live="polite" aria-label="Conversation">
         <div class="vp-empty-state" id="chat-empty-state">
             <p class="vp-empty-state__mark">✦</p>
@@ -14,6 +15,7 @@
             <p data-i18n="workspace.empty.body">Talk through a work, explore your library, or start a registration when you are ready.</p>
         </div>
     </section>
+    {# 메시지 composer: 첨부 파일/등록 시작 메뉴, 텍스트 입력, 드롭베일(드래그 첨부) 포함 #}
     <form id="assistant-form" class="vp-composer">
         <div id="composer-attachments" class="vp-composer__attachments" hidden aria-live="polite"></div>
         <button id="composer-add" class="vp-composer__add" type="button" aria-label="Add a file or start registration" data-i18n-aria-label="workspace.composer.add_aria" aria-expanded="false">＋</button>
@@ -30,10 +32,12 @@
     </form>
     <p id="assistant-status" class="vp-status" role="status"></p>
 </div>
+{# 작품 등록 우측 풀아웃 캔버스: 드롭존, 등록 필드, 파일 큐, 분석 피드를 포함 #}
 <aside id="registration-canvas" class="vp-registration-canvas" hidden aria-label="Registration draft" data-i18n-aria-label="workspace.canvas.aria">
     <div class="vp-registration-canvas__head"><div><p data-i18n="workspace.canvas.eyebrow">Registration draft</p><h2 data-i18n="workspace.canvas.title">Prepare your work</h2></div><button id="close-registration" class="vp-text-button vp-registration-canvas__close" type="button" aria-label="Close registration panel" data-i18n-aria-label="workspace.canvas.close" title="Close registration panel" data-i18n-title="workspace.canvas.close"><span aria-hidden="true">×</span></button></div>
     <p class="vp-registration-canvas__hint" data-i18n="workspace.canvas.hint">The assistant can suggest details. You can edit every field before confirming.</p>
     <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Choose a work to register" data-i18n-aria-label="workspace.canvas.drop_aria"><p class="dropzone__hint" data-i18n="workspace.canvas.drop_hint">Choose files to register</p><label class="dropzone__file"><input id="file-input" type="file" multiple accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,audio/mpeg,audio/wav,video/mp4,video/webm,application/zip,application/x-tar" hidden><span data-i18n="workspace.canvas.choose">Choose files</span></label></div>
+    {# 등록 메타데이터 입력 필드군: 단위/유형/제목/설명/태그/최소 가격/목표 가격/마켓 공개 여부 #}
     <div class="vp-registration__fields">
         <label><span data-i18n="workspace.canvas.unit">Registration unit</span><select id="registration-unit"><option value="individual" data-i18n="workspace.canvas.unit_individual">Each file is a separate work</option><option value="package" data-i18n="workspace.canvas.unit_package">One packaged work</option></select></label>
         <label><span data-i18n="workspace.canvas.type">Type</span><select id="asset-type">{% for value, label in asset_types %}<option value="{{ value }}" data-i18n="common.asset_type.{{ value }}">{{ label }}</option>{% endfor %}</select></label>

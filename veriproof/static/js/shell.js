@@ -20,16 +20,26 @@
 
     function byId(id) { return document.getElementById(id); }
 
+    /**
+     * 현재 활성 창작자 지갑 주소를 [data-chat-shell] 요소의 data-creator-wallet에서 읽어 반환한다.
+     */
     function getWallet() {
         var shell = document.querySelector("[data-chat-shell]");
         return ((shell && shell.dataset.creatorWallet) || "").trim();
     }
 
+    /**
+     * 문서 쿠키에서 csrftoken 값을 읽어 반환한다. 보호되는 POST/PATCH/DELETE 요청의 X-CSRFToken 헤더용.
+     */
     function csrfToken() {
         var match = document.cookie.match(/(?:^|; )csrftoken=([^;]+)/);
         return match ? decodeURIComponent(match[1]) : "";
     }
 
+    /**
+     * fetch 래퍼. 응답 본문을 JSON으로 파싱해 {ok, status, body} 형태로 반환한다.
+     * 본문이 JSON이 아니면 빈 객체로 폴백한다.
+     */
     function requestJson(url, options) {
         return fetch(url, options).then(function (response) {
             return response.json().catch(function () { return {}; }).then(function (body) {
@@ -54,6 +64,10 @@
         s.classList.toggle("is-error", Boolean(isError));
     }
 
+    /**
+     * 공용 사이드바를 초기화한다. 사이드바 토글·새 채팅·히스토리·계정 설정을 바인딩하고
+     * 페이지 진입용 VP.* 훅(getWallet/requestJson/appendAction/refreshSummary)을 노출한다.
+     */
     function init() {
         var shell = document.querySelector("[data-chat-shell]");
         if (!shell) { return; }
@@ -76,6 +90,10 @@
         global.VP.appendAction = appendAction;
         global.VP.refreshSummary = refreshSummary;
 
+        /**
+         * 사이드바 접기/펼치기 토글을 바인딩한다. 상태를 localStorage에 저장하고
+         * 접근성 라벨·aria-expanded를 i18n와 함께 동기화한다.
+         */
         function bindSidebarToggle(root) {
             var toggle = byId("sidebar-toggle");
             if (!toggle) { return; }
@@ -99,6 +117,9 @@
             applyToggleState();
         }
 
+        /**
+         * "새 채팅" 버튼 바인딩. Workspace의 <button>에만 동작하며 클릭 시 vp:new-chat 이벤트를 발생시킨다.
+         */
         function bindNewChat() {
             var btn = byId("new-chat");
             // Only a real <button> (Workspace) is interactive here; on other
@@ -109,6 +130,10 @@
             });
         }
 
+        /**
+         * 대화 히스토리 모달과 사이드바 최근 목록을 바인딩한다. 목록 로드/검색, 이름 변경·삭제 메뉴,
+         * 페이지 이동, 키보드·외부 클릭 닫기를 처리한다.
+         */
         function bindHistory() {
             var modal = byId("history-modal");
             var open = byId("open-history");
@@ -125,6 +150,9 @@
 
             // 최근 목록과 전체 보기 모두 사용자 발화의 제목만 표시한다. AI 응답 본문,
             // 역할, 시간은 히스토리 탐색 UI에 노출하지 않는다.
+            /**
+             * 모달용 대화 제목을 자른다. 한글은 30자, 그 외는 50자까지 표시하고 초과 시 …을 붙인다.
+             */
             function historyTitleForModal(title) {
                 var fullTitle = String(title || "");
                 var limit = /[\uac00-\ud7a3]/.test(fullTitle) ? 30 : 50;
@@ -141,6 +169,9 @@
                 return characters.length > limit ? characters.slice(0, limit).join("") + "..." : fullTitle;
             }
 
+            /**
+             * 열려 있는 행별 메뉴(이름 변경/삭제)를 닫는다. returnFocus가 참이면 메뉴 버튼으로 포커스를 되돌린다.
+             */
             function closeHistoryMenu(returnFocus) {
                 if (!activeHistoryMenu) { return; }
                 activeHistoryMenu.menu.hidden = true;
@@ -149,6 +180,9 @@
                 activeHistoryMenu = null;
             }
 
+            /**
+             * 사이드바·모두 보기 양쪽 목록에서 해당 대화 ID의 제목을 새 제목으로 갱신한다.
+             */
             function updateConversationTitle(conversationId, title) {
                 [conversations, modalConversations].forEach(function (items) {
                     items.forEach(function (conversation) {
@@ -157,6 +191,9 @@
                 });
             }
 
+            /**
+             * 대화를 DELETE 한다. 성공 시 양쪽 목록에서 제거하고 vp:conversation-deleted 이벤트를 발생시킨다.
+             */
             function deleteConversation(item, onSuccess, onFailure) {
                 requestJson("/api/v1/assistant/conversations/" + encodeURIComponent(item.conversation_id), {
                     method: "DELETE",
@@ -178,6 +215,9 @@
                 });
             }
 
+            /**
+             * 행별 메뉴를 인라인 이름 변경 폼으로 교체하고, 제출 시 PATCH로 제목을 갱신한다.
+             */
             function showRenameForm(menu, item) {
                 menu.replaceChildren();
                 var form = document.createElement("form");
@@ -213,6 +253,9 @@
                 input.focus();
             }
 
+            /**
+             * 행별 메뉴를 삭제 확인(재클릭 시 삭제) UI로 교체한다.
+             */
             function showDeleteConfirmation(menu, item) {
                 menu.replaceChildren();
                 var message = document.createElement("p");
@@ -233,6 +276,9 @@
                 confirm.focus();
             }
 
+            /**
+             * 사이드바 히스토리 행에 점3개 메뉴 버튼과(이름 변경/삭제) 메뉴를 추가한다. 한 번에 하나만 열리도록 관리한다.
+             */
             function appendHistoryMenu(row, item) {
                 var button = document.createElement("button");
                 var menu = document.createElement("div");
@@ -282,6 +328,9 @@
                 row.append(button, menu);
             }
 
+            /**
+             * 모달 행에 삭제 버튼을 추가한다. 한 번 클릭하면 확인 상태로 바뀌고, 두 번 클릭하면 실제로 삭제한다.
+             */
             function appendModalDeleteButton(row, item) {
                 var remove = document.createElement("button");
                 var cancel = document.createElement("button");
@@ -313,6 +362,10 @@
                 row.append(remove, cancel);
             }
 
+            /**
+             * 단일 대화 행(<li>)을 생성한다. closeModal 여부에 따라 모달용(제목 자르기 + 삭제 버튼) 또는
+             * 사이드바용(제목 자르기 + 점3개 메뉴) 렌더링으로 분기한다.
+             */
             function rowFor(item, closeModal) {
                 var row = document.createElement("li");
                 var button = document.createElement("button");
@@ -337,6 +390,9 @@
                 }
                 return row;
             }
+            /**
+             * 모두 보기 목록과 사이드바 최근(상위 4개) 목록을 현재 대화 데이터로 다시 그린다.
+             */
             function render() {
                 list.replaceChildren();
                 modalConversations.forEach(function (item) { list.appendChild(rowFor(item, true)); });
@@ -351,6 +407,9 @@
                 conversations.slice(0, 4).forEach(function (item) { recentList.appendChild(rowFor(item, false)); });
                 recent.hidden = conversations.length === 0;
             }
+            /**
+             * /api/v1/assistant/history 에서 대화 목록을 불러온다. openModal이 참이면 모달을 연다.
+             */
             function loadConversations(openModal) {
                 var wallet = getWallet();
                 if (!wallet) { conversations = []; modalConversations = []; render(); return; }
@@ -361,6 +420,9 @@
                     if (openModal) { modal.hidden = false; }
                 }).catch(function () { conversations = []; modalConversations = []; render(); if (openModal) { modal.hidden = false; } });
             }
+            /**
+             * /api/v1/assistant/conversations/search 로 검색어를 보내 결과를 모달 목록에 반영한다.
+             */
             function searchConversations() {
                 var button = searchForm.querySelector("button[type='submit']");
                 button.disabled = true;
@@ -399,6 +461,10 @@
             loadConversations(false);
         }
 
+        /**
+         * 지갑 입력 폼(#wallet-form) 제출을 바인딩한다. 입력값을 saveSettings로 저장하고
+         * 성공 시 창작자 지갑을 갱신한 뒤 계정 데이터를 다시 불러온다.
+         */
         function bindWallet() {
             var form = byId("wallet-form");
             if (!form) { return; }
@@ -415,11 +481,18 @@
             });
         }
 
+        /**
+         * 계정 설정 모달을 바인딩한다. 탭 전환(계정/지갑/비밀번호/판매), 계정 정보 저장,
+         * 지갑 목록·활성화, 비밀번호 변경, 즉시 언어 전환을 처리한다.
+         */
         function bindAccountSettings() {
             var modal = byId("account-modal");
             var open = byId("account-menu-button");
             var form = byId("account-settings-form");
             if (!modal || !open || !form) { return; }
+            /**
+             * 계정 설정 모달의 탭을 전환한다. 판매 탭은 vp:sales-tab-open, 지갑 탭은 loadWalletMonitor를 트리거한다.
+             */
             function selectTab(tabName) {
                 modal.querySelectorAll("[data-settings-tab]").forEach(function (tab) {
                     tab.classList.toggle("is-active", tab.dataset.settingsTab === tabName);
@@ -431,6 +504,9 @@
                 if (tabName === "wallet") { loadWalletMonitor(); }
             }
 
+            /**
+             * /accounts/wallets/ 에서 지갑 목록을 불러와 설정 모달에 렌더링한다. 각 지갑의 활성화 버튼을 연결한다.
+             */
             function loadWalletMonitor() {
                 var list = byId("settings-wallet-list");
                 if (!list) { return; }
@@ -576,6 +652,9 @@
             });
         }
 
+        /**
+         * 창작자 지갑을 셸 data 속성과 지갑 입력/모달 필드에 동기식으로 반영한다(서버 저장은 별도).
+         */
         function setCreatorWallet(wallet) {
             shell.dataset.creatorWallet = wallet || "";
             if (walletInput) { walletInput.value = wallet || ""; }
@@ -583,6 +662,9 @@
             if (modalWallet) { modalWallet.value = wallet || ""; }
         }
 
+        /**
+         * 지갑 변경 후 개요/지시문/액션/판매를 모두 다시 불러오고 vp:wallet-changed 이벤트를 발생시킨다.
+         */
         function refreshAccountData() {
             loadOverview();
             loadDirectives();
@@ -591,6 +673,9 @@
             global.dispatchEvent(new CustomEvent("vp:wallet-changed", { detail: { wallet: getWallet() } }));
         }
 
+        /**
+         * 비용 입력 폼을 바인딩한다. 메모·금액을 /api/v1/assistant/expenses 로 기록하고 개요·판매를 갱신한다.
+         */
         function bindExpense() {
             var form = byId("expense-form");
             if (!form) { return; }
@@ -615,6 +700,9 @@
             });
         }
 
+        /**
+         * 에이전트 지시문 폼을 바인딩한다. 제목·내용을 /api/v1/assistant/directives 로 저장하고 목록을 갱신한다.
+         */
         function bindDirectives() {
             var form = byId("directive-form");
             if (!form) { return; }
@@ -642,6 +730,9 @@
             });
         }
 
+        /**
+         * 구독 활성화 폼을 바인딩한다. 플랜 목록을 로드하고 선택 플랜을 /api/v1/subscriptions/activate 로 활성화한다.
+         */
         function bindSubscription() {
             var form = byId("subscription-form");
             var select = byId("subscription-plan");
@@ -670,6 +761,9 @@
             });
         }
 
+        /**
+         * /api/v1/assistant/overview 에서 창작자 개요(작품/공유/수입/지출/순이익)를 불러와 사이드바에 렌더링한다.
+         */
         function loadOverview() {
             var overview = byId("assistant-overview");
             var loading = byId("assistant-loading");
@@ -690,6 +784,9 @@
             }).catch(function () { if (loading) { loading.hidden = true; } });
         }
 
+        /**
+         * /api/v1/assistant/directives 에서 창작자 지시문 목록을 불러와 사이드바에 렌더링한다.
+         */
         function loadDirectives() {
             var list = byId("directive-list");
             var wallet = getWallet();
@@ -710,6 +807,9 @@
             });
         }
 
+        /**
+         * /api/v1/assistant/actions 에서 검증 액션 목록을 불러와 최근 8개만 사이드바에 렌더링한다.
+         */
         function loadActions() {
             var list = byId("action-list");
             var wallet = getWallet();
@@ -723,6 +823,9 @@
             });
         }
 
+        /**
+         * /api/v1/assistant/sales 에서 판매 요약과 최근 내역을 불러와 사이드바에 렌더링한다.
+         */
         function loadSales() {
             var summary = byId("sales-summary");
             var list = byId("sales-list");
@@ -765,6 +868,9 @@
 
         function refreshSummary() { loadOverview(); loadActions(); loadSales(); }
 
+        /**
+         * 단일 액션(이름 + 상태/검증 여부) <li> 요소를 생성해 반환한다.
+         */
         function actionListItem(action) {
             var item = document.createElement("li");
             var title = document.createElement("strong");
@@ -775,6 +881,9 @@
             return item;
         }
 
+        /**
+         * 빈 상태 안내 텍스트를 담은 <li> 요소를 생성해 반환한다.
+         */
         function emptyItem(text) {
             var li = document.createElement("li");
             li.className = "vp-list-empty";
@@ -782,6 +891,9 @@
             return li;
         }
 
+        /**
+         * [라벨, 값] 쌍 배열을 <dl>의 <dt>/<dd> 쌍으로 target에 렌더링한다.
+         */
         function renderPairs(target, pairs) {
             target.replaceChildren();
             pairs.forEach(function (pair) {

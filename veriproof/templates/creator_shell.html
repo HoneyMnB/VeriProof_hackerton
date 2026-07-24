@@ -3,6 +3,7 @@
 {% comment %}Internal creator shell with one shared sidebar and a page slot.{% endcomment %}
 {% block body_class %}chat-page{% endblock %}
 {% block content %}
+{# 크리에이터 셸 최상위 컨테이너: 사이드바 + 메인 영역 (active_nav와 크리에이터 지갑 데이터 속성 보관) #}
 <div class="vp-chat-shell" data-chat-shell data-page="{{ active_nav|default:'assistant' }}"
      data-creator-wallet="{{ account_preferences.creator_wallet|default:'' }}"
      {% block shell_attrs %}{% endblock %}>
@@ -11,6 +12,7 @@
         {% block main %}{% endblock %}
     </main>
 </div>
+{# 대화 기록 모달: 전체 대화 검색과 목록 표시 #}
 <div id="history-modal" class="vp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="history-title">
     <div class="vp-modal__backdrop" data-history-close></div>
     <section class="vp-modal__panel vp-history-modal">
@@ -20,10 +22,12 @@
     </section>
 </div>
 {% if request.user.is_authenticated %}
+{# 계정/작업공간 설정 모달: 계정·지갑·판매 탭과 로그아웃 (인증 사용자에게만 렌더) #}
 <div id="account-modal" class="vp-modal" hidden role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
     <div class="vp-modal__backdrop" data-account-close></div>
     <section class="vp-modal__panel">
         <div class="vp-modal__head"><h2 id="account-modal-title" data-i18n="account.title">Workspace settings</h2><button class="vp-modal-close" type="button" data-account-close aria-label="Close settings" data-i18n-aria-label="account.close_aria" title="Close settings" data-i18n-title="account.close_aria"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="sr-only" data-i18n="account.close">Close</span></button></div>
+        {# 설정 2단 레이아웃: 섹션 내비게이션(계정/지갑/판매/샌드박스) + 콘텐츠 패널 #}
         <div class="vp-settings-layout">
             <nav class="vp-settings-nav" aria-label="Account sections" data-i18n-aria-label="account.sections_aria"><button type="button" class="is-active" data-settings-tab="account" data-i18n="account.tab.account">Account</button><button type="button" data-settings-tab="wallet" data-i18n="account.tab.wallet">Wallet</button><button type="button" data-settings-tab="sales" data-i18n="account.tab.sales">Sales</button>{% if request.user.is_staff and debug %}<a class="vp-settings-nav__developer" href="/sandbox"><span class="vp-nav__icon" aria-hidden="true">⌘</span><span data-i18n="account.tab.sandbox">Negotiation sandbox</span></a>{% endif %}</nav>
             <div class="vp-settings-content">

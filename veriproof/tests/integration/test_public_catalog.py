@@ -65,6 +65,30 @@ def test_discovery_home_renders_public_work(client):
 
 
 @pytest.mark.django_db
+def test_discover_language_selection_is_kept_on_asset_detail(client):
+    """언어 스위처 쿠키는 로그인 사용자의 상세 페이지 SSR에도 적용된다."""
+    from django.contrib.auth.models import User
+
+    from apps.accounts.models import UserPreference
+    from apps.ip.models import IpAsset
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    user = User.objects.create_user("buyer@example.com", "buyer@example.com", "safe-password-123")
+    UserPreference.objects.filter(user=user).update(language="ko")
+    asset = IpAssetFactory(
+        creator=CreatorFactory(), visibility=IpAsset.PUBLIC, status=IpAsset.ANCHORED
+    )
+    client.force_login(user)
+    client.cookies["veriproof_lang"] = "en"
+
+    discover = client.get("/discover")
+    detail = client.get(f"/discover/{asset.id}")
+
+    assert 'window.__VP_LANG__ = "en"' in discover.content.decode()
+    assert 'window.__VP_LANG__ = "en"' in detail.content.decode()
+
+
+@pytest.mark.django_db
 def test_discovery_does_not_expose_machine_discovery_controls(client):
     response = client.get("/discover")
     content = response.content.decode()
