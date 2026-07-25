@@ -184,21 +184,6 @@ FIRESTORE_ENABLED = os.environ.get("FIRESTORE_ENABLED", "false").lower() == "tru
 STORAGE_BACKEND = os.environ.get("STORAGE_BACKEND", "local")  # 'gcs' | 'local'
 AP2_ENABLED = os.environ.get("AP2_ENABLED", "false").lower() == "true"
 
-# --- AI (Gemini / Vertex) ----------------------------------------------------
-# Import-guarded: google-genai is never imported at module import time.
-GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS", "")
-GEMINI_VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-3.1-flash-lite")
-GEMINI_REASONING_MODEL = os.environ.get("GEMINI_REASONING_MODEL", "gemini-3.1-flash-lite")
-GEMINI_BATCH_MODEL = os.environ.get("GEMINI_BATCH_MODEL", "gemini-3.1-flash-lite")
-# 창작자 권리 비서의 대화 모델은 이미지 분석·협상 모델과 독립적으로 관리한다.
-GEMINI_ASSISTANT_MODEL = os.environ.get(
-    "GEMINI_ASSISTANT_MODEL", "gemini-3.1-flash-lite"
-)
-VERTEX_ENABLED = os.environ.get("VERTEX_ENABLED", "false").lower() == "true"
-VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT", "")
-VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "")
-GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
-
 # --- A2A / ADK --------------------------------------------------------------
 # 공개 URL은 에이전트 A의 탐색 카드에 사용한다. Cloud Run에 배포할 때는
 # 웹 서비스에 할당된 HTTPS URL로 설정해야 한다.
@@ -206,6 +191,21 @@ A2A_PUBLIC_BASE_URL = os.environ.get(
     "A2A_PUBLIC_BASE_URL", "http://localhost:8000"
 ).rstrip("/")
 ADK_MODEL = os.environ.get("ADK_MODEL", "gemini-2.5-flash")
+
+# --- AI (Gemini / Vertex) ----------------------------------------------------
+# Import-guarded: google-genai is never imported at module import time.
+GEMINI_API_KEYS = os.environ.get("GEMINI_API_KEYS", "")
+GEMINI_VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", ADK_MODEL)
+GEMINI_REASONING_MODEL = os.environ.get("GEMINI_REASONING_MODEL", ADK_MODEL)
+GEMINI_BATCH_MODEL = os.environ.get("GEMINI_BATCH_MODEL", ADK_MODEL)
+# 창작자 권리 비서의 대화 모델은 이미지 분석·협상 모델과 독립적으로 관리한다.
+GEMINI_ASSISTANT_MODEL = os.environ.get(
+    "GEMINI_ASSISTANT_MODEL", ADK_MODEL
+)
+VERTEX_ENABLED = os.environ.get("VERTEX_ENABLED", "false").lower() == "true"
+VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT", "")
+VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "")
+GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
 
 # --- Solana / payments -------------------------------------------------------
 SOLANA_RPC_URL = os.environ.get(
