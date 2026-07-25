@@ -102,13 +102,54 @@ the verifier contract.
 
 ## A2A local check
 
+Agent A is an ADK/Gemini seller agent embedded in the Django ASGI process.
+Agent B is a separately deployable ADK/Gemini buyer coordinator under
+`agents/buyer_agent`; it discovers Agent A through the official A2A Agent Card
+and delegates marketplace requests through `RemoteA2aAgent`.
+
+```text
+repository/
+├── veriproof/                  # Django + Agent A A2A endpoint
+├── agents/buyer_agent/         # separately deployable Agent B
+├── Dockerfile.web
+└── Dockerfile.buyer-agent
+```
+
+Configure Vertex AI with Application Default Credentials. Do not place a
+service-account JSON key in the repository.
+
+```bash
+export GOOGLE_GENAI_USE_VERTEXAI=true
+export GOOGLE_CLOUD_PROJECT='your-project'
+export GOOGLE_CLOUD_LOCATION='asia-northeast3'
+export ADK_MODEL='gemini-2.5-flash'
+export A2A_PUBLIC_BASE_URL='https://your-web-service.run.app'
+export SELLER_AGENT_CARD_URL='https://your-web-service.run.app/.well-known/agent-card.json'
+export BUYER_AGENT_PUBLIC_BASE_URL='https://your-buyer-agent.run.app'
+```
+
+Build and run the two Cloud Run deployment units locally:
+
+```bash
+./ctl.sh build api
+./ctl.sh build buyer-agent
+./ctl.sh api run
+./ctl.sh buyer-agent run
+```
+
 An external agent can discover and exercise the public contract in this order:
 
-1. `GET /.well-known/ai-plugin.json`
-2. `GET /api/v1/openapi.json`
-3. `GET /api/v1/catalog`
-4. `GET /api/v1/ip/{asset_id}` with an agent `Accept` header
+1. `GET /.well-known/agent-card.json` for the official A2A 1.0 card.
+2. `POST /a2a/` using the JSON-RPC binding advertised by that card.
+3. Agent A calls the read-only public catalog tools.
+4. Existing payment and settlement APIs handle the chosen asset separately.
 
-For an unlicensed shared asset step 4 returns the actual HTTP 402 x402 payment
-envelope. Submit `mock:<id>` only when running local mock settlement; switch to
-the Solana verifier before any real deployment.
+The legacy `/.well-known/ai-plugin.json` and REST/x402 APIs remain available
+for compatibility. The A2A layer does not itself assert that payment or
+original-file delivery completed.
+
+The initial hackathon runtime uses ADK's in-memory session services and the
+A2A in-memory task store. Keep each demo service at one Cloud Run instance.
+Before enabling horizontal scale-out or resumable/long-running A2A tasks,
+provide `to_a2a()` with a PostgreSQL-backed `DatabaseTaskStore` and a persistent
+ADK session service.
