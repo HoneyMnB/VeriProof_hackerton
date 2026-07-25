@@ -16,8 +16,9 @@ a2a-sdk[http-server]==1.1.1
 uvicorn[standard]>=0.35,<1.0
 
 # --- Solana / payments [import-guarded] ---
-solana>=0.34
-solders>=0.21
+x402[svm]==2.16.0
+solana==0.39.0
+solders==0.27.1
 
 # --- GCP pipeline / data [import-guarded, degrade to no-op when disabled] ---
 google-cloud-firestore>=2.14
