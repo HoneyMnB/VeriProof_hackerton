@@ -28,35 +28,6 @@ APP_DIR = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(APP_DIR))
 
 
-class _ListSecretSigner:
-    """Local signer backed by a Solana CLI-style secret-key byte list."""
-
-    def __init__(self, secret_key: list[int]) -> None:
-        self._secret_key = secret_key
-        self.keypair = self._load_keypair()
-
-
-    def public_key(self) -> str:
-        return str(self.keypair.pubkey())
-
-    def _keypair_local(self):
-        return self.keypair
-
-    def _load_keypair(self):
-        if len(self._secret_key) != 64:
-            raise SystemExit("SENDER_SECRET_KEY must contain exactly 64 integers.")
-        if any(not isinstance(item, int) or item < 0 or item > 255 for item in self._secret_key):
-            raise SystemExit("SENDER_SECRET_KEY values must be integers in 0..255.")
-        try:
-            from solders.keypair import Keypair
-        except ImportError as exc:
-            raise SystemExit(f"solders is required to load SENDER_SECRET_KEY: {exc}") from exc
-        bytes_secret_key = bytes(self._secret_key)
-        keypair = Keypair.from_bytes(bytes_secret_key)
-        print(f"Keypair: {keypair.pubkey()}")
-        return keypair
-
-
 def _require_solana_sdk() -> None:
     """Fail before building a transaction when the runtime SDK is incomplete."""
     try:
@@ -86,19 +57,14 @@ def main() -> None:
 
     from services.solana_service import SolanaService
 
-    signer = _ListSecretSigner(SENDER_SECRET_KEY)
-    service = SolanaService(rpc_url=RPC_URL, signer=signer)
+    service = SolanaService(rpc_url=RPC_URL)
 
-    sender = signer.public_key()
+    print(f"RPC: {RPC_URL}")
 
-    # print(f"RPC: {RPC_URL}")
-    # print(f"From: {sender}")
-    # print(f"To:   {RECIPIENT_PUBKEY}")
-    # print(f"SOL:  {AMOUNT_SOL}")
 
-    signature = service.transfer_sol(RECIPIENT_PUBKEY, AMOUNT_SOL)
-    # print(f"Signature: {signature}")
-    # print(f"Explorer: https://explorer.solana.com/tx/{signature}?cluster=devnet")
+    signature = service.transfer_sol(RECIPIENT_PUBKEY, SENDER_SECRET_KEY, AMOUNT_SOL)
+    print(f"Signature: {signature}")
+    print(f"Explorer: https://explorer.solana.com/tx/{signature}?cluster=devnet")
 
 
 if __name__ == "__main__":

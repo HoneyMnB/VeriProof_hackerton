@@ -14,7 +14,7 @@ from apps.accounts.models import UserPreference
 from apps.accounts.services import ensure_developer_account
 from apps.ip.models import IpAsset, SubscriptionPlan
 from services.registration_service import RegistrationMetadata, get_registration_service
-from services.solana_service import get_solana_service
+from services.solana_adapter_factory import get_solana_service
 from services.subscription_service import get_subscription_service
 
 DEMO_WALLET = "11111111111111111111111111111111"

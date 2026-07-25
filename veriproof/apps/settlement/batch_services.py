@@ -42,7 +42,7 @@ from services.bigquery_sink import get_bigquery_sink
 from services.event_recorder import get_event_recorder
 from services.gemini_service import get_gemini_service
 from services.license_service import get_license_service
-from services.solana_service import get_solana_service
+from services.solana_adapter_factory import get_solana_service
 
 logger = logging.getLogger(__name__)
 

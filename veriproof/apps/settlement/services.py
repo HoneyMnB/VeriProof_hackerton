@@ -33,7 +33,8 @@ from services.firestore_mirror import get_firestore_mirror
 from services.license_service import get_license_service
 from services.payment_verifier import get_payment_verifier
 from services.royalty_service import get_royalty_service
-from services.solana_service import CertificateIssueError, get_solana_service
+from services.solana_adapter_factory import get_solana_service
+from services.solana_service import CertificateIssueError
 
 logger = logging.getLogger(__name__)
 
