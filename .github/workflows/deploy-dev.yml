@@ -1,0 +1,101 @@
+name: Deploy Development
+
+on:
+  push:
+    branches:
+      - develop
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  
+env:
+  REGISTRY: ghcr.io
+
+jobs:
+  build-and-push:
+    name: Build ${{ matrix.service}}
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - service: web 
+            dockerfile: Dockerfile.web
+            image_prefix: veriproof-web
+
+          - service: buyer-agent
+            dockerfile: Dockerfile.buyer-agent
+            image_prefix: veriproof-buyer-agent
+    
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Prepare image name
+        id: image
+        shell: bash
+        run: |
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "name=${REGISTRY}/${owner}/${{ matrix.image_prefix}}" >> "$GITHUB_OUTPUT"
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push ${{ matrix.service }}
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          tags: |
+            ${{ steps.image.outputs.name}}:${{ github.sha }}
+            ${{ steps.image.outputs.name}}:develop
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          provenance: true
+          sbom: true
+
+  deploy:
+    name: Deploy to dev server
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - name: Configure SSH
+        shell: bash
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.DEV_SSH_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Deploy containers
+        shell: bash
+        env:
+          DEV_SSH_HOST: ${{ secrets.DEV_SSH_HOST }}
+          DEV_SSH_PORT: ${{ secrets.DEV_SSH_PORT }}
+          DEV_SSH_USER: ${{ secrets.DEV_SSH_USER }}
+          DEV_DEPLOY_PATH: ${{ secrets.DEV_DEPLOY_PATH }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          ssh \
+            -i ~/.ssh/deploy_key \
+            -p "$DEV_SSH_PORT" \
+            "$DEV_SSH_USER@$DEV_SSH_HOST" \
+            "cd '$DEV_DEPLOY_PATH' &&
+             ./deploy.sh '$IMAGE_TAG'"
