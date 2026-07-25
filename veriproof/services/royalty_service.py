@@ -211,7 +211,7 @@ class RoyaltyService:
 def get_royalty_service() -> RoyaltyService:
     """Factory: build a RoyaltyService with SolanaService + EventRecorder wired."""
     from .event_recorder import get_event_recorder
-    from .solana_service import get_solana_service
+    from .solana_adapter_factory import get_solana_service
 
     return RoyaltyService(
         solana=get_solana_service(),

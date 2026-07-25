@@ -12,7 +12,7 @@ import logging
 import secrets
 from typing import Any
 
-from .solana_service import get_solana_service
+from .solana_adapter_factory import get_solana_service
 
 logger = logging.getLogger(__name__)
 

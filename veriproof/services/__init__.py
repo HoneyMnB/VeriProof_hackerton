@@ -27,7 +27,8 @@ from .license_service import LicenseService, get_license_service
 from .negotiation_engine import NegotiationEngine, get_negotiation_engine
 from .pubsub_publisher import PubSubPublisher, get_pubsub_publisher
 from .royalty_service import RoyaltyService, get_royalty_service
-from .solana_service import SolanaService, get_solana_service
+from .solana_adapter_factory import get_solana_service
+from .solana_service import SolanaService
 from .storage_service import StorageService, get_storage_service
 from .x402_service import X402Service, get_x402_service
 

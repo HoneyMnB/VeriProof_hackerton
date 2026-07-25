@@ -34,6 +34,7 @@ gcp = [
     "google-cloud-pubsub>=2.19,<2.26",
     "google-cloud-kms>=2.21,<2.25",
     "google-cloud-storage>=2.16,<2.19",
+    "google-cloud-aiplatform>=1.71,<2",
 ]
 dev = [
     "pytest>=8",

@@ -334,7 +334,7 @@ def get_registration_service() -> RegistrationService:
     from services.event_recorder import get_event_recorder
     from services.gemini_service import get_gemini_service
     from services.image_processor import get_image_processor
-    from services.solana_service import get_solana_service
+    from services.solana_adapter_factory import get_solana_service
     from services.storage_service import get_storage_service
 
     return RegistrationService(
