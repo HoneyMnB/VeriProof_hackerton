@@ -1,4 +1,33 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      POSTGRES_HOST: postgres
+      A2A_PUBLIC_BASE_URL: ${A2A_PUBLIC_BASE_URL:-http://web:8080}
+    ports:
+      - "${WEB_PORT:-8000}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  buyer-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.buyer-agent
+    env_file:
+      - ${ENV_FILE:-.env}
+    environment:
+      SELLER_AGENT_CARD_URL: ${SELLER_AGENT_CARD_URL:-http://web:8080/.well-known/agent-card.json}
+      BUYER_AGENT_PUBLIC_BASE_URL: ${BUYER_AGENT_PUBLIC_BASE_URL:-http://localhost:8001}
+    ports:
+      - "${BUYER_AGENT_PORT:-8001}:8080"
+    depends_on:
+      - web
+
   postgres:
     image: postgres:16
     env_file:

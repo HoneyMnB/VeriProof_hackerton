@@ -1,0 +1,3 @@
+google-adk[a2a]==2.5.0
+a2a-sdk[http-server]==1.1.1
+uvicorn[standard]>=0.35,<1.0
