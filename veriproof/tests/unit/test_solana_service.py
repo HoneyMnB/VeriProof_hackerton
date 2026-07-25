@@ -130,13 +130,12 @@ def test_solana_anchor_hash_degrades_when_signer_non_conforming():
         svc.anchor_hash("g" * 64, "CreatorPubkey123")
 
 
-def test_solana_get_client_returns_none_when_sdk_missing():
-    """rpc_url set but solana-py absent -> _get_client() is None (offline)."""
-    from services.solana_service import SolanaService
+def test_solana_get_client_uses_http_fallback_when_sdk_missing():
+    """Without solana-py, an RPC URL supplies the sync HTTP fallback client."""
+    from services.solana_service import _HttpSolanaRpcClient, SolanaService
 
     svc = SolanaService(rpc_url="https://api.devnet.solana.com")
-    # solana-py is intentionally NOT installed in the TDD env.
-    assert svc._get_client() is None
+    assert isinstance(svc._get_client(), _HttpSolanaRpcClient)
 
 
 def test_solana_get_client_returns_none_without_rpc_url():
@@ -152,6 +151,22 @@ def test_solana_get_client_returns_injected_client():
 
     stub = _OkClient()
     assert SolanaService(client=stub)._get_client() is stub
+
+
+def test_http_rpc_client_converts_latest_blockhash_to_solders_hash():
+    """JSON-RPC blockhash strings satisfy solders.Transaction's Hash contract."""
+    from solders.hash import Hash
+
+    from services.solana_service import _HttpSolanaRpcClient
+
+    client = _HttpSolanaRpcClient("https://rpc.example")
+    client._rpc = lambda method, params: {  # type: ignore[method-assign]
+        "value": {"blockhash": "11111111111111111111111111111111"}
+    }
+
+    blockhash = client.get_latest_blockhash().value.blockhash
+
+    assert isinstance(blockhash, Hash)
 
 
 def test_solana_factory_builds_local_mock_by_default():

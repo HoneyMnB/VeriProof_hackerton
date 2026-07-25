@@ -6,8 +6,10 @@ in ``tests.fakes.FakeSolanaService``.
 """
 from __future__ import annotations
 
+import base64
 import decimal
 import logging
+from types import SimpleNamespace
 from typing import Any
 
 from ._types import PaymentVerification
@@ -69,6 +71,7 @@ class SolanaService:
     # USDC has 6 decimal places (architecture 8). Comparing in integer
     # min-units avoids float drift: 1.5 USDC == 1_500_000 min-units.
     USDC_DECIMALS = 6
+    LAMPORTS_PER_SOL = 1_000_000_000
     # Commitment floor for a verified payment (architecture 8).
     _CONFIRMED_OR_ABOVE = frozenset({"confirmed", "finalized"})
 
@@ -273,6 +276,91 @@ class SolanaService:
             "SPL-USDC transfer adapter is not configured; payout was not submitted"
         )
 
+    def transfer_sol(self, to_pubkey: str, amount_sol: decimal.Decimal) -> str:
+        """Transfer native SOL to another wallet.
+
+        This is a real System Program transfer when a Solana RPC client and a
+        local signer keypair are configured. It does not fabricate a fallback
+        signature: unavailable RPC, signer, invalid amount, or unsupported KMS
+        signing raises ``CertificateIssueError``.
+        """
+        client = self._get_client()
+        if client is None:
+            raise CertificateIssueError(
+                "transfer_sol unavailable: Solana RPC client is unavailable "
+                "(install solana-py and check SOLANA_RPC_URL)"
+            )
+        if self.signer is None:
+            raise CertificateIssueError(
+                "transfer_sol unavailable: signer is not configured"
+            )
+        lamports = self._sol_to_lamports(amount_sol)
+        try:
+            signer_pubkey = self._signer_pubkey()
+            seam = getattr(client, "send_sol_transfer", None)
+            if seam is not None:
+                return seam(to_pubkey, lamports, signer_pubkey)
+            return self._send_sol_transfer(client, to_pubkey, lamports)
+        except CertificateIssueError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise CertificateIssueError(f"transfer_sol failed: {exc}") from exc
+
+    @classmethod
+    def _sol_to_lamports(cls, amount_sol: decimal.Decimal) -> int:
+        """Convert SOL to lamports without accepting zero/negative values."""
+        if not amount_sol.is_finite() or amount_sol <= 0:
+            raise CertificateIssueError("transfer_sol amount must be positive")
+        lamports = (
+            amount_sol * decimal.Decimal(cls.LAMPORTS_PER_SOL)
+        ).to_integral_exact(rounding=decimal.ROUND_DOWN)
+        if lamports <= 0:
+            raise CertificateIssueError("transfer_sol amount is below one lamport")
+        return int(lamports)
+
+    def _send_sol_transfer(self, client: Any, to_pubkey: str, lamports: int) -> str:
+        """Build, sign, and submit a native SOL System Program transfer."""
+        try:
+            from solders.message import Message
+            from solders.pubkey import Pubkey
+            from solders.system_program import TransferParams, transfer
+            from solders.transaction import Transaction
+        except ImportError as exc:  # pragma: no cover
+            raise CertificateIssueError("solders is required for SOL transfer") from exc
+
+        keypair = self._signer_keypair()
+        sender = keypair.pubkey()
+        recipient = Pubkey.from_string(to_pubkey)
+        instruction = transfer(
+            TransferParams(
+                from_pubkey=sender,
+                to_pubkey=recipient,
+                lamports=lamports,
+            )
+        )
+        blockhash_resp = client.get_latest_blockhash()
+        blockhash = getattr(getattr(blockhash_resp, "value", None), "blockhash", None)
+        if blockhash is None:
+            raise CertificateIssueError("latest Solana blockhash is unavailable")
+        message = Message([instruction], sender)
+        transaction = Transaction([keypair], message, blockhash)
+        response = client.send_transaction(transaction)
+        signature = getattr(response, "value", response)
+        return str(signature)
+
+    def _signer_keypair(self) -> Any:
+        """Return a local signer keypair for transaction-building SDK paths."""
+        keypair = getattr(self.signer, "keypair", None)
+        if keypair is not None:
+            return keypair
+        local_keypair = getattr(self.signer, "_keypair_local", None)
+        if local_keypair is not None:
+            return local_keypair()
+        raise CertificateIssueError(
+            "transfer_sol requires a local signer keypair; KMS transaction "
+            "signing is not configured"
+        )
+
     @staticmethod
     def _build_certificate_memo(asset_id: Any, buyer_pubkey: str, memo: str) -> str:
         """Build the certificate Memo Program payload (architecture 4)."""
@@ -320,8 +408,7 @@ class SolanaService:
         try:
             from solana.rpc.api import Client  # import-guarded
         except ImportError:
-            logger.info("solana-py not installed; SolanaService.anchor_hash degrades")
-            return None
+            return _HttpSolanaRpcClient.from_url(self.rpc_url)
         # Real Client construction needs solana-py installed (cloud only);
         # excluded from the offline coverage gate.
         try:  # pragma: no cover
@@ -404,3 +491,68 @@ def get_solana_service() -> Any:
         usdc_mint=getattr(settings, "USDC_MINT_ADDRESS", None),
         signer=get_kms_signer(),
     )
+
+
+class _HttpSolanaRpcClient:
+    """Small sync JSON-RPC client for solana-py versions without sync Client."""
+
+    def __init__(self, rpc_url: str) -> None:
+        self.rpc_url = rpc_url
+
+    @classmethod
+    def from_url(cls, rpc_url: str | None):
+        if not rpc_url:
+            return None
+        try:
+            import httpx  # noqa: F401
+        except ImportError:
+            logger.info("httpx not installed; Solana RPC client is unavailable")
+            return None
+        return cls(rpc_url)
+
+    def get_latest_blockhash(self):
+        from solders.hash import Hash
+
+        result = self._rpc(
+            "getLatestBlockhash",
+            [{"commitment": "confirmed"}],
+        )
+        blockhash = result.get("value", {}).get("blockhash")
+        if not isinstance(blockhash, str):
+            raise CertificateIssueError("latest Solana blockhash is unavailable")
+        return SimpleNamespace(
+            value=SimpleNamespace(blockhash=Hash.from_string(blockhash))
+        )
+
+    def send_transaction(self, transaction: Any):
+        encoded = base64.b64encode(bytes(transaction)).decode("ascii")
+        result = self._rpc(
+            "sendTransaction",
+            [
+                encoded,
+                {
+                    "encoding": "base64",
+                    "preflightCommitment": "confirmed",
+                },
+            ],
+        )
+        return SimpleNamespace(value=result)
+
+    def _rpc(self, method: str, params: list[Any]) -> Any:
+        import httpx
+
+        response = httpx.post(
+            self.rpc_url,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": method,
+                "params": params,
+            },
+            timeout=30,
+        )
+        response.raise_for_status()
+        payload = response.json()
+        if payload.get("error"):
+            raise CertificateIssueError(f"Solana RPC {method} failed: {payload['error']}")
+        return payload.get("result")
