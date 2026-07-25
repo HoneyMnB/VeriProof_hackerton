@@ -19,6 +19,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import EmailAuthenticationForm, EmailSignUpForm
 from .models import UserPreference, WalletConfiguration
+from .services import ensure_creator_wallet
 
 logger = logging.getLogger(__name__)
 
@@ -142,6 +143,7 @@ def wallet_configurations(request: HttpRequest) -> JsonResponse:
         preference, _ = UserPreference.objects.get_or_create(user=request.user)
         preference.creator_wallet = wallet.address
         preference.save(update_fields=["creator_wallet", "updated_at"])
+    ensure_creator_wallet(wallet.address)
     return JsonResponse({"id": wallet.id, "created": created})
 
 
@@ -158,6 +160,7 @@ def activate_wallet(request: HttpRequest, wallet_id: int) -> JsonResponse:
     preference, _ = UserPreference.objects.get_or_create(user=request.user)
     preference.creator_wallet = wallet.address
     preference.save(update_fields=["creator_wallet", "updated_at"])
+    ensure_creator_wallet(wallet.address)
     return JsonResponse({"creator_wallet": wallet.address})
 
 

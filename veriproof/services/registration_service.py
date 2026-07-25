@@ -336,7 +336,6 @@ def get_registration_service() -> RegistrationService:
     from services.image_processor import get_image_processor
     from services.solana_service import get_solana_service
     from services.storage_service import get_storage_service
-    from services.subscription_service import get_subscription_service
 
     return RegistrationService(
         image_processor=get_image_processor(),
@@ -344,5 +343,4 @@ def get_registration_service() -> RegistrationService:
         solana=get_solana_service(),
         storage=get_storage_service(),
         event_recorder=get_event_recorder(),
-        subscription=get_subscription_service(),
     )

@@ -33,7 +33,6 @@ from services.registration_service import (
     RegistrationMetadata,
     get_registration_service,
 )
-from services.subscription_service import SubscriptionRequiredError
 from services.x402_service import get_x402_service
 
 logger = logging.getLogger(__name__)
@@ -103,9 +102,6 @@ def register(request: HttpRequest) -> JsonResponse:
             gallery_uploads=gallery_uploads,
             account_owner=request.user,
         )
-    except SubscriptionRequiredError as exc:
-        logger.warning("registration subscription rejected creator_wallet=%s", metadata.creator_wallet)
-        return _error("subscription_required", str(exc), status=402)
     except RegistrationError as exc:
         logger.warning(
             "registration rejected creator_wallet=%s code=%s",

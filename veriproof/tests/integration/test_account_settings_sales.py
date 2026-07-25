@@ -1,6 +1,9 @@
 """Creator-shell account settings integration contracts."""
 from __future__ import annotations
 
+import hashlib
+import json
+
 import pytest
 
 
@@ -48,3 +51,49 @@ def test_sandbox_link_is_only_rendered_for_staff_in_debug(client, settings):
     content = response.content.decode()
     assert 'class="vp-settings-nav__developer"' in content
     assert 'href="/sandbox"' in content
+
+
+@pytest.mark.django_db
+def test_wallet_save_prepares_creator_for_registration_drafts(client):
+    """공개 지갑 저장은 등록 초안이 참조할 Creator row까지 준비한다."""
+    from django.contrib.auth.models import User
+
+    from apps.ip.models import Creator
+
+    wallet = "11111111111111111111111111111111"
+    user = User.objects.create_user(username="creator-wallet@example.com", password="test-password-123")
+    client.force_login(user)
+
+    wallet_response = client.post(
+        "/accounts/wallets/save/",
+        json.dumps({
+            "address": wallet,
+            "label": "Primary Solana",
+            "accepts_deposits": True,
+            "receives_payouts": True,
+        }),
+        content_type="application/json",
+    )
+
+    assert wallet_response.status_code == 200
+    assert Creator.objects.filter(wallet_address=wallet).exists()
+
+    draft_response = client.post(
+        "/api/v1/assistant/registration-drafts",
+        json.dumps({
+            "creator_wallet": wallet,
+            "file_name": "work.png",
+            "file_sha256": hashlib.sha256(b"work").hexdigest(),
+            "fields": {
+                "asset_type": "image",
+                "title": "Work",
+                "min_price": "1",
+                "target_price": "2",
+                "visibility": "private",
+            },
+        }),
+        content_type="application/json",
+    )
+
+    assert draft_response.status_code == 201
+    assert draft_response.json()["status"] == "collecting"

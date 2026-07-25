@@ -30,4 +30,4 @@ ENV PORT=8080
 EXPOSE 8080
 
 # config.wsgi:application is the WSGI callable (config/wsgi.py).
-CMD exec gunicorn --bind :${PORT} --workers 2 --threads 4 --timeout 120 config.wsgi:application
+CMD ["sh", "-c", "exec gunicorn --bind :${PORT:-8080} --workers 2 --threads 4 --timeout 120 config.wsgi:application"]

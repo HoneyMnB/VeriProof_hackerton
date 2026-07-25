@@ -1,4 +1,4 @@
-"""계정 시드처럼 HTTP와 분리해야 하는 로컬 개발 기능."""
+"""계정 시드처럼 HTTP와 분리해야 하는 계정 유스케이스."""
 from __future__ import annotations
 
 from django.contrib.auth.models import User
@@ -21,3 +21,10 @@ def ensure_developer_account() -> User:
         user.set_password(DEVELOPER_PASSWORD)
         user.save()
     return user
+
+
+def ensure_creator_wallet(wallet_address: str) -> None:
+    """검증된 공개 지갑 주소를 IP 도메인의 창작자 식별자로 준비한다."""
+    from apps.ip.models import Creator
+
+    Creator.objects.get_or_create(wallet_address=wallet_address)

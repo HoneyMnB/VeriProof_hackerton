@@ -179,3 +179,19 @@ Income is not copied into this table: it is calculated from verified
 # 2026-07-24 — `ip_asset_component`
 
 `AssetComponent` stores the private source-file manifest for a packaged work. Required fields are the parent asset, original file name, MIME type, SHA-256, and internal storage URL. Components are never exposed through public catalog or preview responses; the primary asset hash remains the on-chain registration anchor.
+
+## 2026-07-25 — 계정 지갑의 창작자 식별자 준비 (migration `accounts.0004`)
+
+- 변경: 기존 `accounts.WalletConfiguration.address`와
+  `accounts.UserPreference.creator_wallet` 중 유효한 Solana 공개 주소에 대해
+  `ip.Creator.wallet_address` row를 보정 생성한다.
+- 이유: 대화형 등록 초안, 어시스턴트 이력, 첨부 분석은 `creator_wallet`을
+  `ip.Creator`로 해석한다. 계정 지갑 저장만 완료되고 `Creator`가 없으면
+  `/api/v1/assistant/registration-drafts`가 404를 반환했다.
+- 영향 범위: 스키마는 변경하지 않는다. 이미 저장된 공개 지갑을 등록 초안과
+  창작자 워크스페이스의 런타임 식별자로 사용할 수 있게 하는 데이터 보정이다.
+- 검증: 지갑 저장 후 `Creator` 생성 및 등록 초안 생성 통합 테스트를 추가했다.
+  로컬 호스트 Python에는 Django가 없어 pytest 실행은 수행하지 못했고, 변경 파일
+  문법 검사는 통과했다.
+- Alembic 필요 여부: 불필요. 이 Django 프로젝트는
+  `apps/accounts/migrations/0004_prepare_creator_wallets.py`를 적용한다.
