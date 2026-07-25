@@ -10,6 +10,18 @@ set +a
 DOCKER_NETWORK="${DOCKER_NETWORK:-google-solana}"
 CONTAINER_ADC_FILE="/var/run/secrets/google/application_default_credentials.json"
 
+docker_host_path()
+{
+    local path="$1"
+
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -m "$path"
+        return
+    fi
+
+    printf '%s\n' "$path"
+}
+
 find_adc_file()
 {
     local candidate
@@ -45,8 +57,9 @@ configure_adc_mount()
 
     if ADC_HOST_FILE="$(find_adc_file)"; then
         # 로컬 ADC를 컨테이너 전용 경로에 읽기 전용으로 전달한다.
+        ADC_DOCKER_HOST_FILE="$(docker_host_path "$ADC_HOST_FILE")"
         ADC_RUN_ARGS=(
-            --mount "type=bind,source=$ADC_HOST_FILE,target=$CONTAINER_ADC_FILE,readonly"
+            --mount "type=bind,source=$ADC_DOCKER_HOST_FILE,target=$CONTAINER_ADC_FILE,readonly"
             --env "GOOGLE_APPLICATION_CREDENTIALS=$CONTAINER_ADC_FILE"
         )
         echo "Using local Application Default Credentials"
@@ -88,10 +101,11 @@ run()
     fi
 
     configure_adc_mount
+    DOCKER_ENV_FILE="$(docker_host_path "$ENV_FILE")"
 
-    docker run -dt \
+    MSYS_NO_PATHCONV=1 docker run -dt \
     --name "$SERVICE_NAME" \
-    --env-file "$ENV_FILE" \
+    --env-file "$DOCKER_ENV_FILE" \
     --network "$DOCKER_NETWORK" \
     "${ADC_RUN_ARGS[@]}" \
     $PORT_ARG \
