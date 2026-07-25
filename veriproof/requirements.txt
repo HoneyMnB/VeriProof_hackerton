@@ -11,6 +11,9 @@ whitenoise>=6.12,<7.0
 
 # --- AI (Gemini / Vertex) [import-guarded] ---
 google-genai>=0.3
+google-adk[a2a]==2.5.0
+a2a-sdk[http-server]==1.1.1
+uvicorn[standard]>=0.35,<1.0
 
 # --- Solana / payments [import-guarded] ---
 solana>=0.34

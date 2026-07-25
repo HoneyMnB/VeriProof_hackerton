@@ -199,6 +199,14 @@ VERTEX_PROJECT = os.environ.get("VERTEX_PROJECT", "")
 VERTEX_LOCATION = os.environ.get("VERTEX_LOCATION", "")
 GOOGLE_APPLICATION_CREDENTIALS = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS", "")
 
+# --- A2A / ADK --------------------------------------------------------------
+# 공개 URL은 에이전트 A의 탐색 카드에 사용한다. Cloud Run에 배포할 때는
+# 웹 서비스에 할당된 HTTPS URL로 설정해야 한다.
+A2A_PUBLIC_BASE_URL = os.environ.get(
+    "A2A_PUBLIC_BASE_URL", "http://localhost:8000"
+).rstrip("/")
+ADK_MODEL = os.environ.get("ADK_MODEL", "gemini-2.5-flash")
+
 # --- Solana / payments -------------------------------------------------------
 SOLANA_RPC_URL = os.environ.get(
     "SOLANA_RPC_URL", "https://api.devnet.solana.com"

@@ -20,7 +20,12 @@ dependencies = [
 [project.optional-dependencies]
 # All external SDKs are optional: the project imports with NONE of them
 # installed (import-guarded). They are pulled in for live/cloud runs.
-ai = ["google-genai>=0.3"]
+ai = [
+    "google-genai>=0.3",
+    "google-adk[a2a]==2.5.0",
+    "a2a-sdk[http-server]==1.1.1",
+    "uvicorn[standard]>=0.35,<1.0",
+]
 solana = ["solana>=0.34", "solders>=0.21"]
 gcp = [
     "protobuf>=3.20.2,<6",
