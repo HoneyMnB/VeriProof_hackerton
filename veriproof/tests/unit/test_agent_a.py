@@ -40,3 +40,16 @@ def test_agent_catalog_tool_returns_only_public_registered_assets():
     assert result["count"] == 1
     assert result["assets"][0]["asset_id"] == str(visible.id)
     assert "original_url" not in result["assets"][0]
+
+
+def test_agent_catalog_tool_rejects_noncanonical_asset_type():
+    from agent_a.tools import _search_licensable_assets
+
+    result = _search_licensable_assets(
+        query="바다",
+        asset_type="이미지",
+    )
+
+    assert result["status"] == "invalid_asset_type"
+    assert "image" in result["allowed_asset_types"]
+    assert result["assets"] == []

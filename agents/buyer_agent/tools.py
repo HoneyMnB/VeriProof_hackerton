@@ -6,12 +6,33 @@ from urllib.parse import urlparse
 
 import httpx
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
+from google.adk.tools.agent_tool import AgentTool
+from google.adk.tools.tool_context import ToolContext
 from x402.http.utils import (
     decode_payment_required_header,
     decode_payment_response_header,
 )
 
 from .payments import AutonomousPaymentError, AutonomousX402Buyer
+
+
+class SellerAgentTool(AgentTool):
+    """원격 판매자 장애가 빈 검색 결과처럼 보이지 않게 한다."""
+
+    async def run_async(
+        self,
+        *,
+        args: dict,
+        tool_context: ToolContext,
+    ):
+        result = await super().run_async(args=args, tool_context=tool_context)
+        if result:
+            return result
+        return (
+            "seller_agent_unavailable: the remote seller returned no usable "
+            "A2A response. Verify SELLER_AGENT_CARD_URL and that the seller "
+            "service is running."
+        )
 
 
 def get_seller_agent_card_url() -> str:
