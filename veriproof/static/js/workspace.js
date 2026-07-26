@@ -215,7 +215,7 @@
             chooseRegistrationFile(file);
         }
         /**
-         * 단일 파일을 선택해 드롭존에 표시하고 해시를 계산한 뒤 서버 초안(saveDraft)을 갱신한다.
+         * 단일 파일을 선택해 드롭존에 표시하고 서버 초안(saveDraft)을 갱신한다.
          */
         function chooseRegistrationFile(file) {
             if (!file) { return; }
@@ -223,7 +223,7 @@
             var dropzone = byId("dropzone");
             dropzone.classList.add("has-file");
             dropzone.querySelector(".dropzone__hint").textContent = registrationFiles().length > 1 ? t("workspace.canvas.images_selected", { n: registrationFiles().length }) : file.name;
-            hashFiles(registrationFiles()).then(function (digest) { saveDraft(digest); }).catch(function () { renderDraftError(t("workspace.status.file_prepare")); });
+            saveDraft().catch(function () {});
         }
         /**
          * 선택된 파일 목록을 큐 UI로 렌더링하고 활성 파일을 표시한다.
@@ -255,20 +255,29 @@
             }
             return state.file ? [state.file] : [];
         }
-        function saveDraft(digest) {
+        function saveDraft() {
             // 계정 설정 전에는 파일과 입력값을 현재 캔버스에만 보존한다.
             // 서버 초안은 창작자 지갑을 식별자로 사용하므로 지갑 연결 후 저장한다.
-            if (!wallet()) { return; }
+            if (!wallet()) { return Promise.resolve(); }
             var profile = activeFileProfile();
-            if (!profile) { return; }
-            request("/api/v1/assistant/registration-drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet(), draft_id: profile.draft && profile.draft.draft_id, file_name: state.file.name, file_sha256: digest, fields: fields() }) }).then(function (result) {
-                if (!result.ok) { return renderDraftError(result.body.detail || t("workspace.status.draft_save_failed")); }
+            if (!profile) { return Promise.resolve(); }
+            var data = new FormData();
+            data.append("creator_wallet", wallet());
+            data.append("draft_id", profile.draft && profile.draft.draft_id || "");
+            data.append("file_name", state.file.name);
+            data.append("fields", JSON.stringify(fields()));
+            registrationFiles().forEach(function (file) { data.append("files", file); });
+            return request("/api/v1/assistant/registration-drafts", { method: "POST", body: data }).then(function (result) {
+                if (!result.ok) {
+                    renderDraftError(result.body.detail || t("workspace.status.draft_save_failed"));
+                    throw new Error("draft_save_failed");
+                }
                 profile.draft = result.body;
                 renderDraftMessage(t("workspace.status.draft_saved"));
             });
         }
         /**
-         * 등록 확정 흐름을 실행한다. 파일 해시 계산 → 초안 저장 → 확정 토큰 발급 →
+         * 등록 확정 흐름을 실행한다. 파일 포함 초안 저장 → 확정 토큰 발급 →
          * 파일 업로드(uploadConfirmed) 순으로 진행하며 각 단계 실패를 에러로 표시한다.
          */
         function confirmAndRegister() {
@@ -276,15 +285,14 @@
             if (!wallet()) { return setStatus(t("workspace.status.wallet_register"), true); }
             captureActiveFields();
             var profile = activeFileProfile();
-            hashFiles(registrationFiles()).then(function (digest) {
-                request("/api/v1/assistant/registration-drafts", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet(), draft_id: profile.draft && profile.draft.draft_id, file_name: state.file.name, file_sha256: digest, fields: fields() }) }).then(function (saved) {
-                    if (!saved.ok) { return renderDraftError(saved.body.detail || t("workspace.status.draft_update_failed")); }
-                    profile.draft = saved.body;
-                    return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet() }) });
-                }).then(function (confirmed) {
+            saveDraft().then(function () {
+                if (!profile.draft) { throw new Error("draft_save_failed"); }
+                return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet() }) }).then(function (confirmed) {
                     if (!confirmed || !confirmed.ok) { return renderDraftError((confirmed && confirmed.body.detail) || t("workspace.status.confirm_incomplete")); }
                     uploadConfirmed(confirmed.body.confirmation_token, profile.draft.draft_id);
                 });
+            }).catch(function () {
+                renderDraftError(t("workspace.status.file_prepare"));
             });
         }
         /**
@@ -451,18 +459,6 @@
         function renderDraftMessage(text) { byId("analysis-feed").replaceChildren(Object.assign(document.createElement("li"), { className: "analysis-card", textContent: text })); }
         function renderDraftError(text) { var item = document.createElement("li"); item.className = "analysis-card vp-registration-error"; item.textContent = text; byId("analysis-feed").replaceChildren(item); }
         function setStatus(text, error) { var target = byId("assistant-status"); target.textContent = text || ""; target.classList.toggle("is-error", Boolean(error)); }
-    }
-    /**
-     * 파일을 SHA-256 해시(16진수 문자열)로 변환한다. crypto.subtle.digest를 사용한다.
-     */
-    function hashFile(file) { return file.arrayBuffer().then(function (bytes) { return crypto.subtle.digest("SHA-256", bytes); }).then(function (digest) { return Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, "0"); }).join(""); }); }
-    function hashFiles(files) {
-        return Promise.all(Array.from(files || []).map(hashFile)).then(function (hashes) {
-            if (hashes.length === 1) { return hashes[0]; }
-            return crypto.subtle.digest("SHA-256", new TextEncoder().encode(hashes.join("\n"))).then(function (digest) {
-                return Array.from(new Uint8Array(digest)).map(function (byte) { return byte.toString(16).padStart(2, "0"); }).join("");
-            });
-        });
     }
     if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", init); } else { init(); }
 }());

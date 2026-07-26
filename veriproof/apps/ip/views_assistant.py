@@ -300,22 +300,48 @@ def registration_drafts(request: HttpRequest, draft_id=None) -> JsonResponse:
     """대화형 등록 캔버스의 초안을 저장·확정한다. 실제 등록은 하지 않는다."""
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
-    try:
-        payload = json.loads(request.body or b"{}")
-    except (ValueError, json.JSONDecodeError):
-        return JsonResponse({"error": "invalid_json"}, status=422)
+    payload, uploads, parse_error = _registration_draft_payload(request)
+    if parse_error is not None:
+        return parse_error
     wallet = str(payload.get("creator_wallet") or "").strip()
     service = get_registration_draft_service()
     try:
         if draft_id:
             result = service.confirm(wallet, str(draft_id))
         else:
-            result = service.save(wallet, payload)
+            result = service.save(wallet, payload, uploads=uploads)
     except LookupError:
         return JsonResponse({"error": "draft_not_found"}, status=404)
     except DraftValidationError as exc:
         return JsonResponse({"error": "invalid_draft", "detail": str(exc)}, status=422)
     return JsonResponse(result, status=200 if draft_id else 201)
+
+
+def _registration_draft_payload(request: HttpRequest):
+    """Parse JSON or multipart draft updates without accepting client hashes."""
+    if request.content_type and request.content_type.startswith("multipart/"):
+        fields_raw = request.POST.get("fields") or "{}"
+        try:
+            fields = json.loads(fields_raw)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            return None, None, JsonResponse({"error": "invalid_json"}, status=422)
+        if not isinstance(fields, dict):
+            return None, None, JsonResponse({"error": "invalid_json"}, status=422)
+        payload = {
+            "creator_wallet": request.POST.get("creator_wallet"),
+            "draft_id": request.POST.get("draft_id"),
+            "file_name": request.POST.get("file_name"),
+            "fields": fields,
+        }
+        uploads = tuple(request.FILES.getlist("files"))
+        if not uploads and request.FILES.get("file") is not None:
+            uploads = (request.FILES["file"],)
+        return payload, uploads or None, None
+    try:
+        payload = json.loads(request.body or b"{}")
+    except (ValueError, json.JSONDecodeError):
+        return None, None, JsonResponse({"error": "invalid_json"}, status=422)
+    return payload, None, None
 
 
 @csrf_exempt

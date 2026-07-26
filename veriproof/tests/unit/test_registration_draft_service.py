@@ -1,8 +1,6 @@
 """대화형 등록 초안의 확정 게이트를 검증한다."""
 from __future__ import annotations
 
-import hashlib
-
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -20,13 +18,14 @@ def test_confirmed_draft_requires_matching_upload_hash():
     Creator.objects.create(wallet_address=wallet)
     content = b"draft-content"
     service = RegistrationDraftService()
+    initial_upload = SimpleUploadedFile("work.png", content, content_type="image/png")
     draft = service.save(
         wallet,
         {
             "file_name": "work.png",
-            "file_sha256": hashlib.sha256(content).hexdigest(),
             "fields": {"asset_type": "image", "title": "Draft", "tags": "coast, sunrise", "min_price": "1", "target_price": "2", "visibility": "private"},
         },
+        uploads=initial_upload,
     )
     confirmed = service.confirm(wallet, draft["draft_id"])
     matching = SimpleUploadedFile("work.png", content, content_type="image/png")

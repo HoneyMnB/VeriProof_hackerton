@@ -16,7 +16,6 @@ a2a-sdk[http-server]==1.1.1
 uvicorn[standard]>=0.35,<1.0
 
 # --- Solana / payments [import-guarded] ---
-solana>=0.34
 solders>=0.21
 
 # --- GCP pipeline / data [import-guarded, degrade to no-op when disabled] ---

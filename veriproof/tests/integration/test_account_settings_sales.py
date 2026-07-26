@@ -1,10 +1,10 @@
 """Creator-shell account settings integration contracts."""
 from __future__ import annotations
 
-import hashlib
 import json
 
 import pytest
+from django.core.files.uploadedfile import SimpleUploadedFile
 
 
 @pytest.mark.django_db
@@ -80,19 +80,18 @@ def test_wallet_save_prepares_creator_for_registration_drafts(client):
 
     draft_response = client.post(
         "/api/v1/assistant/registration-drafts",
-        json.dumps({
+        {
             "creator_wallet": wallet,
             "file_name": "work.png",
-            "file_sha256": hashlib.sha256(b"work").hexdigest(),
-            "fields": {
+            "fields": json.dumps({
                 "asset_type": "image",
                 "title": "Work",
                 "min_price": "1",
                 "target_price": "2",
                 "visibility": "private",
-            },
-        }),
-        content_type="application/json",
+            }),
+            "files": SimpleUploadedFile("work.png", b"work", content_type="image/png"),
+        },
     )
 
     assert draft_response.status_code == 201

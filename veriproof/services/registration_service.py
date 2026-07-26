@@ -6,7 +6,6 @@ HTTP 파싱은 뷰에 남기고, 검증된 입력을 받아 분석·저장·온�
 from __future__ import annotations
 
 import datetime
-import hashlib
 import decimal
 import logging
 import uuid
@@ -71,6 +70,7 @@ class RegistrationService:
         storage: Any,
         event_recorder: Any,
         subscription: Any = None,
+        fingerprint: Any = None,
     ) -> None:
         self.image_processor = image_processor
         self.gemini = gemini
@@ -78,6 +78,7 @@ class RegistrationService:
         self.storage = storage
         self.event_recorder = event_recorder
         self.subscription = subscription
+        self.fingerprint = fingerprint or _default_fingerprint()
 
     def register(
         self,
@@ -187,7 +188,7 @@ class RegistrationService:
             from apps.ip.models import AssetComponent, AssetImage
             for index, component in enumerate(supporting_uploads):
                 component_bytes = component.read()
-                component_hash = self.image_processor.sha256(component_bytes)
+                component_hash = self.fingerprint.sha256(component_bytes)
                 component_url = self.storage.save_permanent(
                     "supporting", f"{asset_id}-{index}", component_bytes
                 )
@@ -240,7 +241,7 @@ class RegistrationService:
                 {
                     "file_name": upload.name,
                     "content_mime_type": upload.content_type or "image/png",
-                    "content_sha256": self.image_processor.sha256(content),
+                    "content_sha256": self.fingerprint.sha256(content),
                     "watermark_url": watermark_url,
                     "original_url": original_url,
                     "id": image_id,
@@ -250,11 +251,9 @@ class RegistrationService:
 
     def _work_manifest_hash(self, primary_content: bytes, gallery_contents) -> str:
         """작품을 구성하는 순서 있는 모든 이미지의 단일 증명 해시를 만든다."""
-        image_hashes = [self.image_processor.sha256(primary_content)]
-        image_hashes.extend(self.image_processor.sha256(content) for _upload, content in gallery_contents)
-        if len(image_hashes) == 1:
-            return image_hashes[0]
-        return hashlib.sha256("\n".join(image_hashes).encode("ascii")).hexdigest()
+        contents = [primary_content]
+        contents.extend(content for _upload, content in gallery_contents)
+        return self.fingerprint.content_manifest_sha256(contents)
 
     def _prepare_artifacts(
         self, content: bytes, metadata: RegistrationMetadata, mime: str
@@ -343,4 +342,11 @@ def get_registration_service() -> RegistrationService:
         solana=get_solana_service(),
         storage=get_storage_service(),
         event_recorder=get_event_recorder(),
+        fingerprint=_default_fingerprint(),
     )
+
+
+def _default_fingerprint():
+    from services.image_fingerprint import get_fingerprint_service
+
+    return get_fingerprint_service()

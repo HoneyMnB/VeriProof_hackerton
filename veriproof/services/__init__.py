@@ -21,6 +21,12 @@ from .bigquery_sink import BigQuerySink, get_bigquery_sink
 from .event_recorder import EventRecorder, get_event_recorder
 from .firestore_mirror import FirestoreMirror, get_firestore_mirror
 from .gemini_service import GeminiService, get_gemini_service
+from .image_fingerprint import (
+    FingerprintService,
+    ImageFingerprint,
+    ImageFingerprintMatch,
+    get_fingerprint_service,
+)
 from .image_processor import ImageProcessor, get_image_processor
 from .kms_signer import KmsSigner, get_kms_signer
 from .license_service import LicenseService, get_license_service
@@ -53,6 +59,10 @@ __all__ = [
     "get_storage_service",
     "ImageProcessor",
     "get_image_processor",
+    "FingerprintService",
+    "get_fingerprint_service",
+    "ImageFingerprint",
+    "ImageFingerprintMatch",
     "NegotiationEngine",
     "get_negotiation_engine",
     "X402Service",

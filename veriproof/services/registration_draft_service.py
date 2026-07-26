@@ -1,7 +1,6 @@
 """대화형 등록 초안의 검증·확정 경계."""
 from __future__ import annotations
 
-import hashlib
 import logging
 import uuid
 from dataclasses import dataclass
@@ -30,7 +29,10 @@ class RegistrationDraftService:
 
     _ALLOWED_FIELDS = frozenset({"asset_type", "title", "description", "tags", "min_price", "target_price", "visibility"})
 
-    def save(self, wallet: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def __init__(self, *, fingerprint: Any = None) -> None:
+        self.fingerprint = fingerprint or _default_fingerprint()
+
+    def save(self, wallet: str, payload: dict[str, Any], uploads: Any = None) -> dict[str, Any]:
         """사용자·에이전트가 수집한 값만 병합하고 확정 상태는 무효화한다."""
         from apps.ip.models import Creator, RegistrationDraft
 
@@ -50,10 +52,8 @@ class RegistrationDraftService:
         cleaned = {key: str(value).strip() for key, value in fields.items() if value is not None}
         draft.fields = {**draft.fields, **cleaned}
         draft.file_name = str(payload.get("file_name") or draft.file_name).strip()[:255]
-        supplied_hash = str(payload.get("file_sha256") or draft.file_sha256).strip().lower()
-        if supplied_hash and (len(supplied_hash) != 64 or any(char not in "0123456789abcdef" for char in supplied_hash)):
-            raise DraftValidationError("The attachment hash is invalid.")
-        draft.file_sha256 = supplied_hash
+        if uploads is not None:
+            draft.file_sha256 = self.fingerprint.upload_manifest_sha256(uploads)
         draft.status = RegistrationDraft.COLLECTING
         draft.confirmation_token = None
         draft.confirmed_at = None
@@ -88,7 +88,7 @@ class RegistrationDraftService:
                 raise DraftValidationError("The registration draft is not confirmed.")
             if str(draft.confirmation_token) != str(token):
                 raise DraftValidationError("The registration confirmation is invalid.")
-            digest = self._hash_uploads(uploads)
+            digest = self.fingerprint.upload_manifest_sha256(uploads)
             if digest != draft.file_sha256:
                 raise DraftValidationError("The selected work-image set differs from the confirmed attachment.")
             return ConfirmedDraft(draft_id=str(draft.id), fields=dict(draft.fields))
@@ -100,29 +100,6 @@ class RegistrationDraftService:
         RegistrationDraft.objects.filter(id=draft_id, status=RegistrationDraft.CONFIRMED).update(
             status=RegistrationDraft.EXECUTED, executed_asset=asset
         )
-
-    @staticmethod
-    def _hash_upload(upload: Any) -> str:
-        """업로드의 청크를 스트림으로 읽어 sha256 hex digest를 반환한다.
-
-        읽은 뒤 업로드 위치를 다시 맨 앞으로 되돌려, 이후 실제 등록 파이프라인이
-        파일 전체를 다시 읽을 수 있도록 한다.
-        """
-        hasher = hashlib.sha256()
-        for chunk in upload.chunks():
-            hasher.update(chunk)
-        upload.seek(0)
-        return hasher.hexdigest()
-
-    @classmethod
-    def _hash_uploads(cls, uploads: Any) -> str:
-        """순서가 있는 이미지 해시 목록의 매니페스트 SHA-256을 계산한다."""
-        if not isinstance(uploads, (list, tuple)):
-            uploads = (uploads,)
-        image_hashes = [cls._hash_upload(upload) for upload in uploads]
-        if len(image_hashes) == 1:
-            return image_hashes[0]
-        return hashlib.sha256("\n".join(image_hashes).encode("ascii")).hexdigest()
 
     @staticmethod
     def _validate_ready(draft: Any) -> None:
@@ -140,3 +117,9 @@ class RegistrationDraftService:
 def get_registration_draft_service() -> RegistrationDraftService:
     """초안 유스케이스 팩토리."""
     return RegistrationDraftService()
+
+
+def _default_fingerprint():
+    from services.image_fingerprint import get_fingerprint_service
+
+    return get_fingerprint_service()
