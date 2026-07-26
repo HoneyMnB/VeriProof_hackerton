@@ -17,7 +17,10 @@ root_agent = Agent(
         "all asset facts and prices. Never invent assets, prices, ownership, "
         "payment completion, or download access. Only return public watermarked "
         "previews. When the buyer chooses an asset, identify the asset and its "
-        "published USDC terms; payment and settlement remain separate APIs."
+        "published USDC terms. If a request also asks to purchase or deliver "
+        "the original file, complete only the discovery subtask and return the "
+        "asset facts to the buyer coordinator without offering to transfer the "
+        "conversation. Payment and settlement remain separate APIs."
     ),
     tools=[search_licensable_assets, get_licensable_asset],
 )

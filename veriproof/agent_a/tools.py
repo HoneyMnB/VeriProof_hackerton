@@ -9,6 +9,8 @@ from asgiref.sync import sync_to_async
 from apps.ip.models import IpAsset
 from services.catalog_service import get_catalog_service
 
+from .schemas import AssetType
+
 
 def _json_safe_asset(asset: Any) -> dict[str, Any]:
     payload = get_catalog_service().serialize(asset)
@@ -20,11 +22,23 @@ def _json_safe_asset(asset: Any) -> dict[str, Any]:
 
 def _search_licensable_assets(
     query: str,
-    asset_type: str = "",
+    asset_type: AssetType | str | None = None,
     maximum_price_usdc: float | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """동기 Django ORM 경로에서 공개 등록 자산을 검색한다."""
+    try:
+        canonical_asset_type = (
+            AssetType(asset_type).value if asset_type else ""
+        )
+    except ValueError:
+        return {
+            "status": "invalid_asset_type",
+            "allowed_asset_types": [item.value for item in AssetType],
+            "count": 0,
+            "assets": [],
+        }
+
     bounded_limit = max(1, min(int(limit), 20))
     price_max = (
         decimal.Decimal(str(maximum_price_usdc))
@@ -33,7 +47,7 @@ def _search_licensable_assets(
     )
     assets = get_catalog_service().search(
         query=query.strip(),
-        asset_type=asset_type.strip().lower(),
+        asset_type=canonical_asset_type,
         price_max=price_max,
     )
     results = [_json_safe_asset(asset) for asset in assets[:bounded_limit]]
@@ -42,7 +56,7 @@ def _search_licensable_assets(
 
 async def search_licensable_assets(
     query: str,
-    asset_type: str = "",
+    asset_type: AssetType | None = None,
     maximum_price_usdc: float | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
@@ -50,7 +64,8 @@ async def search_licensable_assets(
 
     Args:
         query: 주제, 분위기, 스타일 등의 자연어 검색어.
-        asset_type: 이미지, 오디오, 비디오 등의 선택 자산 유형.
+        asset_type: image, document, audio, video, software, product, other 중
+            하나인 선택 자산 유형. 사용자 표현을 번역하지 말고 이 표준 값을 사용한다.
         maximum_price_usdc: 선택 가능한 최대 최소 판매가(USDC).
         limit: 1개에서 20개 사이의 최대 결과 수.
     """

@@ -5,13 +5,14 @@ import os
 from google.adk.agents import Agent
 
 from .tools import (
+    SellerAgentTool,
     build_seller_agent,
     get_x402_payment_terms,
     negotiate_license,
     purchase_x402_asset,
 )
 
-seller_agent = build_seller_agent()
+seller_agent_tool = SellerAgentTool(agent=build_seller_agent())
 
 root_agent = Agent(
     name="veriproof_buyer_agent",
@@ -21,9 +22,13 @@ root_agent = Agent(
         "A2A seller agents."
     ),
     instruction=(
-        "Help the buyer find a suitable work. Delegate marketplace discovery "
-        "and published licensing terms to veriproof_seller_agent through A2A. "
-        "Use get_x402_payment_terms and negotiate_license for payment terms. "
+        "You are the buyer-side coordinator and must retain control of the "
+        "entire purchase workflow. Call veriproof_seller_agent only as a tool "
+        "for marketplace discovery and published licensing facts. Send that "
+        "tool only the discovery or licensing subtask, never a request to buy, "
+        "pay, or deliver the original file. After it returns, continue the "
+        "workflow yourself. Use get_x402_payment_terms and negotiate_license "
+        "for payment terms. "
         "Never request, display, or store a private key in the conversation. "
         "After a license and final price are selected, call purchase_x402_asset "
         "to pay autonomously only within the configured delegated per-payment "
@@ -34,9 +39,9 @@ root_agent = Agent(
         "PAYMENT-RESPONSE."
     ),
     tools=[
+        seller_agent_tool,
         get_x402_payment_terms,
         negotiate_license,
         purchase_x402_asset,
     ],
-    sub_agents=[seller_agent],
 )
