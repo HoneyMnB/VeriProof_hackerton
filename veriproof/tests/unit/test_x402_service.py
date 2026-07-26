@@ -19,7 +19,42 @@ import pytest
 
 _USDC_MINT = "USDCMINT111111111111111111111111111111111"
 _ESCROW = "EscrowWallet111111111111111111111111111111111"
-_CREATOR_WALLET = "CreatorWallet111111111111111111111111111111111"
+_CREATOR_WALLET = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+_NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
+
+
+class _ProtocolStub:
+    """네트워크 없이 x402 서비스의 도메인 매핑만 검증하는 대역이다."""
+
+    def build_challenge(self, **kwargs):
+        from services.x402_protocol_service import X402Challenge
+
+        amount = int(decimal.Decimal(kwargs["amount_usdc"]) * decimal.Decimal("1000000"))
+        body = {
+            "x402Version": 2,
+            "error": "Payment required",
+            "resource": {
+                "url": kwargs["resource_url"],
+                "description": kwargs["description"],
+                "mimeType": "application/json",
+            },
+            "accepts": [
+                {
+                    "scheme": "exact",
+                    "network": _NETWORK,
+                    "asset": kwargs["usdc_mint"],
+                    "amount": str(amount),
+                    "payTo": kwargs["pay_to"],
+                    "maxTimeoutSeconds": 300,
+                    "extra": {"feePayer": "Facilitator111", "memo": kwargs["memo"]},
+                }
+            ],
+        }
+        return X402Challenge(
+            headers={"PAYMENT-REQUIRED": "encoded-v2"},
+            body=body,
+            payment_required=SimpleNamespace(accepts=[]),
+        )
 
 
 # --- Fixtures (plain objects; no DB) -----------------------------------------
@@ -59,7 +94,8 @@ def _svc() -> "X402Service":  # type: ignore[name-defined]  # forward ref
         ap2_enabled=False,
         usdc_mint=_USDC_MINT,
         escrow_pubkey=_ESCROW,
-        network="devnet",
+        network=_NETWORK,
+        protocol_service=_ProtocolStub(),
     )
 
 
@@ -123,7 +159,7 @@ def test_build_payment_required_headers_present():
     asset = _make_asset()
     headers, _body = svc.build_payment_required(asset)
 
-    assert headers["X-402-Payment-Required"] == "true"
+    assert headers["PAYMENT-REQUIRED"] == "encoded-v2"
     assert headers["X-Agent-Protocol"] == "x402"
     assert headers["X-402-Negotiation-Endpoint"] == "/api/v1/ip/asset-uuid-1/negotiate"
     # R5b: standalone asset -> creator wallet.
@@ -137,28 +173,17 @@ def test_build_payment_required_body_schema():
     asset = _make_asset()
     _headers, body = svc.build_payment_required(asset)
 
-    assert body["error"] == "Payment or License Required"
-    assert body["asset_id"] == "asset-uuid-1"
-    assert body["preview_url"] == "/previews/asset-uuid-1/watermark"
-    assert body["x402_version"] == "1"
+    assert body["error"] == "Payment required"
+    assert body["x402Version"] == 2
+    assert body["resource"]["url"] == "/api/v1/ip/asset-uuid-1"
 
     accepts = body["accepts"]
     assert isinstance(accepts, list) and len(accepts) == 1
     accept = accepts[0]
-    assert accept["scheme"] == "solana-usdc"
-    assert accept["network"] == "devnet"
-    assert accept["mint"] == _USDC_MINT
-    assert accept["pay_to"] == _CREATOR_WALLET  # R5b standalone
-
-    how = body["how_to_negotiate"]
-    assert how["endpoint"] == "/api/v1/ip/asset-uuid-1/negotiate"
-    assert how["method"] == "POST"
-    assert set(how["required_payload"].keys()) == {
-        "buyer_agent_id",
-        "offer_usdc",
-        "usage_type",
-    }
-    assert how["settle_endpoint"] == "/api/v1/ip/asset-uuid-1/settle"
+    assert accept["scheme"] == "exact"
+    assert accept["network"] == _NETWORK
+    assert accept["asset"] == _USDC_MINT
+    assert accept["payTo"] == _CREATOR_WALLET
 
 
 def test_build_payment_required_uses_target_price_as_max_amount():
@@ -169,7 +194,7 @@ def test_build_payment_required_uses_target_price_as_max_amount():
 
     accept = body["accepts"][0]
     # Compare as Decimals (the body serialises as str of the decimal).
-    assert decimal.Decimal(str(accept["max_amount_required"])) == decimal.Decimal("2.75")
+    assert accept["amount"] == "2750000"
 
 
 # === Payment Recipient Resolution (R5b / AC-8 / AC-9) ========================
@@ -192,7 +217,7 @@ def test_pay_to_is_creator_for_standalone_asset():
     svc = _svc()
     headers, body = svc.build_payment_required(asset)
     assert headers["X-Solana-Pay-Address"] == _CREATOR_WALLET
-    assert body["accepts"][0]["pay_to"] == _CREATOR_WALLET
+    assert body["accepts"][0]["payTo"] == _CREATOR_WALLET
 
 
 def test_pay_to_is_escrow_for_secondary_asset():
@@ -211,7 +236,7 @@ def test_pay_to_is_escrow_for_secondary_asset():
     svc = _svc()
     headers, body = svc.build_payment_required(secondary)
     assert headers["X-Solana-Pay-Address"] == _ESCROW
-    assert body["accepts"][0]["pay_to"] == _ESCROW
+    assert body["accepts"][0]["payTo"] == _ESCROW
 
 
 def test_resolve_pay_to_reads_settings_when_escrow_not_given(settings):

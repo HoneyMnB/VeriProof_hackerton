@@ -195,3 +195,19 @@ Income is not copied into this table: it is calculated from verified
   문법 검사는 통과했다.
 - Alembic 필요 여부: 불필요. 이 Django 프로젝트는
   `apps/accounts/migrations/0004_prepare_creator_wallets.py`를 적용한다.
+
+## 2026-07-26 — 자율 결제 데모 수취 지갑 보정
+
+- 변경: `seed_demo_catalog`가 `DEMO_CREATOR_WALLET`의 제어 가능한 Solana
+  Devnet 공개키를 필수로 사용한다. 기존 데모 이미지 해시와 일치하지만 다른
+  창작자에 연결된 자산은 현재 데모 창작자로 재연결하고 목업 등록 인증서를
+  현재 공개키 기준으로 다시 발급한다.
+- 이유: 과거 시스템 프로그램 주소(`111...`)는 개인키가 있는 판매자 지갑이
+  아니므로 실제 x402 USDC 수취 및 최종 정산 테스트에 사용할 수 없었다.
+- 영향 범위: 명시적으로 `seed_demo_catalog`를 실행한 로컬 데모 자산에만
+  적용한다. 일반 창작자 자산, 라이선스 및 결제 내역은 변경하지 않는다.
+- 검증: Django system check와 migration 불변 검사는 통과했고 Buyer 자율 결제
+  정책 계약을 실행 검증했다. 실제 `seed_demo_catalog` 재실행은 기존 로컬 DB를
+  변경하므로 이번 작업에서는 수행하지 않았다.
+- Alembic 필요 여부: 불필요. DB 스키마 변경 없이 로컬 데모 운영 데이터만
+  보정한다.

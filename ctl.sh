@@ -210,9 +210,9 @@ case $1 in
     adk-ui)
         shift
         PORT=8002:8002
-        IMAGE_NAME="api"
+        IMAGE_NAME="buyer-agent"
         SERVICE_NAME="adk-ui"
-        IMAGE_COMMAND="adk web --host 0.0.0.0 --port 8002 /app"
+        IMAGE_COMMAND="adk web --host 0.0.0.0 --port 8002 /app/agents"
         MOUNT_MEDIA=true
         run_command "$@"
         ;;

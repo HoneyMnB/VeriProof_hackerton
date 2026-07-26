@@ -20,7 +20,9 @@ from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
 from apps.ip.models import IpAsset
+from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
+from apps.settlement.services import get_settlement_service
 from services.catalog_service import get_catalog_service
 from services.event_recorder import get_event_recorder
 from services.preview_service import watermark_preview_url
@@ -34,6 +36,7 @@ from services.registration_service import (
     get_registration_service,
 )
 from services.x402_service import get_x402_service
+from services.x402_protocol_service import X402PaymentInvalid, X402ProtocolError
 
 logger = logging.getLogger(__name__)
 
@@ -383,7 +386,34 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     # Unlicensed — classify the client (R6/R7).
     x402 = get_x402_service()
     if x402.classify_client(request) == "agent":
-        return _payment_required_response(request, asset, x402)
+        session = _accepted_x402_session(request, asset)
+        if request.GET.get("session_id") and session is None:
+            return _error(
+                "invalid_negotiation_session",
+                "accepted negotiation session not found for this asset",
+                status=409,
+            )
+        amount = (
+            session.final_price_usdc
+            if session is not None
+            else asset.target_price_usdc
+        )
+        payment_signature = request.headers.get("PAYMENT-SIGNATURE")
+        if payment_signature:
+            return _settle_x402_request(
+                request,
+                asset,
+                session,
+                amount,
+                payment_signature,
+                x402,
+            )
+        return _payment_required_response(
+            request,
+            asset,
+            x402,
+            amount_usdc=amount,
+        )
 
     # R7 / AC-4: browser fallback (200 Solana Pay).
     return JsonResponse(x402.build_solana_pay_fallback(asset), status=200)
@@ -412,10 +442,26 @@ def _licensed_response(asset: IpAsset, license: License) -> JsonResponse:
 
 
 def _payment_required_response(
-    request: HttpRequest, asset: IpAsset, x402_service
+    request: HttpRequest,
+    asset: IpAsset,
+    x402_service,
+    *,
+    amount_usdc: decimal.Decimal | None = None,
 ) -> JsonResponse:
-    """Build the 402 response (R3/R4/R5) and record the HTTP_402 event (R9)."""
-    headers, body = x402_service.build_payment_required(asset)
+    """공식 x402 V2 402 응답을 만들고 관측 이벤트를 기록한다."""
+    try:
+        headers, body = x402_service.build_payment_required(
+            asset,
+            resource_url=request.build_absolute_uri(),
+            amount_usdc=amount_usdc,
+        )
+    except X402ProtocolError as exc:
+        logger.error("x402 payment terms unavailable asset=%s error=%s", asset.id, exc)
+        return _error(
+            "x402_unavailable",
+            "payment facilitator is temporarily unavailable",
+            status=503,
+        )
     response = JsonResponse(body, status=402)
     for name, value in headers.items():
         response[name] = value
@@ -429,6 +475,87 @@ def _payment_required_response(
         asset=asset,
     )
     return response
+
+
+def _settle_x402_request(
+    request: HttpRequest,
+    asset: IpAsset,
+    session: NegotiationSession | None,
+    amount_usdc: decimal.Decimal,
+    payment_signature: str,
+    x402_service,
+) -> JsonResponse:
+    """동일 GET에 제출된 공식 x402 결제를 정산하고 라이선스를 발급한다."""
+    try:
+        challenge = x402_service.build_challenge(
+            asset,
+            resource_url=request.build_absolute_uri(),
+            amount_usdc=amount_usdc,
+        )
+        settled = x402_service.settle_payment_signature(
+            payment_signature=payment_signature,
+            challenge=challenge,
+        )
+    except X402PaymentInvalid as exc:
+        logger.info("x402 payment rejected asset=%s error=%s", asset.id, exc)
+        return _payment_required_response(
+            request,
+            asset,
+            x402_service,
+            amount_usdc=amount_usdc,
+        )
+    except X402ProtocolError as exc:
+        logger.error("x402 settlement unavailable asset=%s error=%s", asset.id, exc)
+        return _error(
+            "x402_unavailable",
+            "payment facilitator is temporarily unavailable",
+            status=503,
+        )
+
+    result = get_settlement_service().settle_pipeline(
+        asset=asset,
+        session=session,
+        tx_signature=settled.transaction,
+        buyer_wallet=settled.payer,
+        expected_amount=amount_usdc,
+        usage_type=(session.usage_type if session is not None else "commercial"),
+        payment_already_verified=True,
+    )
+    if not result.ok or result.license is None:
+        logger.error(
+            "x402 domain settlement failed after on-chain settlement asset=%s tx=%s",
+            asset.id,
+            settled.transaction,
+        )
+        return _error(
+            "license_issue_failed",
+            "payment settled but license issuance must be retried",
+            status=503,
+        )
+
+    response = _licensed_response(asset, result.license)
+    response["PAYMENT-RESPONSE"] = settled.response_header
+    response["Access-Control-Expose-Headers"] = "PAYMENT-RESPONSE"
+    return response
+
+
+def _accepted_x402_session(
+    request: HttpRequest,
+    asset: IpAsset,
+) -> NegotiationSession | None:
+    """요청한 자산에 속한 수락 완료 협상만 x402 가격에 반영한다."""
+    session_id = request.GET.get("session_id")
+    if not session_id:
+        return None
+    try:
+        return NegotiationSession.objects.filter(
+            id=session_id,
+            asset=asset,
+            status=NegotiationSession.ACCEPTED,
+            final_price_usdc__isnull=False,
+        ).first()
+    except (TypeError, ValueError):
+        return None
 
 
 # === GET /api/v1/ip/{asset_id}/certificate/{cert_id} (SPEC-004) ==============

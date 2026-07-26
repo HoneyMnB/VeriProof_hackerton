@@ -1,0 +1,445 @@
+{
+  "info": {
+    "_postman_id": "8bd65368-2b12-4ab9-bb55-0b89f9004544",
+    "name": "VeriProof A2A",
+    "description": "Seller Agent A와 Buyer Agent B의 A2A 탐색, 직접 호출, 원격 위임을 검증합니다. VeriProof Local A2A 환경을 선택하고 위에서 아래 순서로 실행하세요.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01. Agent Card",
+      "item": [
+        {
+          "name": "Seller Agent Card 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{seller_base_url}}/.well-known/agent-card.json",
+            "description": "Seller Agent A의 공식 Agent Card를 조회합니다. Card의 web:8080 주소는 Docker 내부 주소이므로 Postman 직접 호출에는 seller_a2a_url을 사용합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const card = pm.response.json();",
+                  "pm.test(\"Seller Agent Card 계약 확인\", function () {",
+                  "    pm.expect(card.name).to.eql(\"VeriProof Seller Agent\");",
+                  "    pm.expect(card.supportedInterfaces).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(card.supportedInterfaces[0].protocolBinding).to.eql(\"JSONRPC\");",
+                  "    pm.expect(card.skills).to.be.an(\"array\").that.is.not.empty;",
+                  "});",
+                  "pm.collectionVariables.set(\"seller_advertised_a2a_url\", card.supportedInterfaces[0].url);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buyer Agent Card 조회",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{buyer_base_url}}/.well-known/agent-card.json",
+            "description": "Buyer Agent B의 Agent Card와 공개된 스킬 메타데이터를 확인합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const card = pm.response.json();",
+                  "pm.test(\"Buyer Agent Card 계약 확인\", function () {",
+                  "    pm.expect(card.name).to.eql(\"veriproof_buyer_agent\");",
+                  "    pm.expect(card.supportedInterfaces).to.be.an(\"array\").that.is.not.empty;",
+                  "    pm.expect(card.skills).to.be.an(\"array\").that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02. Seller Agent 직접 호출",
+      "item": [
+        {
+          "name": "공개 라이선스 이미지 검색",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": \"{{$guid}}\",\n  \"method\": \"message/send\",\n  \"params\": {\n    \"message\": {\n      \"role\": \"user\",\n      \"messageId\": \"{{$guid}}\",\n      \"parts\": [\n        {\n          \"kind\": \"text\",\n          \"text\": \"Find any public image currently available for licensing. Report only verified catalog data including the asset title, ID, and published USDC terms.\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{seller_a2a_url}}",
+            "description": "Buyer를 거치지 않고 Seller Agent와 실제 Django 카탈로그 도구를 확인합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const payload = pm.response.json();",
+                  "pm.test(\"JSON-RPC 성공 응답\", function () {",
+                  "    pm.expect(payload.jsonrpc).to.eql(\"2.0\");",
+                  "    pm.expect(payload.error).to.be.undefined;",
+                  "    pm.expect(payload.result).to.be.an(\"object\");",
+                  "});",
+                  "if (payload.result && payload.result.kind === \"task\") {",
+                  "    pm.test(\"Seller Task 완료\", function () {",
+                  "        pm.expect(payload.result.status.state).to.eql(\"completed\");",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03. Buyer → Seller 위임",
+      "item": [
+        {
+          "name": "검색 결과 없음",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": \"{{$guid}}\",\n  \"method\": \"message/send\",\n  \"params\": {\n    \"message\": {\n      \"role\": \"user\",\n      \"messageId\": \"{{$guid}}\",\n      \"parts\": [\n        {\n          \"kind\": \"text\",\n          \"text\": \"Find a sea image available for licensing under 10 USDC. Use the VeriProof seller agent and report only verified catalog results.\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{buyer_a2a_url}}",
+            "description": "조건과 일치하는 자산이 없을 때 Buyer가 자산이나 가격을 만들어내지 않는지 확인합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const payload = pm.response.json();",
+                  "pm.test(\"Buyer Task 완료\", function () {",
+                  "    pm.expect(payload.error).to.be.undefined;",
+                  "    pm.expect(payload.result.kind).to.eql(\"task\");",
+                  "    pm.expect(payload.result.status.state).to.eql(\"completed\");",
+                  "});",
+                  "const answers = [];",
+                  "(payload.result.artifacts || []).forEach(function (artifact) {",
+                  "    (artifact.parts || []).forEach(function (part) {",
+                  "        if (part.kind === \"text\" && part.text) { answers.push(part.text); }",
+                  "    });",
+                  "});",
+                  "pm.test(\"자연어 응답 반환\", function () { pm.expect(answers.join(\"\\n\")).not.to.eql(\"\"); });",
+                  "pm.collectionVariables.set(\"last_task_id\", payload.result.id);",
+                  "pm.collectionVariables.set(\"last_context_id\", payload.result.contextId || \"\");",
+                  "pm.collectionVariables.set(\"last_answer\", answers.join(\"\\n\"));",
+                  "console.log(\"Buyer 응답:\", answers.join(\"\\n\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "실제 공개 자산 검색",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": \"{{$guid}}\",\n  \"method\": \"message/send\",\n  \"params\": {\n    \"message\": {\n      \"role\": \"user\",\n      \"messageId\": \"{{$guid}}\",\n      \"parts\": [\n        {\n          \"kind\": \"text\",\n          \"text\": \"Find any public image currently available for licensing. Use the VeriProof seller agent and report the verified asset title, ID, and published USDC terms.\"\n        }\n      ]\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{buyer_a2a_url}}",
+            "description": "현재 DB의 공개 자산이 있으면 Asset ID와 USDC 조건이 반환되는 양성 경로입니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const payload = pm.response.json();",
+                  "pm.test(\"Buyer Task 정상 완료\", function () {",
+                  "    pm.expect(payload.error).to.be.undefined;",
+                  "    pm.expect(payload.result.kind).to.eql(\"task\");",
+                  "    pm.expect(payload.result.status.state).to.eql(\"completed\");",
+                  "});",
+                  "const answers = [];",
+                  "(payload.result.artifacts || []).forEach(function (artifact) {",
+                  "    (artifact.parts || []).forEach(function (part) {",
+                  "        if (part.kind === \"text\" && part.text) { answers.push(part.text); }",
+                  "    });",
+                  "});",
+                  "const answer = answers.join(\"\\n\");",
+                  "pm.test(\"검증된 라이선스 응답 반환\", function () {",
+                  "    pm.expect(answer).not.to.eql(\"\");",
+                  "    pm.expect(answer.toUpperCase()).to.include(\"USDC\");",
+                  "});",
+                  "pm.collectionVariables.set(\"last_task_id\", payload.result.id);",
+                  "pm.collectionVariables.set(\"last_context_id\", payload.result.contextId || \"\");",
+                  "pm.collectionVariables.set(\"last_answer\", answer);",
+                  "console.log(\"Buyer 응답:\", answer);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04. x402 V2 결제",
+      "item": [
+        {
+          "name": "결제 조건 조회 (402)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Protocol",
+                "value": "x402"
+              }
+            ],
+            "url": "{{seller_base_url}}/api/v1/ip/{{asset_id}}?session_id={{session_id}}",
+            "description": "공식 x402 V2 PAYMENT-REQUIRED 헤더를 확인합니다. 협상 전이면 session_id를 비워 둡니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 402 응답\", function () { pm.response.to.have.status(402); });",
+                  "const encoded = pm.response.headers.get(\"PAYMENT-REQUIRED\");",
+                  "pm.test(\"표준 PAYMENT-REQUIRED 헤더\", function () { pm.expect(encoded).to.be.a(\"string\").and.not.empty; });",
+                  "const required = JSON.parse(decodeURIComponent(escape(atob(encoded))));",
+                  "pm.test(\"x402 V2 Exact Solana 조건\", function () {",
+                  "    pm.expect(required.x402Version).to.eql(2);",
+                  "    pm.expect(required.accepts[0].scheme).to.eql(\"exact\");",
+                  "    pm.expect(required.accepts[0].network).to.match(/^solana:/);",
+                  "});",
+                  "pm.collectionVariables.set(\"payment_required_header\", encoded);",
+                  "console.log(\"x402 결제 조건:\", required);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "라이선스 가격 협상",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Protocol",
+                "value": "x402"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"buyer_agent_id\": \"postman-buyer\",\n  \"offer_usdc\": {{offer_usdc}},\n  \"usage_type\": \"commercial\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{seller_base_url}}/api/v1/ip/{{asset_id}}/negotiate",
+            "description": "협상 결과가 ACCEPT이면 session_id를 저장하고 다음 402 조회에서 협상 가격을 사용합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"협상 API 정상 응답\", function () { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });",
+                  "const body = pm.response.json();",
+                  "if (body.session_id) { pm.collectionVariables.set(\"session_id\", body.session_id); }",
+                  "console.log(\"협상 결과:\", body);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "외부 지갑 서명 제출 (동일 GET)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Accept",
+                "value": "application/json"
+              },
+              {
+                "key": "X-Agent-Protocol",
+                "value": "x402"
+              },
+              {
+                "key": "PAYMENT-SIGNATURE",
+                "value": "{{payment_signature}}"
+              }
+            ],
+            "url": "{{seller_base_url}}/api/v1/ip/{{asset_id}}?session_id={{session_id}}",
+            "description": "개인키는 Postman이나 Agent에 넣지 않습니다. 공식 x402 SVM 클라이언트와 외부 지갑이 만든 PAYMENT-SIGNATURE를 변수에 넣은 뒤 실행합니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"라이선스 발급 성공\", function () { pm.response.to.have.status(200); });",
+                  "const encoded = pm.response.headers.get(\"PAYMENT-RESPONSE\");",
+                  "pm.test(\"표준 PAYMENT-RESPONSE 헤더\", function () { pm.expect(encoded).to.be.a(\"string\").and.not.empty; });",
+                  "const settled = JSON.parse(decodeURIComponent(escape(atob(encoded))));",
+                  "pm.test(\"체인 정산 성공\", function () { pm.expect(settled.success).to.eql(true); });",
+                  "console.log(\"x402 정산 결과:\", settled);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05. Task 조회",
+      "item": [
+        {
+          "name": "마지막 Buyer Task 조회",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"jsonrpc\": \"2.0\",\n  \"id\": \"{{$guid}}\",\n  \"method\": \"tasks/get\",\n  \"params\": {\n    \"id\": \"{{last_task_id}}\",\n    \"historyLength\": 10\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": "{{buyer_a2a_url}}",
+            "description": "바로 앞 Buyer 요청에서 저장한 Task를 조회합니다. Buyer 컨테이너 재시작 후에는 인메모리 Task가 사라집니다."
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
+                  "const payload = pm.response.json();",
+                  "pm.test(\"마지막 Task 조회 성공\", function () {",
+                  "    pm.expect(payload.error).to.be.undefined;",
+                  "    pm.expect(payload.result.id).to.eql(pm.collectionVariables.get(\"last_task_id\"));",
+                  "    pm.expect(payload.result.status.state).to.eql(\"completed\");",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "seller_advertised_a2a_url",
+      "value": ""
+    },
+    {
+      "key": "last_task_id",
+      "value": ""
+    },
+    {
+      "key": "last_context_id",
+      "value": ""
+    },
+    {
+      "key": "last_answer",
+      "value": ""
+    },
+    {
+      "key": "asset_id",
+      "value": ""
+    },
+    {
+      "key": "offer_usdc",
+      "value": "1"
+    },
+    {
+      "key": "session_id",
+      "value": ""
+    },
+    {
+      "key": "payment_required_header",
+      "value": ""
+    },
+    {
+      "key": "payment_signature",
+      "value": ""
+    }
+  ]
+}

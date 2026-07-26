@@ -186,11 +186,12 @@ POST /api/v1/ip/{asset_id}/settle             결제 증명 검증과 라이선�
 ```text
 1. agent: manifest/OpenAPI 확인 -> catalog에서 공개 자산 선택
 2. agent: GET asset + X-Agent-Protocol: x402
-3. server: 유효 License가 없으면 HTTP 402 + payment-required envelope
+3. server: 유효 License가 없으면 HTTP 402 + `PAYMENT-REQUIRED`(x402 V2)
 4. agent: POST negotiate(buyer_agent_id, offer_usdc, usage_type)
 5. server: Gemini 협상 결과와 가격/라운드 불변식을 적용해 ACCEPT/COUNTER/REJECT
-6. agent: 수취자에게 USDC를 결제한 뒤 POST settle(tx_signature, buyer_wallet, session_id?)
-7. server: verifier 성공 시 License 멱등 생성, 인증서 발행 시도, 만료형 다운로드 URL 반환
+6. agent: 외부 지갑에서 x402 SVM 결제를 승인·서명
+7. agent: 동일 GET을 `PAYMENT-SIGNATURE` 및 `session_id?`와 함께 재호출
+8. server: Facilitator 검증·정산 후 License를 멱등 생성하고 `PAYMENT-RESPONSE`와 다운로드 URL 반환
 ```
 
 `GET /api/v1/ip/{asset_id}`에서 `X-Solana-Tx-Sig`가 해당 asset의 저장된 `License.payment_tx_sig`와 일치하면 200 `LICENSED`와 남은 기간의 download URL을 반환한다. 그렇지 않은 공개 자산은 요청 분류에 따라 agent에는 402, browser에는 200 Solana Pay URL을 반환한다. 비공개·미앵커·등록 인증서 없는 자산은 404다.
@@ -199,9 +200,9 @@ POST /api/v1/ip/{asset_id}/settle             결제 증명 검증과 라이선�
 
 `X402Service.classify_client()`는 `X-Agent-Protocol: x402` 또는 `Accept: application/json`이면 agent, `Accept: text/html`이면 browser로 판단한다. `Accept`가 없거나 `*/*`처럼 애매하면 보수적으로 agent로 본다.
 
-agent 402 응답에는 `X-402-Payment-Required: true`, `X-Agent-Protocol: x402`, 협상 endpoint, 수취 주소, USDC mint 헤더가 있고, 본문에는 `x402_version: "1"`, `scheme: "solana-usdc"`, `network: "devnet"`, `max_amount_required`(target price), `pay_to`, negotiate/settle endpoint가 있다. browser fallback은 동일 수취 규칙으로 `solana-pay:{address}?amount=...&spl-token=...` URI를 제공한다.
+agent 402 응답에는 공식 x402 V2 Base64 `PAYMENT-REQUIRED` 헤더가 있다. 디코딩한 본문은 `x402Version: 2`, `scheme: "exact"`, Solana Devnet CAIP-2 네트워크, USDC mint(`asset`), 최소 단위 금액(`amount`), 수취자(`payTo`), Facilitator `feePayer`를 포함한다. `X-402-Negotiation-Endpoint` 등은 VeriProof 협상 발견용 확장 헤더다. 결제 성공 응답은 공식 `PAYMENT-RESPONSE` 헤더를 반환한다. browser fallback은 동일 수취 규칙으로 `solana-pay:{address}?amount=...&spl-token=...` URI를 제공한다.
 
-정산 요청의 최소 본문은 `tx_signature`, `buyer_wallet`이며 `session_id`는 선택이다. `X402Service.parse_payment_submitted()`는 tx/buyer wallet/선택 amount를 `SubmittedPayment`으로 해석할 수 있지만, 단건 `/settle` view는 현재 이 helper를 직접 호출하지 않고 동등 필드를 자체 파싱한다. 이 중복 경계는 향후 하나의 입력 검증 경로로 합칠 후보이다.
+표준 경로는 외부 지갑이 만든 `PAYMENT-SIGNATURE`를 동일 GET에 제출한다. 기존 `POST /settle`의 `tx_signature`, `buyer_wallet`, 선택적 `session_id` 본문은 이전 클라이언트를 위한 호환 경로로 유지한다.
 
 ### 8.4 협상과 AP2 mandate
 

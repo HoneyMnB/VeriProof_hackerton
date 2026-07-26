@@ -8,7 +8,7 @@
 ---
 
 ## 1. 목적
-외부 AI 에이전트가 자산 URL에 접근할 때 라이선스 보유 여부를 판별하여, 미보유 시 `HTTP 402`와 **a2a-x402 payment-required** 스펙(협상·결제 방법)을 런타임에 즉시 전달한다. 사람(Non-agent) 클라이언트는 Solana Pay 고정가 폴백으로 안내한다.
+외부 AI 에이전트가 자산 URL에 접근할 때 라이선스 보유 여부를 판별하여, 미보유 시 `HTTP 402`와 공식 **x402 V2 PaymentRequired**를 런타임에 전달한다. 사람(Non-agent) 클라이언트는 Solana Pay 고정가 폴백으로 안내한다.
 
 ## 2. 범위
 - IN: 클라이언트 판별(미들웨어), 402 응답 생성(a2a-x402 정렬), 라이선스 검사, Solana Pay 폴백.
@@ -22,8 +22,9 @@
 - **R1** WHEN `GET /api/v1/ip/{asset_id}` 요청이 오면, the system SHALL 자산 존재 여부를 확인하고 없으면 404를 반환한다.
 - **R2** WHEN 요청 헤더 `X-Solana-Tx-Sig`가 존재하고 `LicenseService.is_licensed(asset, tx_sig)`가 참이면, the system SHALL 200과 원본 접근 정보(`download_url` 또는 서명 토큰)를 반환한다.
 - **R3** IF 유효 라이선스가 없으면 THEN the system SHALL `X402Service.build_payment_required(asset)`로 402 상태와 헤더/본문(§아키텍처 3.1)을 반환한다.
-- **R4** WHEN 402를 반환하면, the system SHALL 헤더 `X-402-Payment-Required: true`, `X-402-Negotiation-Endpoint`, `X-Solana-Pay-Address`, `X-Payment-Mint`를 포함한다.
-- **R5** WHEN 402 본문을 생성하면, the system SHALL `accepts`(scheme/network/mint/pay_to/max_amount_required)와 `how_to_negotiate`(endpoint/method/required_payload/settle_endpoint)와 `preview_url`을 포함한다.
+- **R4** WHEN 402를 반환하면, the system SHALL 공식 Base64 `PAYMENT-REQUIRED` 헤더와 협상 발견용 `X-402-Negotiation-Endpoint`를 포함한다.
+- **R5** WHEN 402 본문을 생성하면, the system SHALL x402 V2 `PaymentRequired` 스키마(`x402Version`, `resource`, `accepts`)를 사용하고 Exact/Solana CAIP-2/USDC 최소 단위/`payTo`/`feePayer`를 포함한다.
+- **R5c** WHEN 공식 `PAYMENT-SIGNATURE`가 제출되면, the system SHALL 동일 GET에서 Facilitator 검증·정산을 수행하고 성공 시 `PAYMENT-RESPONSE`와 라이선스 접근 정보를 반환한다.
 - **R5b** WHEN `pay_to`/`X-Solana-Pay-Address`를 설정하면, the system SHALL **결제 수취주소 해석 규칙**(아키텍처 §8)을 적용한다: `asset.parent_asset`가 있으면(2차 창작물) `PLATFORM_ESCROW_PUBKEY`, 없으면 `creator.wallet_address`. (S3 로열티 분배를 위해 2차 창작물은 반드시 에스크로로 라우팅)
 
 ### 클라이언트 판별
@@ -41,14 +42,15 @@
 | AC | 조건 | 기대결과 |
 |----|------|---------|
 | AC-1 | 존재하지 않는 asset_id | 404 |
-| AC-2 | 에이전트 요청(x402 헤더), 라이선스 없음 | 402 + 필수 헤더 4종 + 본문 accepts/how_to_negotiate |
+| AC-2 | 에이전트 요청(x402 헤더), 라이선스 없음 | 402 + `PAYMENT-REQUIRED` + x402 V2 본문 |
 | AC-3 | 에이전트 요청, 유효 라이선스 tx 보유 | 200 + download 정보 |
 | AC-4 | 브라우저 요청(Accept: text/html), 라이선스 없음 | 200 + Solana Pay 고정가 안내 |
-| AC-5 | 402 본문 스키마 | `preview_url`, `accepts[0].mint == USDC_MINT_ADDRESS` |
+| AC-5 | 402 본문 스키마 | `x402Version == 2`, `accepts[0].asset == USDC_MINT_ADDRESS` |
 | AC-6 | 402 반환 시 | HTTP_402 이벤트 1건 기록 |
 | AC-7 | 이미 발급된 라이선스 tx 재조회 | 온체인 재검증 호출 없음(mock 호출횟수 0) |
 | AC-8 | 일반 자산 402 | `pay_to == creator.wallet_address` |
 | AC-9 | 2차 창작물(parent 있음) 402 | `pay_to == PLATFORM_ESCROW_PUBKEY` |
+| AC-10 | 유효한 `PAYMENT-SIGNATURE` 동일 GET 재요청 | 200 + `PAYMENT-RESPONSE` + download 정보 |
 
 ---
 
@@ -58,9 +60,9 @@
 - `test_classify_agent_by_x_agent_protocol_header`
 - `test_classify_agent_by_accept_json`
 - `test_classify_browser_by_accept_html`
-- `test_build_payment_required_headers_present` — 헤더 4종.
-- `test_build_payment_required_body_schema` — accepts/how_to_negotiate/preview_url.
-- `test_build_payment_required_uses_target_price_as_max_amount`.
+- `test_build_payment_required_headers_present` — `PAYMENT-REQUIRED`와 협상 확장 헤더.
+- `test_build_payment_required_body_schema` — x402 V2 `PaymentRequired`.
+- `test_build_payment_required_uses_target_price_as_max_amount` — USDC 최소 단위 금액.
 - `test_pay_to_is_creator_for_standalone_asset` (AC-8).
 - `test_pay_to_is_escrow_for_secondary_asset` (AC-9, R5b).
 
@@ -72,6 +74,7 @@
 - `test_402_body_contains_usdc_mint` (AC-5).
 - `test_402_records_event` (AC-6).
 - `test_existing_license_skips_onchain_verify` (AC-7, mock 호출횟수 검증).
+- `test_payment_signature_retries_same_get_and_returns_payment_response` (AC-10).
 
 ---
 

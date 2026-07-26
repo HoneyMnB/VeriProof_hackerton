@@ -105,6 +105,7 @@ class SettlementService:
         buyer_wallet: str,
         expected_amount: decimal.Decimal | None = None,
         usage_type: str | None = None,
+        payment_already_verified: bool = False,
     ) -> SettlementResult:
         """Run the full settlement pipeline. R1/R2/R3/R4/R5/R6/R14/R14b/R15/R16.
 
@@ -121,17 +122,18 @@ class SettlementService:
         # A. Verify the on-chain USDC payment (R1/R2). Recipient comes from the
         # shared resolve_pay_to SSOT so settle matches 402/negotiate recipients.
         recipient = resolve_pay_to(asset)
-        verification = self.payment_verifier.verify_usdc_payment(
-            tx_signature,
-            expected_recipient=recipient,
-            expected_amount=amount,
-            mint=mint,
-        )
-        if not verification.is_valid:
-            # R3 / AC-2 / AC-3: invalid -> 400, no license granted.
-            return SettlementResult(
-                ok=False, status="INVALID", error="invalid_settlement"
+        if not payment_already_verified:
+            verification = self.payment_verifier.verify_usdc_payment(
+                tx_signature,
+                expected_recipient=recipient,
+                expected_amount=amount,
+                mint=mint,
             )
+            if not verification.is_valid:
+                # R3 / AC-2 / AC-3: invalid -> 400, no license granted.
+                return SettlementResult(
+                    ok=False, status="INVALID", error="invalid_settlement"
+                )
 
         # B. Grant the license (idempotent on payment_tx_sig). R4/R5/R7/R8.
         # PAYMENT_VERIFIED is fanned out inside grant (R15).

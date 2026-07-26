@@ -175,23 +175,26 @@
 
 ## Ⅶ. 외부 에이전트에게 스펙이 전달되는 2가지 방식
 
-### 1. 런타임 동적 전달 (a2a-x402 payment-required)
-외부 AI가 이미지 URL(`GET /api/v1/ip/{id}`)에 접근하면, 서버가 `HTTP 402`와 함께 협상·결제 스펙(JSON)을 즉시 실어 보냅니다:
+### 1. 런타임 동적 전달 (x402 V2 PaymentRequired)
+외부 AI가 이미지 URL(`GET /api/v1/ip/{id}`)에 접근하면, 서버가 `HTTP 402`와
+Base64 `PAYMENT-REQUIRED` 헤더를 반환합니다. 디코딩한 JSON은 다음 형태입니다:
 ```json
 {
-  "error": "Payment or License Required",
-  "asset_id": "<uuid>",
-  "preview_url": "<watermark_url>",
-  "x402_version": "1",
-  "accepts": [{ "scheme":"solana-usdc","network":"devnet","mint":"<USDC_MINT>","pay_to":"<creator_wallet>","max_amount_required":"<target_price>" }],
-  "how_to_negotiate": {
-    "endpoint": "/api/v1/ip/{id}/negotiate", "method": "POST",
-    "required_payload": {"buyer_agent_id":"string","offer_usdc":"float","usage_type":"string"},
-    "settle_endpoint": "/api/v1/ip/{id}/settle"
-  }
+  "x402Version": 2,
+  "resource": {"url": "https://<host>/api/v1/ip/<uuid>"},
+  "accepts": [{
+    "scheme": "exact",
+    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "asset": "<USDC_MINT>",
+    "amount": "<USDC 최소 단위>",
+    "payTo": "<creator_wallet>",
+    "extra": {"feePayer": "<facilitator_wallet>"}
+  }]
 }
 ```
-외부 에이전트는 이 응답을 읽고 즉시 다음 협상을 이어갑니다.
+외부 에이전트는 별도 협상 API를 호출할 수 있고, 외부 지갑이 만든
+`PAYMENT-SIGNATURE`를 동일 GET에 제출합니다. 성공 시 서버는
+`PAYMENT-RESPONSE`와 라이선스 접근 정보를 반환합니다.
 
 ### 2. 에이전트 레지스트리 / 플러그인 등록 (생태계 공개)
 `/.well-known/ai-plugin.json` 규격을 공개하여, x402 생태계(awesome-x402, x402-agent-kit 등)나 AI 도구 레지스트리에서 외부 개발자가 가져다 쓸 수 있게 합니다.

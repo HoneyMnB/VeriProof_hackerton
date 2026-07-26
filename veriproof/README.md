@@ -153,3 +153,6 @@ A2A in-memory task store. Keep each demo service at one Cloud Run instance.
 Before enabling horizontal scale-out or resumable/long-running A2A tasks,
 provide `to_a2a()` with a PostgreSQL-backed `DatabaseTaskStore` and a persistent
 ADK session service.
+
+The local delegated-wallet x402 purchase flow is documented in
+[`docs/autonomous-x402-payment.md`](../docs/autonomous-x402-payment.md).

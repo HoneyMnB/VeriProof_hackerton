@@ -1,6 +1,7 @@
 """에이전트 A 탐색 및 카탈로그 도구 계약 테스트."""
 
 import pytest
+from asgiref.sync import async_to_sync
 from starlette.testclient import TestClient
 
 
@@ -34,7 +35,7 @@ def test_agent_catalog_tool_returns_only_public_registered_assets():
         status=IpAsset.ANCHORED,
     )
 
-    result = search_licensable_assets("blue sea")
+    result = async_to_sync(search_licensable_assets)("blue sea")
 
     assert result["count"] == 1
     assert result["assets"][0]["asset_id"] == str(visible.id)

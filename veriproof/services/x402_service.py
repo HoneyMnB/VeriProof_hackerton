@@ -21,11 +21,14 @@ from typing import Any
 
 from ._payment import resolve_pay_to
 from ._types import SubmittedPayment
-
-# SPEC-002: the a2a-x402 payment-required envelope version this server speaks.
-X402_VERSION = "1"
-# SPEC-002 R5: the single payment scheme VeriProof accepts on devnet.
-SOLANA_USDC_SCHEME = "solana-usdc"
+from .x402_protocol_service import (
+    SOLANA_DEVNET_CAIP2,
+    X402Challenge,
+    X402ProtocolError,
+    X402ProtocolService,
+    X402Settlement,
+    get_x402_protocol_service,
+)
 # SPEC-002 R7: human-readable label for the Solana Pay QR fallback.
 SOLANA_PAY_LABEL = "VeriProof IP License"
 
@@ -45,8 +48,10 @@ class X402Service:
         self,
         ap2_enabled: bool | None = None,
         usdc_mint: str | None = None,
-        network: str = "devnet",
+        network: str = SOLANA_DEVNET_CAIP2,
         escrow_pubkey: str | None = None,
+        facilitator_url: str = "https://x402.org/facilitator",
+        protocol_service: X402ProtocolService | None = None,
     ) -> None:
         self.ap2_enabled = ap2_enabled
         self.usdc_mint = usdc_mint
@@ -55,6 +60,8 @@ class X402Service:
         # resolution rule when ``asset.parent_asset`` is set. ``None`` defers
         # to ``settings.PLATFORM_ESCROW_PUBKEY`` at call time.
         self.escrow_pubkey = escrow_pubkey
+        self.facilitator_url = facilitator_url
+        self._protocol_service = protocol_service
 
     # --- SPEC-002: client classification (R6 / R7) --------------------------
 
@@ -104,56 +111,76 @@ class X402Service:
 
     # --- SPEC-002: 402 envelope (R3 / R4 / R5 / R5b) ------------------------
 
-    def build_payment_required(self, asset: Any) -> tuple[dict, dict]:
-        """Build the 402 ``(headers, body)`` per architecture §3.1.
-
-        Implements the single payment-recipient resolution rule (§8):
-        ``parent_asset`` set -> escrow, else creator wallet.
-        """
+    def build_payment_required(
+        self,
+        asset: Any,
+        *,
+        resource_url: str | None = None,
+        amount_usdc: decimal.Decimal | None = None,
+    ) -> tuple[dict[str, str], dict[str, Any]]:
+        """공식 x402 V2 결제 조건과 VeriProof 협상 경로를 반환한다."""
         asset_id = str(asset.id)
-        # R5b: the shared SSOT helper; pass our resolved escrow pubkey so no
-        # settings access is needed inside the hot path.
         pay_to = resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey)
         negotiate_endpoint = f"/api/v1/ip/{asset_id}/negotiate"
         settle_endpoint = f"/api/v1/ip/{asset_id}/settle"
-
+        challenge = self.build_challenge(
+            asset,
+            resource_url=resource_url or f"/api/v1/ip/{asset_id}",
+            amount_usdc=amount_usdc,
+        )
         headers = {
-            "X-402-Payment-Required": "true",
+            **challenge.headers,
+            # 협상 API 발견과 기존 클라이언트 호환을 위한 VeriProof 확장 헤더다.
             "X-Agent-Protocol": "x402",
             "X-402-Negotiation-Endpoint": negotiate_endpoint,
             "X-Solana-Pay-Address": pay_to,
-            "X-Payment-Mint": self.usdc_mint,
+            "X-Payment-Mint": self.usdc_mint or "",
+            "X-402-Legacy-Settle-Endpoint": settle_endpoint,
         }
+        return headers, challenge.body
 
-        from services.preview_service import watermark_preview_url
+    def build_challenge(
+        self,
+        asset: Any,
+        *,
+        resource_url: str,
+        amount_usdc: decimal.Decimal | None = None,
+    ) -> X402Challenge:
+        """동일 GET 재요청의 검증에 사용할 자산별 결제 조건을 생성한다."""
+        return self._protocol().build_challenge(
+            resource_url=resource_url,
+            description=f"VeriProof asset {asset.id} license",
+            pay_to=resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey),
+            amount_usdc=amount_usdc or asset.target_price_usdc,
+            usdc_mint=self.usdc_mint or "",
+            memo=f"veriproof:{asset.id}",
+        )
 
-        body = {
-            "error": "Payment or License Required",
-            "asset_id": asset_id,
-            "preview_url": watermark_preview_url(asset.id),
-            "x402_version": X402_VERSION,
-            "accepts": [
-                {
-                    "scheme": SOLANA_USDC_SCHEME,
-                    "network": self.network,
-                    "mint": self.usdc_mint,
-                    "pay_to": pay_to,
-                    # R5 / AC: max_amount_required == target_price_usdc.
-                    "max_amount_required": str(asset.target_price_usdc),
-                }
-            ],
-            "how_to_negotiate": {
-                "endpoint": negotiate_endpoint,
-                "method": "POST",
-                "required_payload": {
-                    "buyer_agent_id": "string",
-                    "offer_usdc": "float",
-                    "usage_type": "string",
-                },
-                "settle_endpoint": settle_endpoint,
-            },
-        }
-        return headers, body
+    def settle_payment_signature(
+        self,
+        *,
+        payment_signature: str,
+        challenge: X402Challenge,
+    ) -> X402Settlement:
+        """공식 PAYMENT-SIGNATURE를 검증하고 Facilitator에서 정산한다."""
+        return self._protocol().verify_and_settle(
+            payment_signature=payment_signature,
+            challenge=challenge,
+        )
+
+    def _protocol(self) -> X402ProtocolService:
+        """동일 설정의 공식 x402 서버 인스턴스를 프로세스 안에서 재사용한다."""
+        if self._protocol_service is None:
+            try:
+                self._protocol_service = get_x402_protocol_service(
+                    self.facilitator_url,
+                    self.network,
+                )
+            except Exception as exc:
+                raise X402ProtocolError(
+                    "x402 Facilitator를 초기화할 수 없습니다."
+                ) from exc
+        return self._protocol_service
 
     # --- SPEC-002: Solana Pay browser fallback (R7) -------------------------
 
@@ -291,4 +318,10 @@ def get_x402_service() -> X402Service:
         ap2_enabled=getattr(settings, "AP2_ENABLED", False),
         usdc_mint=getattr(settings, "USDC_MINT_ADDRESS", None),
         escrow_pubkey=getattr(settings, "PLATFORM_ESCROW_PUBKEY", None),
+        facilitator_url=getattr(
+            settings,
+            "X402_FACILITATOR_URL",
+            "https://x402.org/facilitator",
+        ),
+        network=getattr(settings, "X402_NETWORK", SOLANA_DEVNET_CAIP2),
     )
