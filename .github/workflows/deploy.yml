@@ -109,9 +109,7 @@ jobs:
             local file="$1"
             local name="$2"
             local value="$3"
-            value="${value//\\/\\\\}"
-            value="${value//\"/\\\"}"
-            printf '%s="%s"\n' "$name" "$value" >> "$file"
+            printf '%s=%s\n' "$name" "$value" >> "$file"
           }
 
           append_env "$WEB_RUNTIME_ENV" GCP_PROJECT_ID "$GCP_PROJECT_ID"
