@@ -33,13 +33,20 @@ def _json_safe_asset(asset: Any) -> dict[str, Any]:
 def _search_licensable_assets(
     query: str,
     asset_type: AssetType | str | None = None,
+<<<<<<< HEAD
     maximum_price_sol: float | None = None,
+=======
+    maximum_price_usdc: float | None = None,
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
     limit: int = 10,
 ) -> dict[str, Any]:
     """동기 Django ORM 경로에서 공개 등록 자산을 검색한다."""
     try:
+<<<<<<< HEAD
 
         tool_log.info(f"query: {query}, asset_type: {asset_type}, maximum_price_sol: {maximum_price_sol}, limit: {limit}")
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
         canonical_asset_type = (
             AssetType(asset_type).value if asset_type else ""
         )
@@ -70,22 +77,38 @@ def _search_licensable_assets(
 async def search_licensable_assets(
     query: str,
     asset_type: AssetType | None = None,
+<<<<<<< HEAD
     maximum_price_sol: float | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """
     라이선스 구매가 가능한 공개 블록체인 등록 자산을 검색한다.
+=======
+    maximum_price_usdc: float | None = None,
+    limit: int = 10,
+) -> dict[str, Any]:
+    """라이선스 구매가 가능한 공개 블록체인 등록 자산을 검색한다.
+
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
     Args:
         query: 주제, 분위기, 스타일 등의 자연어 검색어.
         asset_type: image, document, audio, video, software, product, other 중
             하나인 선택 자산 유형. 사용자 표현을 번역하지 말고 이 표준 값을 사용한다.
+<<<<<<< HEAD
         maximum_price_sol: 선택 가능한 최대 최소 판매가(SOL).
+=======
+        maximum_price_usdc: 선택 가능한 최대 최소 판매가(USDC).
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
         limit: 1개에서 20개 사이의 최대 결과 수.
     """
     return await sync_to_async(_search_licensable_assets, thread_sensitive=True)(
         query,
         asset_type,
+<<<<<<< HEAD
         maximum_price_sol,
+=======
+        maximum_price_usdc,
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
         limit,
     )
 

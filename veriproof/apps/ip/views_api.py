@@ -21,7 +21,10 @@ from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
 from apps.ip.models import IpAsset
+<<<<<<< HEAD
 from apps.ip.browser_license_session import has_browser_payment_request
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
 from apps.settlement.services import get_settlement_service
@@ -769,19 +772,15 @@ def _settle_x402_request(
 ) -> JsonResponse:
     """동일 GET에 제출된 공식 x402 결제를 정산하고 라이선스를 발급한다."""
     try:
-        print("build_challenge:--------------------------------- ", request.build_absolute_uri())
         challenge = x402_service.build_challenge(
             asset,
             resource_url=request.build_absolute_uri(),
             amount_usdc=amount_usdc,
         )
-        print("challenge:--------------------------------- ", challenge)
         settled = x402_service.settle_payment_signature(
             payment_signature=payment_signature,
             challenge=challenge,
         )
-
-        print("settled:--------------------------------- ", settled)
     except X402PaymentInvalid as exc:
         logger.info("x402 payment rejected asset=%s error=%s", asset.id, exc)
         return _payment_required_response(
@@ -790,7 +789,6 @@ def _settle_x402_request(
             x402_service,
             amount_usdc=amount_usdc,
         )
-
     except X402ProtocolError as exc:
         logger.error("x402 settlement unavailable asset=%s error=%s", asset.id, exc)
         return _error(

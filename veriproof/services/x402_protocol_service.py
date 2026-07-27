@@ -130,7 +130,6 @@ class X402ProtocolService:
         """PAYMENT-SIGNATURE를 검증한 뒤 Facilitator를 통해 정산한다."""
         try:
             payload = decode_payment_signature_header(payment_signature)
-            print("[verify_and_settle] payload:--------------------------------- ", payload)
         except Exception as exc:  # SDK의 Base64·JSON·스키마 오류를 단일 경계로 변환한다.
             raise X402PaymentInvalid("PAYMENT-SIGNATURE 형식이 올바르지 않습니다.") from exc
 
@@ -138,7 +137,6 @@ class X402ProtocolService:
             challenge.payment_required.accepts,
             payload,
         )
-        print("[verify_and_settle] requirements:--------------------------------- ", requirements)
         if requirements is None:
             raise X402PaymentInvalid("제출된 결제가 현재 결제 조건과 일치하지 않습니다.")
 

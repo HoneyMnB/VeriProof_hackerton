@@ -53,7 +53,6 @@ class X402Service:
         usdc_mint: str | None = None,
         network: str = SOLANA_DEVNET_CAIP2,
         escrow_pubkey: str | None = None,
-        rpc_url: str | None = None,
         facilitator_url: str = "https://x402.org/facilitator",
         protocol_service: X402ProtocolService | None = None,
     ) -> None:

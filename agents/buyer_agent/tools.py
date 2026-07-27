@@ -77,6 +77,7 @@ def _session_query(session_id: str) -> dict[str, str]:
     return {"session_id": str(uuid.UUID(session_id))}
 
 
+<<<<<<< HEAD
 def _remember_accepted_session(
     tool_context: ToolContext | None,
     asset_id: str,
@@ -151,6 +152,11 @@ async def get_x402_payment_terms(
     asset_id: str,
     session_id: str = "",
     tool_context: ToolContext | None = None,
+=======
+async def get_x402_payment_terms(
+    asset_id: str,
+    session_id: str = "",
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 ) -> dict:
     """공식 x402 V2 결제 조건을 조회한다.
 
@@ -158,11 +164,18 @@ async def get_x402_payment_terms(
         asset_id: 구매할 VeriProof 자산 UUID.
         session_id: 수락된 협상 가격을 사용할 때의 선택적 세션 UUID.
     """
+<<<<<<< HEAD
     resolved_session_id = _resolve_session_id(asset_id, session_id, tool_context)
     async with httpx.AsyncClient(timeout=30) as client:
         response = await client.get(
             _asset_url(asset_id),
             params=_session_query(resolved_session_id),
+=======
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.get(
+            _asset_url(asset_id),
+            params=_session_query(session_id),
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
             headers={
                 "Accept": "application/json",
                 "X-Agent-Protocol": "x402",
@@ -192,6 +205,7 @@ async def get_x402_payment_terms(
     }
 
 
+<<<<<<< HEAD
 async def get_sol_payment_terms(asset_id: str) -> dict:
     """판매자가 직접 설정한 Devnet 네이티브 SOL 결제 조건을 조회한다.
 
@@ -209,12 +223,17 @@ async def get_sol_payment_terms(asset_id: str) -> dict:
     }
 
 
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 async def negotiate_license(
     asset_id: str,
     buyer_agent_id: str,
     offer_usdc: float,
     usage_type: str = "commercial",
+<<<<<<< HEAD
     tool_context: ToolContext | None = None,
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 ) -> dict:
     """판매자 Agent A의 라이선스 가격 협상 API를 호출한다.
 
@@ -237,6 +256,7 @@ async def negotiate_license(
                 "usage_type": usage_type,
             },
         )
+<<<<<<< HEAD
     body = _response_body(response)
     if isinstance(body, dict) and body.get("status") == "ACCEPT":
         _remember_accepted_session(tool_context, asset_id, body)
@@ -248,13 +268,21 @@ async def negotiate_license(
     return {
         "http_status": response.status_code,
         "body": body,
+=======
+    return {
+        "http_status": response.status_code,
+        "body": _response_body(response),
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
     }
 
 
 async def purchase_x402_asset(
     asset_id: str,
     session_id: str = "",
+<<<<<<< HEAD
     tool_context: ToolContext | None = None,
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 ) -> dict:
     """위임된 거래당 한도 안에서 자산을 자율 결제한다.
 
@@ -264,6 +292,7 @@ async def purchase_x402_asset(
 
     Args:
         asset_id: 구매할 VeriProof 자산 UUID.
+<<<<<<< HEAD
         session_id: 협상 가격을 적용할 수락 완료 세션 UUID. 생략하면 현재
             대화에서 이 자산에 대해 수락된 협상 세션을 사용한다.
     """
@@ -275,6 +304,15 @@ async def purchase_x402_asset(
         return await buyer.purchase(
             _asset_url(asset_id),
             params=_session_query(resolved_session_id),
+=======
+        session_id: 협상 가격을 적용할 수락 완료 세션 UUID.
+    """
+    try:
+        buyer = AutonomousX402Buyer()
+        return await buyer.purchase(
+            _asset_url(asset_id),
+            params=_session_query(session_id),
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
         )
     except AutonomousPaymentError as exc:
         return {
@@ -284,6 +322,7 @@ async def purchase_x402_asset(
         }
 
 
+<<<<<<< HEAD
 async def purchase_sol_asset(asset_id: str) -> dict:
     """판매자 설정 Devnet SOL 가격으로 자산을 자율 결제한다.
 
@@ -300,6 +339,8 @@ async def purchase_sol_asset(asset_id: str) -> dict:
         }
 
 
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 async def submit_x402_payment(
     asset_id: str,
     payment_signature: str,
