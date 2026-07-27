@@ -33,6 +33,7 @@ env:
   ARTIFACT_REGISTRY_REPOSITORY: ${{ secrets.ARTIFACT_REGISTRY_REPOSITORY }}
   WEB_SERVICE: ${{ 'veriproof-web' }}
   BUYER_AGENT_SERVICE: ${{ 'veriproof-buyer-agent' }}
+  ADK_UI_SERVICE: ${{ 'veriproof-adk-ui' }}
 
 jobs:
   deploy:
@@ -124,8 +125,17 @@ jobs:
           append_env "$BUYER_RUNTIME_ENV" BUYER_WALLET_SECRET_KEY \
             "$BUYER_WALLET_SECRET_KEY"
 
+          ADK_UI_ENABLED="$(
+            awk -F= '$1 == "ADK_UI_CLOUD_RUN_ENABLED" { print tolower($2) }' env.prod \
+              | tail -n 1
+          )"
+          if [[ "$ADK_UI_ENABLED" != "true" ]]; then
+            ADK_UI_ENABLED=false
+          fi
+
           echo "web=$WEB_RUNTIME_ENV" >> "$GITHUB_OUTPUT"
           echo "buyer=$BUYER_RUNTIME_ENV" >> "$GITHUB_OUTPUT"
+          echo "adk_ui_enabled=$ADK_UI_ENABLED" >> "$GITHUB_OUTPUT"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -213,6 +223,26 @@ jobs:
           region: ${{ env.GCP_REGION }}
           image: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/veriproof-buyer-agent:${{ github.event.inputs.version }}
           env_vars_file: ${{ steps.runtime_env.outputs.buyer }}
+
+      - name: Deploy ADK UI to Cloud Run
+        if: ${{ steps.runtime_env.outputs.adk_ui_enabled == 'true' }}
+        env:
+          IMAGE: ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.ARTIFACT_REGISTRY_REPOSITORY }}/veriproof-buyer-agent:${{ github.event.inputs.version }}
+          CLOUD_RUN_SERVICE_ACCOUNT: ${{ secrets.CLOUD_RUN_SERVICE_ACCOUNT }}
+          BUYER_RUNTIME_ENV: ${{ steps.runtime_env.outputs.buyer }}
+        run: |
+          set -euo pipefail
+
+          gcloud run deploy "$ADK_UI_SERVICE" \
+            --project "$GCP_PROJECT_ID" \
+            --region "$GCP_REGION" \
+            --image "$IMAGE" \
+            --service-account "$CLOUD_RUN_SERVICE_ACCOUNT" \
+            --env-vars-file "$BUYER_RUNTIME_ENV" \
+            --command adk \
+            --args web,--host,0.0.0.0,--port,8080,/app/agents \
+            --port 8080 \
+            --quiet
 
       - name: Create GitHub release
         env:
