@@ -731,7 +731,7 @@
         }
 
         /**
-         * 구독 활성화 폼을 바인딩한다. 플랜 목록을 로드하고 선택 플랜을 /api/v1/subscriptions/activate 로 활성화한다.
+         * 구독 플랜 목록을 로드한다. 활성화는 실제 결제 연동 전까지 서버가 거부한다.
          */
         function bindSubscription() {
             var form = byId("subscription-form");
@@ -750,11 +750,9 @@
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
                 var wallet = getWallet();
-                var payment = byId("subscription-payment").value.trim();
-                if (!wallet || !select.value || !payment) { setStatus("Connect a wallet, choose a plan, and enter the payment ID.", true); return; }
-                requestJson("/api/v1/subscriptions/activate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet, plan_code: select.value, payment_tx_sig: payment }) }).then(function (result) {
+                if (!wallet || !select.value) { setStatus("Connect a wallet and choose a plan.", true); return; }
+                requestJson("/api/v1/subscriptions/activate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet, plan_code: select.value }) }).then(function (result) {
                     if (!result.ok) { setStatus(result.body.detail || result.body.error || "Subscription could not be activated.", true); return; }
-                    byId("subscription-payment").value = "";
                     setStatus("Registration subscription activated.");
                     loadOverview();
                 });

@@ -118,7 +118,11 @@
                 <ol id="asset-settings-sales-list" class="asset-settings-modal__sales-list"></ol>
             </section>
             <a id="asset-settings-explorer" class="asset-settings-modal__explorer" target="_blank" rel="noopener" hidden data-i18n="library.asset.explorer">Solana Explorer verify</a>
-            <button type="submit" data-i18n="library.terms.save">Save listing settings</button><span class="asset-card__terms-status" role="status"></span>
+            <div class="asset-settings-modal__actions">
+                <button type="submit" data-i18n="library.terms.save">Save listing settings</button>
+                <button type="button" class="asset-settings-modal__delete" data-asset-delete data-i18n="library.terms.delete">Delete work</button>
+            </div>
+            <span class="asset-card__terms-status" role="status"></span>
         </form>
     </section>
 </div>

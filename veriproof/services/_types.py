@@ -99,6 +99,7 @@ class PaymentVerification:
     sender: str
     slot: int
     commitment: str | None = None
+    tx_signature: str | None = None
 
 
 @dataclass(frozen=True)

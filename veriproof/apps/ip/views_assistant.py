@@ -25,10 +25,6 @@ from services.registration_draft_service import (
     DraftValidationError,
     get_registration_draft_service,
 )
-from services.subscription_service import (
-    SubscriptionRequiredError,
-    get_subscription_service,
-)
 
 
 def status(request: HttpRequest) -> JsonResponse:
@@ -70,7 +66,7 @@ def history(request: HttpRequest) -> JsonResponse:
         items = service.history(wallet, conversation_id=conversation_id)
         conversations = service.conversation_summaries(wallet)
     except LookupError:
-        return JsonResponse({"error": "creator_not_found"}, status=404)
+        return JsonResponse({"items": [], "conversations": []})
     return JsonResponse({"items": items, "conversations": conversations})
 
 
@@ -170,21 +166,16 @@ def actions(request: HttpRequest) -> JsonResponse:
 
 @csrf_exempt
 def activate_subscription(request: HttpRequest) -> JsonResponse:
-    """로컬 데모 구독 결제를 활성화한다."""
+    """Reject subscription activation until a real payment path is wired."""
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
-    try:
-        data = json.loads(request.body or b"{}")
-        subscription = get_subscription_service().activate_mock_subscription(
-            str(data.get("creator_wallet") or "").strip(),
-            str(data.get("plan_code") or "").strip(),
-            str(data.get("payment_tx_sig") or "").strip(),
-        )
-    except (ValueError, json.JSONDecodeError, SubscriptionRequiredError) as exc:
-        return JsonResponse({"error": "invalid_subscription", "detail": str(exc)}, status=422)
-    except LookupError:
-        return JsonResponse({"error": "subscription_plan_not_found"}, status=404)
-    return JsonResponse({"subscription_id": subscription.id, "status": subscription.status}, status=201)
+    return JsonResponse(
+        {
+            "error": "subscription_payment_unavailable",
+            "detail": "subscription activation requires a real payment integration",
+        },
+        status=503,
+    )
 
 
 def subscription_plans(request: HttpRequest) -> JsonResponse:
@@ -298,6 +289,13 @@ def conversation_attachment(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 def registration_drafts(request: HttpRequest, draft_id=None) -> JsonResponse:
     """대화형 등록 캔버스의 초안을 저장·확정한다. 실제 등록은 하지 않는다."""
+    if request.method == "GET":
+        wallet = (
+            request.GET.get("creator")
+            or request.GET.get("wallet")
+            or _request_creator_wallet(request)
+        ).strip()
+        return JsonResponse({"items": _registration_draft_items(wallet)})
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
     payload, uploads, parse_error = _registration_draft_payload(request)
@@ -315,6 +313,29 @@ def registration_drafts(request: HttpRequest, draft_id=None) -> JsonResponse:
     except DraftValidationError as exc:
         return JsonResponse({"error": "invalid_draft", "detail": str(exc)}, status=422)
     return JsonResponse(result, status=200 if draft_id else 201)
+
+
+def _request_creator_wallet(request: HttpRequest) -> str:
+    """로그인 사용자의 설정 지갑을 반환한다. 없으면 빈 문자열."""
+    if not getattr(request, "user", None) or not request.user.is_authenticated:
+        return ""
+    preference = getattr(request.user, "veriproof_preferences", None)
+    return (getattr(preference, "creator_wallet", "") or "").strip()
+
+
+def _registration_draft_items(wallet: str) -> list[dict[str, object]]:
+    """지갑의 등록 초안 목록을 반환한다. 알 수 없는 지갑이면 빈 목록."""
+    if not wallet:
+        return []
+    from apps.ip.models import Creator, RegistrationDraft
+
+    creator = Creator.objects.filter(wallet_address=wallet).first()
+    if creator is None:
+        return []
+    return [
+        get_registration_draft_service().serialize(draft)
+        for draft in RegistrationDraft.objects.filter(creator=creator)[:50]
+    ]
 
 
 def _registration_draft_payload(request: HttpRequest):

@@ -4,7 +4,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ENV_FILE="$ROOT_DIR/.env"
 
 set -a
-. "$ENV_FILE"
+# Windows 편집기가 저장한 CRLF도 환경 변수 값에 ``\r`` 없이 읽는다.
+. <(sed 's/\r$//' "$ENV_FILE")
 set +a
 
 DOCKER_NETWORK="${DOCKER_NETWORK:-google-solana}"
@@ -69,6 +70,22 @@ configure_adc_mount()
     fi
 }
 
+configure_media_mount()
+{
+    MEDIA_RUN_ARGS=()
+
+    if [[ ${MOUNT_MEDIA:-false} != "true" ]]; then
+        return
+    fi
+
+    MEDIA_HOST_DIR="${MEDIA_HOST_PATH:-$ROOT_DIR/.runtime/media}"
+    mkdir -p "$MEDIA_HOST_DIR"
+
+    MEDIA_DOCKER_HOST_DIR="$(docker_host_path "$MEDIA_HOST_DIR")"
+    MEDIA_RUN_ARGS=(--mount "type=bind,source=$MEDIA_DOCKER_HOST_DIR,target=/app/media")
+    echo "Media directory: $MEDIA_HOST_DIR -> /app/media"
+}
+
 build()
 {
     if [[ $1 == "api" ]]; then
@@ -100,14 +117,22 @@ run()
         PORT_ARG="-p $PORT"
     fi
 
+    NETWORK_ALIAS_ARGS=()
+    if [[ -n ${NETWORK_ALIAS:-} ]]; then
+        NETWORK_ALIAS_ARGS=(--network-alias "$NETWORK_ALIAS")
+    fi
+
     configure_adc_mount
+    configure_media_mount
     DOCKER_ENV_FILE="$(docker_host_path "$ENV_FILE")"
 
     MSYS_NO_PATHCONV=1 docker run -dt \
     --name "$SERVICE_NAME" \
     --env-file "$DOCKER_ENV_FILE" \
     --network "$DOCKER_NETWORK" \
+    "${NETWORK_ALIAS_ARGS[@]}" \
     "${ADC_RUN_ARGS[@]}" \
+    "${MEDIA_RUN_ARGS[@]}" \
     $PORT_ARG \
     "$IMAGE_NAME" $IMAGE_COMMAND
 
@@ -167,7 +192,9 @@ case $1 in
         PORT=8000:8080
         IMAGE_NAME="api"
         SERVICE_NAME="cs-api"
+        NETWORK_ALIAS="web"
         IMAGE_COMMAND=
+        MOUNT_MEDIA=true
         run_command "$@"
         ;;
 
@@ -177,6 +204,16 @@ case $1 in
         IMAGE_NAME="buyer-agent"
         SERVICE_NAME="buyer-agent"
         IMAGE_COMMAND=
+        run_command "$@"
+        ;;
+
+    adk-ui)
+        shift
+        PORT=8002:8002
+        IMAGE_NAME="api"
+        SERVICE_NAME="adk-ui"
+        IMAGE_COMMAND="adk web --host 0.0.0.0 --port 8002 /app"
+        MOUNT_MEDIA=true
         run_command "$@"
         ;;
 

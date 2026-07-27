@@ -2,6 +2,13 @@
 from __future__ import annotations
 
 import pytest
+from django.test import override_settings
+
+
+_TEST_STATIC_STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
 
 
 @pytest.mark.django_db
@@ -137,8 +144,9 @@ def test_discovery_searches_creator_tags_and_preserves_work_type(client):
 
 
 @pytest.mark.django_db
+@override_settings(STORAGES=_TEST_STATIC_STORAGES)
 def test_public_detail_only_renders_watermarked_preview(client):
-    """사람용 상세 화면은 원본·비워터마크 썸네일 대신 결제 경로만 보여준다."""
+    """사람용 상세 화면은 원본·비워터마크 썸네일 대신 SOL 결제 진입만 보여준다."""
     from apps.ip.models import IpAsset
     from tests.factories import CreatorFactory, IpAssetFactory
 
@@ -150,7 +158,75 @@ def test_public_detail_only_renders_watermarked_preview(client):
     assert response.status_code == 200
     assert f"/previews/{asset.id}/watermark" in content
     assert "thumbnail" not in content
-    assert f"/api/v1/ip/{asset.id}/settle" in content
+    assert "solana:" in content
+    assert "cluster=devnet" in content
+    assert "reference=" in content
+    assert "SOL" in content
+    assert "<details" not in content
+    assert "payment-proof-form" not in content
+    assert "data-solana-pay-open" in content
+    assert "data-solana-pay-send" in content
+    assert "data-solana-pay-check" not in content
+    assert "Solpay request" not in content
+    assert "Copy request" in content
+    assert f"/api/v1/ip/{asset.id}/solpay/verify" in content
+    assert "Pay with Phantom" in content
+    assert "Solpay" in content
+    assert "chromewebstore.google.com" not in content
+    assert 'class="asset-detail__pay" href="solana:' not in content
+    assert 'class="asset-detail__wallet-link" href="solana:' not in content
+
+
+@pytest.mark.django_db
+def test_solpay_verify_grants_license_and_returns_download_url(client, monkeypatch):
+    """Solana Pay 검증 성공 후에만 기존 라이선스 다운로드 토큰을 발급한다."""
+    import decimal
+
+    from apps.ip.models import IpAsset
+    from apps.settlement.models import License
+    from services._types import PaymentVerification
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    asset = IpAssetFactory(
+        creator=CreatorFactory(),
+        visibility=IpAsset.PUBLIC,
+        status=IpAsset.ANCHORED,
+        target_price_usdc=decimal.Decimal("3.000000"),
+    )
+
+    class FakeSolanaService:
+        def __init__(self, rpc_url):
+            self.rpc_url = rpc_url
+
+        def verify_sol_payment_by_reference(self, *, reference, expected_recipient, expected_amount, expected_memo):
+            assert reference == "11111111111111111111111111111111"
+            assert expected_amount == decimal.Decimal("3.000000")
+            assert expected_memo == f"VERIPROOF:{asset.id}"
+            return PaymentVerification(
+                is_valid=True,
+                amount=decimal.Decimal("3.000000"),
+                sender="TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+                slot=123,
+                commitment="confirmed",
+                tx_signature="solpay_tx_001",
+            )
+
+    monkeypatch.setattr("apps.ip.views_api.SolanaService", FakeSolanaService)
+
+    response = client.post(
+        f"/api/v1/ip/{asset.id}/solpay/verify",
+        data='{"reference":"11111111111111111111111111111111"}',
+        content_type="application/json",
+    )
+    body = response.json()
+
+    assert response.status_code == 200
+    assert body["status"] == "PAID"
+    assert body["download_url"].startswith("/files/")
+    assert "tx_signature" not in body
+    license = License.objects.get(payment_tx_sig="solpay_tx_001")
+    assert license.asset_id == asset.id
+    assert body["download_url"] == f"/files/{license.download_token}"
 
 
 @pytest.mark.django_db

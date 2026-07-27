@@ -42,9 +42,9 @@ _SORT_OPTIONS = [
 # as strings so they survive the query-param round-trip unchanged.
 _PRICE_BUCKETS = [
     ("all", "Any price", None, None),
-    ("under5", "Under 5 USDC", None, "5"),
-    ("5to25", "5 – 25 USDC", "5", "25"),
-    ("over25", "25+ USDC", "25", None),
+    ("under5", "Under 5 SOL", None, "5"),
+    ("5to25", "5 - 25 SOL", "5", "25"),
+    ("over25", "25+ SOL", "25", None),
 ]
 
 
@@ -118,7 +118,6 @@ def asset_detail(request: HttpRequest, asset_id) -> HttpResponse:
             "gallery_images": _gallery_previews(asset),
             "payment": get_x402_service().build_solana_pay_fallback(asset),
             "active_nav": "discover",
-            "local_mock_payment": settings.DEBUG and settings.PAYMENT_VERIFIER == "mock",
         },
     )
 

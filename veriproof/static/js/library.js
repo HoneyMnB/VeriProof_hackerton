@@ -80,10 +80,19 @@
         var form = document.getElementById("asset-settings-form");
         if (!modal || !form) { return; }
         var lastTrigger = null;
+        var deleteButton = modal.querySelector("[data-asset-delete]");
         function close() {
             modal.hidden = true;
             document.body.style.overflow = "";
+            resetDeleteButton();
             if (lastTrigger) { lastTrigger.focus(); lastTrigger = null; }
+        }
+        function resetDeleteButton() {
+            if (!deleteButton) { return; }
+            deleteButton.dataset.confirming = "0";
+            deleteButton.classList.remove("is-confirming");
+            deleteButton.textContent = t("library.terms.delete");
+            deleteButton.disabled = false;
         }
         modal.addEventListener("click", function (event) {
             var target = event.target && event.target.closest ? event.target.closest("[data-asset-settings-close]") : null;
@@ -105,6 +114,9 @@
                 form.elements.title.value = data.title || "";
                 form.elements.description.value = data.description || "";
                 form.elements.tags.value = (data.tags || []).join(", ");
+                resetDeleteButton();
+                var status = form.querySelector(".asset-card__terms-status");
+                if (status) { status.textContent = ""; }
                 document.getElementById("asset-settings-name").textContent = data.title || card.querySelector("h3").textContent;
                 renderRegistration(data);
                 renderSales(data.sales_summary || {}, data.sales || []);
@@ -116,6 +128,53 @@
                 form.elements.min_price_usdc.focus();
             });
         });
+        if (deleteButton) {
+            deleteButton.addEventListener("click", function () {
+                var status = form.querySelector(".asset-card__terms-status");
+                if (deleteButton.dataset.confirming !== "1") {
+                    deleteButton.dataset.confirming = "1";
+                    deleteButton.classList.add("is-confirming");
+                    deleteButton.textContent = t("library.terms.delete_confirm");
+                    if (status) { status.textContent = t("library.terms.delete_hint"); }
+                    return;
+                }
+                deleteButton.disabled = true;
+                if (status) { status.textContent = t("library.terms.deleting"); }
+                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/delete", { method: "DELETE" }).then(function (response) {
+                    return response.text().then(function (text) {
+                        var body = {};
+                        if (text) {
+                            try { body = JSON.parse(text); } catch (e) { body = {}; }
+                        }
+                        return { ok: response.ok, body: body };
+                    });
+                }).then(function (result) {
+                    if (!result.ok) {
+                        resetDeleteButton();
+                        if (status) { status.textContent = result.body.detail || t("library.terms.delete_failed"); }
+                        return;
+                    }
+                    var card = document.getElementById("asset-" + form.dataset.assetId);
+                    if (card) { card.remove(); }
+                    close();
+                    updateEmptyLibraryState();
+                }).catch(function () {
+                    resetDeleteButton();
+                    if (status) { status.textContent = t("library.terms.delete_network"); }
+                });
+            });
+        }
+    }
+
+    function updateEmptyLibraryState() {
+        var grid = document.querySelector(".asset-grid");
+        var state = document.getElementById("library-state");
+        if (!grid || !state || grid.querySelector(".asset-card")) { return; }
+        grid.remove();
+        var empty = document.createElement("p");
+        empty.className = "no-assets";
+        empty.textContent = t("library.empty.noassets");
+        state.appendChild(empty);
     }
 
     /**

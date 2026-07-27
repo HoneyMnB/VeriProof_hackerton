@@ -14,7 +14,8 @@ import logging
 import uuid
 
 from django.conf import settings
-from django.http import HttpRequest, JsonResponse
+from django.db import transaction
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
@@ -23,6 +24,8 @@ from apps.ip.models import IpAsset
 from apps.settlement.models import License
 from services.catalog_service import get_catalog_service
 from services.event_recorder import get_event_recorder
+from services.license_service import get_license_service
+from services._payment import resolve_pay_to
 from services.preview_service import watermark_preview_url
 from services.registration_draft_service import (
     DraftValidationError,
@@ -34,6 +37,7 @@ from services.registration_service import (
     get_registration_service,
 )
 from services.x402_service import get_x402_service
+from services.solana_service import CertificateIssueError, SolanaService
 
 logger = logging.getLogger(__name__)
 
@@ -243,6 +247,31 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
     })
 
 
+@csrf_exempt
+def delete_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """소유 창작자가 요청한 작품을 실제 삭제한다."""
+    if request.method != "DELETE":
+        return _error("method_not_allowed", "DELETE required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to manage an IP asset", status=401)
+    asset = IpAsset.objects.filter(id=asset_id, account_owner=request.user).first()
+    if asset is None:
+        logger.warning("asset delete rejected user=%s asset_id=%s", request.user.get_username(), asset_id)
+        return _error("asset_not_found", "asset not found", status=404)
+    with transaction.atomic():
+        asset.derivatives.update(parent_asset=None, royalty_share_bps=None)
+        if hasattr(asset, "source_draft"):
+            asset.source_draft.executed_asset = None
+            asset.source_draft.save(update_fields=["executed_asset", "updated_at"])
+        asset.batch_items.all().delete()
+        asset.licenses.all().delete()
+        if hasattr(asset, "registration_charge"):
+            asset.registration_charge.delete()
+        asset.delete()
+    logger.info("asset deleted user=%s asset_id=%s", request.user.get_username(), asset_id)
+    return HttpResponse(status=204)
+
+
 def _is_valid_pubkey(value: str) -> bool:
     """SPEC-001 R10: validate a Solana base58 32-byte pubkey.
 
@@ -387,6 +416,84 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
 
     # R7 / AC-4: browser fallback (200 Solana Pay).
     return JsonResponse(x402.build_solana_pay_fallback(asset), status=200)
+
+
+@csrf_exempt
+def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Verify a browser Solana Pay native SOL payment by reference on Devnet."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_json", "JSON body required", status=422)
+    reference = str(data.get("reference") or "").strip()
+    if not _is_valid_pubkey(reference):
+        return _error("invalid_reference", "reference must be a valid Solana pubkey", status=422)
+
+    asset = IpAsset.objects.select_related("creator").filter(id=asset_id).first()
+    if (
+        asset is None
+        or asset.visibility != IpAsset.PUBLIC
+        or asset.status not in {IpAsset.ANCHORED, IpAsset.LISTED}
+        or not asset.registration_certificate_tx_sig
+    ):
+        return _error("not_found", "asset not found", status=404)
+
+    expected_memo = f"VERIPROOF:{asset.id}"
+    solana = SolanaService(rpc_url=settings.SOLANA_RPC_URL)
+    try:
+        verification = solana.verify_sol_payment_by_reference(
+            reference=reference,
+            expected_recipient=resolve_pay_to(asset),
+            expected_amount=asset.target_price_usdc,
+            expected_memo=expected_memo,
+        )
+    except CertificateIssueError as exc:
+        logger.warning("solpay verification failed asset_id=%s: %s", asset.id, exc)
+        return _error("solpay_verification_unavailable", "payment verification is temporarily unavailable", status=503)
+
+    if not verification.is_valid:
+        return JsonResponse(
+            {
+                "status": "PENDING",
+                "asset_id": str(asset.id),
+                "reference": reference,
+            },
+            status=202,
+        )
+    if not verification.tx_signature or not verification.sender:
+        logger.warning("solpay verification missing settlement fields asset_id=%s", asset.id)
+        return _error("solpay_verification_incomplete", "payment verification is incomplete", status=503)
+
+    try:
+        license = get_license_service().grant(
+            asset=asset,
+            buyer_wallet=verification.sender,
+            price=asset.target_price_usdc,
+            usage_type="commercial",
+            payment_tx=verification.tx_signature,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("solpay license grant failed asset_id=%s tx_sig=%s: %s", asset.id, verification.tx_signature, exc)
+        return _error("license_grant_failed", "license could not be granted", status=503)
+
+    expires_at = license.download_expires_at
+
+    return JsonResponse(
+        {
+            "status": "PAID",
+            "asset_id": str(asset.id),
+            "reference": reference,
+            "payer_wallet": verification.sender,
+            "amount_sol": str(verification.amount),
+            "download_url": f"/files/{license.download_token}" if license.download_token else None,
+            "download_expires_at": expires_at.isoformat() if expires_at else None,
+            "slot": verification.slot,
+            "commitment": verification.commitment,
+        },
+        status=200,
+    )
 
 
 def _licensed_response(asset: IpAsset, license: License) -> JsonResponse:

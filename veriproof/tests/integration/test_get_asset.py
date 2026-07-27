@@ -183,7 +183,14 @@ def test_browser_without_license_gets_solana_pay_fallback(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["solana_pay"]["address"] == VALID_WALLET
-    assert body["solana_pay"]["amount_usdc"]
+    assert body["solana_pay"]["asset"] == "SOL"
+    assert body["solana_pay"]["cluster"] == "devnet"
+    assert body["solana_pay"]["rpc_url"]
+    assert body["solana_pay"]["reference"]
+    assert body["solana_pay"]["amount_sol"]
+    assert "cluster=devnet" in body["solana_pay"]["uri"]
+    assert "reference=" in body["solana_pay"]["uri"]
+    assert "spl-token" not in body["solana_pay"]["uri"]
 
 
 # === AC-5: 402 body contains USDC mint ======================================

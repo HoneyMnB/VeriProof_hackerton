@@ -1,19 +1,14 @@
-"""로컬 결제 목업은 명시적 테스트 거래만 승인한다."""
+"""Runtime payment verification is real-only."""
 from __future__ import annotations
 
-import decimal
 
-from services.payment_verifier import LocalMockPaymentVerifier
+def test_payment_verifier_factory_returns_real_solana_service(settings):
+    from services.payment_verifier import get_payment_verifier
+    from services.solana_service import SolanaService
 
+    settings.SOLANA_RPC_URL = "https://api.devnet.solana.com"
+    settings.PLATFORM_ESCROW_SECRET_KEY = ""
 
-def test_local_mock_payment_verifier_accepts_only_explicit_mock_transaction():
-    verifier = LocalMockPaymentVerifier()
-    accepted = verifier.verify_usdc_payment(
-        "mock:local-a2a-001", "recipient", decimal.Decimal("1.25"), "mint"
-    )
-    rejected = verifier.verify_usdc_payment(
-        "real-looking-signature", "recipient", decimal.Decimal("1.25"), "mint"
-    )
-    assert accepted.is_valid is True
-    assert accepted.amount == decimal.Decimal("1.25")
-    assert rejected.is_valid is False
+    verifier = get_payment_verifier()
+
+    assert isinstance(verifier, SolanaService)

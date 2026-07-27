@@ -1,7 +1,6 @@
 """구독 권한과 등록·인증서 비용 사용 이력을 관리하는 유스케이스."""
 from __future__ import annotations
 
-import datetime
 import logging
 from typing import Any
 
@@ -17,24 +16,6 @@ class SubscriptionRequiredError(ValueError):
 class SubscriptionService:
     """창작자 구독 활성화·권한 검증·사용 차감을 담당하는 유스케이스."""
 
-    def activate_mock_subscription(self, wallet: str, plan_code: str, payment_tx_sig: str) -> Any:
-        """로컬 데모 결제 증빙으로 플랜을 활성화한다."""
-        from apps.ip.models import Creator, CreatorSubscription, SubscriptionPlan
-
-        if not payment_tx_sig.startswith("mock:"):
-            raise SubscriptionRequiredError("local subscription payment must use a mock transaction id")
-        plan = SubscriptionPlan.objects.filter(code=plan_code, is_active=True).first()
-        if plan is None:
-            raise LookupError("subscription_plan_not_found")
-        creator, _ = Creator.objects.get_or_create(wallet_address=wallet)
-        now = timezone.now()
-        CreatorSubscription.objects.filter(creator=creator, status=CreatorSubscription.ACTIVE).update(status=CreatorSubscription.EXPIRED)
-        subscription = CreatorSubscription.objects.create(
-            creator=creator, plan=plan, payment_tx_sig=payment_tx_sig,
-            period_start=now, period_end=now + datetime.timedelta(days=30),
-        )
-        logger.info("subscription activated creator_wallet=%s plan=%s", wallet, plan.code)
-        return subscription
     def authorize_registration(self, creator_wallet: str) -> None:
         """외부 작업 전 활성 구독과 잔여 등록 권한을 확인한다."""
         from apps.ip.models import Creator, CreatorSubscription

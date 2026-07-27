@@ -57,11 +57,13 @@ class Command(BaseCommand):
     help = "Register the generated local demo works through the normal pipeline."
 
     def handle(self, *args, **options):
-        """이미지·Gemini·저장소·목업 앵커가 모두 준비될 때만 데모를 만든다."""
+        """이미지·Gemini·저장소·Solana Memo signer가 준비될 때만 데모를 만든다."""
         if not settings.DEBUG:
             raise CommandError("seed_demo_catalog is available only when DEBUG=true")
-        if getattr(settings, "SOLANA_ADAPTER", "mock") != "mock":
-            raise CommandError("local demo catalog requires SOLANA_ADAPTER=mock")
+        if not getattr(settings, "PLATFORM_ESCROW_SECRET_KEY", ""):
+            raise CommandError(
+                "seed_demo_catalog requires PLATFORM_ESCROW_SECRET_KEY for real Solana Memo registration"
+            )
         directory = Path(settings.BASE_DIR) / "demo_assets"
         missing = [work.filename for work in DEMO_WORKS if not (directory / work.filename).is_file()]
         if missing:
@@ -135,7 +137,7 @@ class Command(BaseCommand):
 
     @staticmethod
     def _ensure_capacity(plan_code: str, needed: int) -> None:
-        """데모 목업 구독은 명시적 mock 거래 식별자로만 활성화한다."""
+        """데모 구독 용량을 시딩 전에 확보한다."""
         from apps.ip.models import CreatorSubscription
 
         active = CreatorSubscription.objects.filter(
@@ -145,8 +147,7 @@ class Command(BaseCommand):
         ).select_related("plan").first()
         if active and active.registrations_used + needed <= active.plan.included_registrations:
             return
-        from django.utils import timezone
 
-        get_subscription_service().activate_mock_subscription(
-            DEMO_WALLET, plan_code, f"mock:demo-catalog-subscription:{timezone.now().timestamp()}"
+        raise CommandError(
+            "demo subscription capacity is insufficient; create an active subscription before seeding"
         )

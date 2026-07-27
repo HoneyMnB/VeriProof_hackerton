@@ -249,21 +249,28 @@ def test_get_x402_service_factory_reads_settings(settings):
 # === Solana Pay browser fallback (R7) ========================================
 
 
-def test_build_solana_pay_fallback_uses_target_price():
-    """R7 / AC-4: browser fallback is a 200 with Buy-It-Now == target_price."""
+def test_build_solana_pay_fallback_uses_target_price_as_native_sol():
+    """R7 / AC-4: browser fallback is a SOL Buy-It-Now transfer request."""
     svc = _svc()
     asset = _make_asset(target_price="3.25")
     body = svc.build_solana_pay_fallback(asset)
 
-    # The fixed Buy-It-Now price equals target_price_usdc.
-    assert decimal.Decimal(str(body["solana_pay"]["amount_usdc"])) == decimal.Decimal(
+    # The fixed Buy-It-Now amount equals the catalog target price.
+    assert decimal.Decimal(str(body["solana_pay"]["amount_sol"])) == decimal.Decimal(
         "3.25"
     )
     # Address routed via the same SSOT helper (standalone -> creator).
     assert body["solana_pay"]["address"] == _CREATOR_WALLET
-    assert body["solana_pay"]["mint"] == _USDC_MINT
-    # A solana-pay: URI is present for QR rendering.
-    assert body["solana_pay"]["uri"].lower().startswith("solana-pay:")
+    assert body["solana_pay"]["asset"] == "SOL"
+    assert body["solana_pay"]["cluster"] == "devnet"
+    assert body["solana_pay"]["rpc_url"] == "https://api.devnet.solana.com"
+    assert body["solana_pay"]["reference"]
+    assert "mint" not in body["solana_pay"]
+    # Native SOL transfer requests use the official solana:<recipient> URL.
+    assert body["solana_pay"]["uri"].startswith(f"solana:{_CREATOR_WALLET}?")
+    assert "cluster=devnet" in body["solana_pay"]["uri"]
+    assert "reference=" in body["solana_pay"]["uri"]
+    assert "spl-token" not in body["solana_pay"]["uri"]
 
 
 # === LicenseService.is_licensed DB short-circuit (R10 / AC-7) ================
