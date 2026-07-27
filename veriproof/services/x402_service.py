@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import decimal
 import secrets
+import os
 from typing import Any
 from urllib.parse import urlencode
 
@@ -59,7 +60,7 @@ class X402Service:
         self.ap2_enabled = ap2_enabled
         self.usdc_mint = usdc_mint
         self.network = network
-        self.rpc_url = rpc_url or "https://api.devnet.solana.com"
+        self.rpc_url = os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")
         # SPEC-002 R5b: platform escrow pubkey used by the shared recipient
         # resolution rule when ``asset.parent_asset`` is set. ``None`` defers
         # to ``settings.PLATFORM_ESCROW_PUBKEY`` at call time.
