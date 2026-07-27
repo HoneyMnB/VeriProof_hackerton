@@ -21,10 +21,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
 from apps.ip.models import IpAsset
-<<<<<<< HEAD
 from apps.ip.browser_license_session import has_browser_payment_request
-=======
->>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
 from apps.settlement.services import get_settlement_service
