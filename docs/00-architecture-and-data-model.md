@@ -58,7 +58,7 @@ GOOGLE_APPLICATION_CREDENTIALS=...  # Vertex/GCP SA
 
 # --- Solana / 결제 ---
 SOLANA_RPC_URL=https://api.devnet.solana.com   # 또는 GCP Blockchain RPC 엔드포인트
-USDC_MINT_ADDRESS=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDNCDU  # Devnet USDC
+USDC_MINT_ADDRESS=4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU  # Devnet USDC
 PLATFORM_ESCROW_PUBKEY=...
 PLATFORM_ESCROW_SECRET_KEY=...      # 로컬 폴백(Devnet 전용). 클라우드는 KMS_KEY 사용
 KMS_KEY_NAME=projects/.../cryptoKeys/...   # Cloud KMS EC 서명키(선택)
@@ -149,41 +149,40 @@ SANDBOX_MODE=live|mock             # 샌드박스 온체인 실연동/모의 (SP
 
 | 계층 | 표준 | VeriProof 구현 위치 |
 |------|------|---------------------|
-| 접근 제어 | **HTTP 402 + x402 헤더** | `X402InterceptorMiddleware` / `GET /api/v1/ip/{id}` |
-| 에이전트 메시지 흐름 | **a2a-x402** (payment-required → submitted → completed) | `X402Service`가 402 응답을 `payment-required`로, `/settle`을 `payment-submitted/completed`로 매핑 |
+| 접근 제어 | **HTTP 402 + x402 V2 헤더** | `GET /api/v1/ip/{id}` |
+| 결제 메시지 흐름 | **x402 V2** (`PAYMENT-REQUIRED` → `PAYMENT-SIGNATURE` → `PAYMENT-RESPONSE`) | `X402ProtocolService`와 동일 GET 재요청 |
 | 결제 의도·권한 | **AP2 Mandate(VDC)** | 협상 결과를 Cart Mandate, 결제조건을 Payment Mandate로 서명 기록(`AP2_ENABLED`) |
 | 결제 실행/서명 | **pay.sh** | 구매자측 402 감지·지갑 서명; 서버는 `/paysh/webhook` 수신 |
 | 사람용 결제 | **Solana Pay** | Non-agent 폴백 고정가 QR |
 
 ### 3.1 x402 402 응답 계약
 ```json
-// Headers
-X-402-Payment-Required: true
-X-Agent-Protocol: x402
+// 표준 헤더
+PAYMENT-REQUIRED: <base64 PaymentRequired>
+// VeriProof 확장 헤더
 X-402-Negotiation-Endpoint: /api/v1/ip/{asset_id}/negotiate
 X-Solana-Pay-Address: <creator_wallet>
 X-Payment-Mint: <USDC_MINT_ADDRESS>
-// Body (a2a-x402 payment-required 정렬)
+// Body(PAYMENT-REQUIRED를 디코딩한 PaymentRequired와 동일)
 {
-  "error": "Payment or License Required",
-  "asset_id": "<uuid>",
-  "preview_url": "<watermark_url>",
-  "x402_version": "1",
+  "x402Version": 2,
+  "error": "Payment required",
+  "resource": {"url": "https://<host>/api/v1/ip/<uuid>", "mimeType": "application/json"},
   "accepts": [{
-    "scheme": "solana-usdc",
-    "network": "devnet",
-    "mint": "<USDC_MINT_ADDRESS>",
-    "pay_to": "<creator_wallet>",
-    "max_amount_required": "<target_price>"
-  }],
-  "how_to_negotiate": {
-    "endpoint": "/api/v1/ip/{asset_id}/negotiate",
-    "method": "POST",
-    "required_payload": {"buyer_agent_id":"string","offer_usdc":"float","usage_type":"string"},
-    "settle_endpoint": "/api/v1/ip/{asset_id}/settle"
-  }
+    "scheme": "exact",
+    "network": "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1",
+    "asset": "<USDC_MINT_ADDRESS>",
+    "amount": "<USDC 최소 단위 정수 문자열>",
+    "payTo": "<creator_wallet>",
+    "maxTimeoutSeconds": 300,
+    "extra": {"feePayer": "<facilitator_wallet>", "memo": "veriproof:<uuid>"}
+  }]
 }
 ```
+
+구매자는 외부 지갑에서 서명한 Base64 `PAYMENT-SIGNATURE`를 동일 GET에 보내며,
+성공 응답은 Base64 `PAYMENT-RESPONSE`를 포함한다. 기존 `POST /settle`은 호환
+경로로만 유지한다.
 
 ---
 

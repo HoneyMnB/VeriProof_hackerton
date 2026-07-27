@@ -12,6 +12,8 @@ import logging
 import secrets
 from typing import Any
 
+from django.utils import timezone
+
 from .solana_adapter_factory import get_solana_service
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,8 @@ class LicenseService:
         usage_type: str,
         payment_tx: str,
         session: Any = None,
+        buyer_user: Any = None,
+        payment_currency: str = "USDC",
     ) -> Any:
         """Grant a License for ``asset`` to ``buyer_wallet``. SPEC-004 R4/R5/R7/R8.
 
@@ -65,8 +69,11 @@ class LicenseService:
         license = License.objects.create(
             asset=asset,
             session=session,
+            buyer_user=buyer_user,
             buyer_wallet=buyer_wallet,
-            price_usdc=price,
+            price_usdc=price if payment_currency == "USDC" else None,
+            price_sol=price if payment_currency == "SOL" else None,
+            payment_currency=payment_currency,
             usage_type=usage_type or "commercial",
             payment_tx_sig=payment_tx,
             certificate_tx_sig=None,
@@ -111,22 +118,22 @@ class LicenseService:
         """Return True if ``asset`` was licensed via ``tx_sig``. SPEC-002/004.
 
         SPEC-002 R10 / AC-7: the DB is the system of record. If a ``License``
-        row exists for this ``(asset, tx_sig)`` we return True WITHOUT any
-        on-chain call (cost + latency win). Only when no DB license is found
-        AND a ``tx_sig`` is supplied do we lazily call
+        row exists for this ``(asset, tx_sig)`` and its download right is still
+        active, we return True WITHOUT any on-chain call (cost + latency win).
+        Expired rows remain as the payment ledger but no longer grant access.
+        Only when no active DB license is found AND a ``tx_sig`` is supplied do
+        we lazily call
         ``SolanaService.verify_usdc_payment`` — the on-chain re-verification
         fallback that full settlement (SPEC-004) exercises.
         """
         from apps.settlement.models import License
 
-        # R10: DB first. A hit short-circuits the on-chain call entirely.
-        if (
-            tx_sig
-            and License.objects.filter(
-                asset=asset, payment_tx_sig=tx_sig
-            ).exists()
-        ):
-            return True
+        # R10: DB first. Active hits short-circuit the on-chain call entirely;
+        # expired hits stay in the ledger but force a new payment.
+        if tx_sig:
+            license = License.objects.filter(asset=asset, payment_tx_sig=tx_sig).first()
+            if license is not None:
+                return self.is_download_active(license)
 
         # No tx_sig to verify against -> definitely not licensed here.
         if not tx_sig:
@@ -148,6 +155,12 @@ class LicenseService:
         )
         return bool(verification.is_valid)
 
+    @staticmethod
+    def is_download_active(license: Any) -> bool:
+        """Return whether a persisted License currently grants download access."""
+        expires_at = getattr(license, "download_expires_at", None)
+        return bool(expires_at and expires_at > timezone.now())
+
 
 def get_license_service() -> LicenseService:
     """Factory: build a LicenseService from current Django settings."""
@@ -157,7 +170,7 @@ def get_license_service() -> LicenseService:
 
     return LicenseService(
         download_token_ttl_seconds=getattr(
-            settings, "DOWNLOAD_TOKEN_TTL_SECONDS", 3600
+            settings, "DOWNLOAD_TOKEN_TTL_SECONDS", 604800
         ),
         event_recorder=get_event_recorder(),
     )

@@ -40,6 +40,8 @@ class RegistrationMetadata:
     creator_wallet: str
     asset_type: str
     visibility: str
+    # Registration-canvas price inputs are native Devnet SOL values. USDC
+    # terms remain independent and are never inferred from these values.
     min_price: decimal.Decimal
     target_price: decimal.Decimal
     title: str | None = None
@@ -141,7 +143,12 @@ class RegistrationService:
             thumbnail_url = self._save_preview("thumbnail", asset_id, thumbnail)
             watermark_url = self._save_preview("watermark", asset_id, watermark)
             retention = datetime.timedelta(days=int(settings.ORIGINAL_RETENTION_DAYS))
-            original_url = self.storage.save_temporary(asset_id, content, retention)
+            original_url = self.storage.save_temporary(
+                asset_id,
+                content,
+                retention,
+                upload.content_type,
+            )
             gallery_artifacts = self._prepare_gallery_artifacts(gallery_contents, asset_id, retention)
         except Exception as exc:  # noqa: BLE001 - storage adapter exceptions are external
             logger.error(
@@ -170,8 +177,10 @@ class RegistrationService:
                 ai_tags=list(analysis.tags),
                 category=metadata.category or analysis.category,
                 originality_score=analysis.originality_score,
-                min_price_usdc=metadata.min_price,
-                target_price_usdc=metadata.target_price,
+                min_price_usdc=None,
+                target_price_usdc=None,
+                min_price_sol=metadata.min_price,
+                target_price_sol=metadata.target_price,
                 image_sha256=content_hash,
                 perceptual_hash=perceptual_hash,
                 thumbnail_url=thumbnail_url,
@@ -234,7 +243,12 @@ class RegistrationService:
             image_id = uuid.uuid4()
             try:
                 watermark_url = self.storage.save_permanent("watermark", image_id, watermark)
-                original_url = self.storage.save_temporary(image_id, content, retention)
+                original_url = self.storage.save_temporary(
+                    image_id,
+                    content,
+                    retention,
+                    upload.content_type,
+                )
             except Exception as exc:  # noqa: BLE001 - storage adapter exceptions are external
                 raise RegistrationError("storage_unavailable", "gallery image storage could not be completed", 503) from exc
             artifacts.append(

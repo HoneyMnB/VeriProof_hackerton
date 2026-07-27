@@ -36,6 +36,7 @@ from .royalty_service import RoyaltyService, get_royalty_service
 from .solana_adapter_factory import get_solana_service
 from .solana_service import SolanaService
 from .storage_service import StorageService, get_storage_service
+from .tools_logger import ToolsLogger
 from .x402_service import X402Service, get_x402_service
 
 __all__ = [
@@ -57,6 +58,7 @@ __all__ = [
     "get_kms_signer",
     "StorageService",
     "get_storage_service",
+    "ToolsLogger",
     "ImageProcessor",
     "get_image_processor",
     "FingerprintService",

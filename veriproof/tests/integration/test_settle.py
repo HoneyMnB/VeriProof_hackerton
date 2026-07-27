@@ -24,7 +24,7 @@ import pytest
 from tests.conftest import VALID_WALLET
 
 SETTLE_TEMPLATE = "/api/v1/ip/{asset_id}/settle"
-_BUYER = "BuyerWallet1111111111111111111111111111111111"
+_BUYER = VALID_WALLET
 _USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDNCDU"
 _AGENT_HEADERS = {"X-Agent-Protocol": "x402", "Accept": "application/json"}
 

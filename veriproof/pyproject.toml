@@ -26,7 +26,7 @@ ai = [
     "a2a-sdk[http-server]==1.1.1",
     "uvicorn[standard]>=0.35,<1.0",
 ]
-solana = ["solana>=0.34", "solders>=0.21"]
+solana = ["solana==0.39.0", "solders==0.27.1"]
 gcp = [
     "protobuf>=3.20.2,<6",
     "google-cloud-firestore>=2.14,<2.22",

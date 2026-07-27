@@ -22,6 +22,10 @@ from django.contrib.auth.decorators import login_required
 from django.http import Http404, HttpRequest, HttpResponse
 from django.template.response import TemplateResponse
 
+from apps.ip.browser_license_session import (
+    get_active_browser_license,
+    remember_browser_payment_request,
+)
 from apps.ip.models import AssetImage, IpAsset
 from apps.settlement.models import License
 from services.catalog_service import get_catalog_service
@@ -110,13 +114,18 @@ def asset_detail(request: HttpRequest, asset_id) -> HttpResponse:
     )
     if asset is None:
         raise Http404("public asset not found")
+    payment = get_x402_service().build_solana_pay_fallback(asset)
+    active_license = get_active_browser_license(request, asset)
+    if request.user.is_authenticated:
+        remember_browser_payment_request(request, asset, payment["solana_pay"]["reference"])
     return TemplateResponse(
         request,
         "asset_detail.html",
         {
             "asset": get_catalog_service().serialize(asset),
             "gallery_images": _gallery_previews(asset),
-            "payment": get_x402_service().build_solana_pay_fallback(asset),
+            "payment": payment,
+            "active_license": _active_license_context(active_license),
             "active_nav": "discover",
         },
     )
@@ -186,6 +195,20 @@ def _gallery_previews(asset: IpAsset) -> list[dict]:
         for image in asset.gallery_images.all()
     )
     return previews
+
+
+def _active_license_context(license: License | None) -> dict | None:
+    """Template DTO for a browser session's currently active download right."""
+    if license is None or not license.download_token:
+        return None
+    return {
+        "download_url": f"/files/{license.download_token}",
+        "download_expires_at": (
+            license.download_expires_at.isoformat()
+            if license.download_expires_at
+            else None
+        ),
+    }
 
 
 def _bucket_range(key: str):
@@ -306,7 +329,9 @@ def _asset_card(asset: IpAsset) -> dict:
     sales = [
         {
             "buyer_wallet": license.buyer_wallet,
-            "price_usdc": str(license.price_usdc),
+            "price_usdc": str(license.price_usdc) if license.price_usdc is not None else None,
+            "price_sol": str(license.price_sol) if license.price_sol is not None else None,
+            "payment_currency": license.payment_currency,
             "usage_type": license.usage_type,
             "granted_at": license.granted_at.isoformat() if license.granted_at else None,
             "certificate_tx_sig": license.certificate_tx_sig or "",
@@ -315,7 +340,7 @@ def _asset_card(asset: IpAsset) -> dict:
     ]
     sales_summary = {
         "sale_count": len(licenses),
-        "gross_usdc": str(sum((license.price_usdc for license in licenses), decimal.Decimal("0"))),
+        "gross_usdc": str(sum((license.price_usdc or decimal.Decimal("0") for license in licenses), decimal.Decimal("0"))),
         "last_sale_at": sales[0]["granted_at"] if sales else None,
     }
     manage_data = {
@@ -338,6 +363,7 @@ def _asset_card(asset: IpAsset) -> dict:
         "originality_score": asset.originality_score,
         "min_price_usdc": str(asset.min_price_usdc),
         "target_price_usdc": str(asset.target_price_usdc),
+        "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else "",
         # 판매 조건 편집 폼은 서버가 가진 현재 공개 상태를 그대로 렌더링한다.
         # 누락하면 폼이 항상 private처럼 보이는 UI/데이터 불일치가 생긴다.
         "visibility": asset.visibility,

@@ -193,11 +193,12 @@ def test_register_document_gets_ai_tags_and_description(client, monkeypatch):
     사용자 태그/설명과 별개로 저장된다(에이전트 검색용)."""
     from apps.ip.models import IpAsset
 
+    storage = FakeStorageService()
     _patch_services(
         monkeypatch,
         gemini=FakeGeminiService(),
         solana=FakeSolanaService(),
-        storage=FakeStorageService(),
+        storage=storage,
     )
     upload = _upload(b"%PDF-1.4 minimal", filename="brief.pdf", mime="application/pdf")
     response = _post(client, upload, asset_type="document", tags="user-a, user-b", description="my brief")
@@ -209,6 +210,8 @@ def test_register_document_gets_ai_tags_and_description(client, monkeypatch):
     assert asset.description == "my brief"
     assert asset.ai_tags == ["test"]
     assert asset.ai_description == "a test asset"
+    temporary_calls = [call for call in storage.calls if call[0] == "save_temporary"]
+    assert temporary_calls[0][1][3] == "application/pdf"
 
 
 def test_confirmed_draft_metadata_preserves_creator_tags():
@@ -448,7 +451,8 @@ def test_register_persists_creator_selected_target_price(client, png_bytes, monk
         client, _upload(png_bytes), min_price="2.00", target_price="4.25"
     ).json()
     asset = IpAsset.objects.get(id=body["asset_id"])
-    assert asset.target_price_usdc == _decimal.Decimal("4.250000")
+    assert asset.target_price_usdc is None
+    assert asset.target_price_sol == _decimal.Decimal("4.250000000")
 
 
 # --- Event recording ---------------------------------------------------------

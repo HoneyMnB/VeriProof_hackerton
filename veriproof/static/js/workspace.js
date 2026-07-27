@@ -3,6 +3,7 @@
     "use strict";
 
     var VP = window.VP || {};
+    var DEFAULT_REGISTRATION_PRICE = "0.001";
     function byId(id) { return document.getElementById(id); }
     function wallet() { return (VP.getWallet ? VP.getWallet() : "") || ""; }
     function request(url, options) {
@@ -198,8 +199,8 @@
             byId("asset-title").value = saved.title || file.name.replace(/\.[^.]+$/, "");
             byId("asset-description").value = saved.description || "";
             byId("asset-tags").value = saved.tags || "";
-            byId("min-price").value = saved.min_price || "1.00";
-            byId("target-price").value = saved.target_price || "3.00";
+            byId("min-price").value = saved.min_price || DEFAULT_REGISTRATION_PRICE;
+            byId("target-price").value = saved.target_price || DEFAULT_REGISTRATION_PRICE;
             byId("asset-share").checked = saved.visibility === "public";
         }
         /**
@@ -247,6 +248,7 @@
          * 현재 등록 폼의 모든 입력값을 객체로 수집해 반환한다(자산 유형/제목/설명/태그/가격/공개여부).
          */
         function fields() {
+            // Registration-canvas prices are native Devnet SOL amounts.
             return { asset_type: byId("asset-type").value, title: byId("asset-title").value.trim(), description: byId("asset-description").value.trim(), tags: byId("asset-tags").value.trim(), min_price: byId("min-price").value, target_price: byId("target-price").value, visibility: byId("asset-share").checked ? "public" : "private" };
         }
         function registrationFiles() {

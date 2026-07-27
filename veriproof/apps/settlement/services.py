@@ -105,6 +105,9 @@ class SettlementService:
         buyer_wallet: str,
         expected_amount: decimal.Decimal | None = None,
         usage_type: str | None = None,
+        payment_already_verified: bool = False,
+        buyer_user: Any = None,
+        payment_currency: str = "USDC",
     ) -> SettlementResult:
         """Run the full settlement pipeline. R1/R2/R3/R4/R5/R6/R14/R14b/R15/R16.
 
@@ -118,30 +121,47 @@ class SettlementService:
         )
         effective_usage = usage_type or self._resolve_usage(asset, session)
 
-        # A. Verify the on-chain USDC payment (R1/R2). Recipient comes from the
-        # shared resolve_pay_to SSOT so settle matches 402/negotiate recipients.
+        if payment_currency not in {"USDC", "SOL"}:
+            raise ValueError("unsupported payment currency")
+        # A. Verify the on-chain payment. Recipient comes from the shared
+        # resolve_pay_to SSOT so all settlement routes agree on the payee.
         recipient = resolve_pay_to(asset)
-        verification = self.payment_verifier.verify_usdc_payment(
-            tx_signature,
-            expected_recipient=recipient,
-            expected_amount=amount,
-            mint=mint,
-        )
-        if not verification.is_valid:
-            # R3 / AC-2 / AC-3: invalid -> 400, no license granted.
-            return SettlementResult(
-                ok=False, status="INVALID", error="invalid_settlement"
-            )
+        if not payment_already_verified:
+            if payment_currency == "SOL":
+                verification = self.payment_verifier.verify_sol_payment_transaction(
+                    signature=tx_signature,
+                    expected_recipient=recipient,
+                    expected_lamports=self.solana._amount_to_lamports(amount),
+                    expected_memo=f"VERIPROOF:{asset.id}:SOL",
+                )
+            else:
+                verification = self.payment_verifier.verify_usdc_payment(
+                    tx_signature,
+                    expected_recipient=recipient,
+                    expected_amount=amount,
+                    mint=mint,
+                )
+            if not verification.is_valid:
+                # R3 / AC-2 / AC-3: invalid -> 400, no license granted.
+                return SettlementResult(
+                    ok=False, status="INVALID", error="invalid_settlement"
+                )
 
         # B. Grant the license (idempotent on payment_tx_sig). R4/R5/R7/R8.
         # PAYMENT_VERIFIED is fanned out inside grant (R15).
+        grant_kwargs = {
+            "session": session,
+            "buyer_user": buyer_user,
+        }
+        if payment_currency == "SOL":
+            grant_kwargs["payment_currency"] = "SOL"
         granted = self.license_service.grant(
             asset,
             buyer_wallet,
             amount,
             effective_usage,
             tx_signature,
-            session=session,
+            **grant_kwargs,
         )
 
         # C. Issue the certificate Memo (R6). Failure is decoupled (R16): the
@@ -170,6 +190,14 @@ class SettlementService:
                 "asset_id": str(asset.id),
                 "buyer_wallet": buyer_wallet,
                 "price_usdc": str(amount),
+                **(
+                    {
+                        "price_sol": str(amount),
+                        "payment_currency": "SOL",
+                    }
+                    if payment_currency == "SOL"
+                    else {}
+                ),
                 "payment_tx_sig": tx_signature,
                 "certificate_tx_sig": certificate_tx,
                 "usage_type": effective_usage,

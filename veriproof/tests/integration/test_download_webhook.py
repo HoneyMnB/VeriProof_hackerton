@@ -22,7 +22,7 @@ from freezegun import freeze_time
 
 from tests.conftest import VALID_WALLET
 
-_BUYER = "BuyerWallet1111111111111111111111111111111111"
+_BUYER = "BuyerWallet111111111111111111111111111111"
 _USDC_MINT = "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDNCDU"
 _AGENT_HEADERS = {"X-Agent-Protocol": "x402", "Accept": "application/json"}
 _WEBHOOK_URL = "/api/v1/paysh/webhook"
@@ -120,6 +120,7 @@ def test_download_valid_token_returns_original(client, monkeypatch):
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
         target_price_usdc=decimal.Decimal("3.0"),
+        content_mime_type="image/png",
     )
     recorder = _RecordingRecorder()
     import tempfile
@@ -128,7 +129,10 @@ def test_download_valid_token_returns_original(client, monkeypatch):
     storage = StorageService(backend="local", media_root=media_root)
     # Seed a temporary original so read_temporary can serve it.
     storage.save_temporary(
-        asset.id, b"ORIGINAL-PNG-BYTES", datetime.timedelta(seconds=60)
+        asset.id,
+        b"ORIGINAL-PNG-BYTES",
+        datetime.timedelta(seconds=60),
+        "image/png",
     )
     # Inject the storage into the download view's DI seam.
     monkeypatch.setattr("apps.settlement.views_api.get_storage_service", lambda: storage)
@@ -158,7 +162,36 @@ def test_download_valid_token_returns_original(client, monkeypatch):
 
     assert response.status_code == 200
     assert response.content == b"ORIGINAL-PNG-BYTES"
+    assert response["Content-Type"] == "image/png"
     assert "attachment" in response["Content-Disposition"]
+    assert response["Content-Disposition"].endswith('filename="original.png"')
+
+
+@pytest.mark.django_db
+def test_download_pdf_token_returns_pdf_filename(client, monkeypatch):
+    """PDF originals are downloaded as PDF files, not original.bin."""
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+    from tests.fakes import FakeStorageService
+
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        asset_type="document",
+        content_mime_type="application/pdf",
+        thumbnail_url=None,
+        watermark_url=None,
+        originality_score=None,
+    )
+    license = LicenseFactory(asset=asset, download_token="pdf-token")
+    storage = FakeStorageService()
+    storage.temporary[asset.id] = b"%PDF-1.4"
+    monkeypatch.setattr("apps.settlement.views_api.get_storage_service", lambda: storage)
+
+    response = client.get(_DOWNLOAD_TEMPLATE.format(token=license.download_token))
+
+    assert response.status_code == 200
+    assert response.content == b"%PDF-1.4"
+    assert response["Content-Type"] == "application/pdf"
+    assert response["Content-Disposition"].endswith('filename="original.pdf"')
 
 
 @pytest.mark.django_db
@@ -170,7 +203,10 @@ def test_download_multi_image_work_returns_one_archive(client, monkeypatch):
     from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
     from tests.fakes import FakeStorageService
 
-    asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET))
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        content_mime_type="image/png",
+    )
     image = AssetImage.objects.create(
         asset=asset,
         position=1,
@@ -191,7 +227,7 @@ def test_download_multi_image_work_returns_one_archive(client, monkeypatch):
     assert response.status_code == 200
     assert response["Content-Type"] == "application/zip"
     with zipfile.ZipFile(io.BytesIO(response.content)) as archive:
-        assert archive.read("original-1") == b"PRIMARY"
+        assert archive.read("original-1.png") == b"PRIMARY"
         assert archive.read("detail.png") == b"DETAIL"
 
 

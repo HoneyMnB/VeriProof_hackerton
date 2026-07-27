@@ -41,13 +41,14 @@ SECRET_KEY = os.environ.get(
 # TDD/local defaults to DEBUG=True. Production must set DEBUG=False.
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
-# Empty in local dev. Production sets VERIPROOF_ALLOWED_HOSTS=a,b,c .
+# 로컬 기본값에는 Docker 내부 Seller 별칭을 포함하고 운영은 환경 변수로 제한한다.
 _ALLOWED_HOSTS_RAW = os.environ.get("VERIPROOF_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = [h.strip() for h in _ALLOWED_HOSTS_RAW.split(",") if h.strip()] or [
     "localhost",
     "127.0.0.1",
     "0.0.0.0",
     "[::1]",
+    "web",
 ]
 
 # --- Applications ------------------------------------------------------------
@@ -212,7 +213,14 @@ SOLANA_RPC_URL = os.environ.get(
     "SOLANA_RPC_URL", "https://api.devnet.solana.com"
 )
 USDC_MINT_ADDRESS = os.environ.get(
-    "USDC_MINT_ADDRESS", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDNCDU"
+    "USDC_MINT_ADDRESS", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+)
+DEMO_CREATOR_WALLET = os.environ.get("DEMO_CREATOR_WALLET", "")
+X402_FACILITATOR_URL = os.environ.get(
+    "X402_FACILITATOR_URL", "https://x402.org/facilitator"
+)
+X402_NETWORK = os.environ.get(
+    "X402_NETWORK", "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
 )
 # Empty by default in local; cloud deployment sets the escrow pubkey.
 PLATFORM_ESCROW_PUBKEY = os.environ.get("PLATFORM_ESCROW_PUBKEY", "")
@@ -239,7 +247,7 @@ MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "5"))
 MICRO_FLOOR_USDC = os.environ.get("MICRO_FLOOR_USDC", "0.05")  # Decimal string
 BATCH_MAX_ITEMS = int(os.environ.get("BATCH_MAX_ITEMS", "200"))
 ORIGINAL_RETENTION_DAYS = int(os.environ.get("ORIGINAL_RETENTION_DAYS", "7"))
-DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("DOWNLOAD_TOKEN_TTL_SECONDS", "3600"))
+DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("DOWNLOAD_TOKEN_TTL_SECONDS", "604800"))
 
 # --- Logging -----------------------------------------------------------------
 

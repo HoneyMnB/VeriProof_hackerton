@@ -95,3 +95,26 @@ def test_get_license_service_factory_reads_settings(settings):
     svc = get_license_service()
     assert isinstance(svc, LicenseService)
     assert svc.download_token_ttl_seconds == 7200
+
+
+@pytest.mark.django_db
+def test_is_licensed_returns_false_for_expired_ledger_row(monkeypatch):
+    """Expired License rows remain in the ledger but no longer grant access."""
+    from django.utils import timezone
+    from services.license_service import LicenseService
+    from tests.fakes import FakeSolanaService
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+
+    asset = IpAssetFactory(creator=CreatorFactory())
+    license = LicenseFactory(
+        asset=asset,
+        payment_tx_sig="tx_expired_ledger_001",
+        download_expires_at=timezone.now() - timezone.timedelta(seconds=1),
+    )
+    fake_solana = FakeSolanaService()
+    monkeypatch.setattr(
+        "services.license_service.get_solana_service", lambda: fake_solana
+    )
+
+    assert LicenseService().is_licensed(asset, license.payment_tx_sig) is False
+    assert fake_solana.calls == []

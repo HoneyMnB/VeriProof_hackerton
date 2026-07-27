@@ -1,3 +1,7 @@
 google-adk[a2a]==2.5.0
 a2a-sdk[http-server]==1.1.1
 uvicorn[standard]>=0.35,<1.0
+httpx>=0.28.1
+x402[svm]==2.16.0
+# x402 2.16.0 signer가 사용하는 ``solana.rpc.api`` 경로는 0.40에서 제거됐다.
+solana==0.39.0

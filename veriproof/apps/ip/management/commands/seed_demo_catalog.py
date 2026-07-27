@@ -9,15 +9,15 @@ from pathlib import Path
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management.base import BaseCommand, CommandError
+from solders.pubkey import Pubkey
 
 from apps.accounts.models import UserPreference
 from apps.accounts.services import ensure_developer_account
-from apps.ip.models import IpAsset, SubscriptionPlan
+from apps.ip.models import Creator, IpAsset, SubscriptionPlan
 from services.registration_service import RegistrationMetadata, get_registration_service
 from services.solana_adapter_factory import get_solana_service
 from services.subscription_service import get_subscription_service
 
-DEMO_WALLET = "11111111111111111111111111111111"
 DEMO_PLAN_CODE = "local-demo-catalog"
 
 
@@ -60,10 +60,19 @@ class Command(BaseCommand):
         """이미지·Gemini·저장소·Solana Memo signer가 준비될 때만 데모를 만든다."""
         if not settings.DEBUG:
             raise CommandError("seed_demo_catalog is available only when DEBUG=true")
-        if not getattr(settings, "PLATFORM_ESCROW_SECRET_KEY", ""):
+        if getattr(settings, "SOLANA_ADAPTER", "mock") != "mock":
+            raise CommandError("local demo catalog requires SOLANA_ADAPTER=mock")
+        wallet = str(getattr(settings, "DEMO_CREATOR_WALLET", "")).strip()
+        if not wallet:
             raise CommandError(
-                "seed_demo_catalog requires PLATFORM_ESCROW_SECRET_KEY for real Solana Memo registration"
+                "DEMO_CREATOR_WALLET must be a controlled Solana Devnet wallet"
             )
+        try:
+            Pubkey.from_string(wallet)
+        except ValueError as exc:
+            raise CommandError(
+                "DEMO_CREATOR_WALLET is not a valid Solana public key"
+            ) from exc
         directory = Path(settings.BASE_DIR) / "demo_assets"
         missing = [work.filename for work in DEMO_WORKS if not (directory / work.filename).is_file()]
         if missing:
@@ -71,29 +80,48 @@ class Command(BaseCommand):
 
         user = ensure_developer_account()
         preference, _ = UserPreference.objects.get_or_create(user=user)
-        preference.creator_wallet = DEMO_WALLET
+        preference.creator_wallet = wallet
         preference.save(update_fields=["creator_wallet", "updated_at"])
-        # 데모 작품도 실제 라이브러리와 동일하게 계정 소유권을 가진다. 이미
-        # 등록된 자산까지 연결해 seed 재실행이 현재 로컬 DB를 복구할 수 있게 한다.
-        IpAsset.objects.filter(creator__wallet_address=DEMO_WALLET).update(account_owner=user)
+        creator, _ = Creator.objects.get_or_create(wallet_address=wallet)
         plan, _ = SubscriptionPlan.objects.update_or_create(
             code=DEMO_PLAN_CODE,
             defaults={"name": "Local demo catalog", "monthly_fee_usdc": "0", "included_registrations": len(DEMO_WORKS), "is_active": True},
         )
         pending = []
+        demo_hashes = []
         for work in DEMO_WORKS:
             path = directory / work.filename
             content = path.read_bytes()
             content_hash = hashlib.sha256(content).hexdigest()
+            demo_hashes.append(content_hash)
             if IpAsset.objects.filter(image_sha256=content_hash).exists():
                 self.stdout.write(f"skip existing: {work.filename}")
                 continue
             pending.append((work, content))
+        # 기존 데모 데이터도 현재 제어 가능한 판매자 지갑으로만 수취하게 한다.
+        # 지갑이 바뀐 자산은 목업 등록 인증서도 새 공개키 기준으로 다시 발급한다.
+        reassigned = IpAsset.objects.filter(
+            image_sha256__in=demo_hashes,
+        ).exclude(creator=creator).update(
+            creator=creator,
+            account_owner=user,
+            registration_certificate_tx_sig=None,
+        )
+        IpAsset.objects.filter(
+            image_sha256__in=demo_hashes,
+            creator=creator,
+        ).update(account_owner=user)
         if not pending:
-            repaired = self._backfill_registration_certificates()
-            self.stdout.write(self.style.SUCCESS(f"Demo catalog already ready; created=0 certificates_repaired={repaired}"))
+            repaired = self._backfill_registration_certificates(
+                wallet,
+                demo_hashes,
+            )
+            self.stdout.write(self.style.SUCCESS(
+                "Demo catalog already ready; "
+                f"created=0 reassigned={reassigned} certificates_repaired={repaired}"
+            ))
             return
-        self._ensure_capacity(plan.code, len(pending))
+        self._ensure_capacity(wallet, plan.code, len(pending))
         service = get_registration_service()
         created = 0
         for work, content in pending:
@@ -101,7 +129,7 @@ class Command(BaseCommand):
             outcome = service.register(
                 upload,
                 RegistrationMetadata(
-                    creator_wallet=DEMO_WALLET,
+                    creator_wallet=wallet,
                     asset_type=IpAsset.IMAGE,
                     visibility=IpAsset.PUBLIC,
                     min_price=Decimal(work.minimum),
@@ -116,18 +144,22 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS(f"Demo catalog ready; created={created}"))
 
     @staticmethod
-    def _backfill_registration_certificates() -> int:
+    def _backfill_registration_certificates(
+        wallet: str,
+        demo_hashes: list[str],
+    ) -> int:
         """기존 로컬 데모도 인증서가 없으면 공개 목록에서 제외되지 않게 보완한다."""
         solana = get_solana_service()
         repaired = 0
         assets = IpAsset.objects.filter(
-            creator__wallet_address=DEMO_WALLET,
+            creator__wallet_address=wallet,
+            image_sha256__in=demo_hashes,
             registration_certificate_tx_sig__isnull=True,
         )
         for asset in assets.iterator():
             certificate = solana.issue_registration_certificate(
                 asset.id,
-                DEMO_WALLET,
+                wallet,
                 asset.image_sha256,
             )
             asset.registration_certificate_tx_sig = certificate
@@ -136,18 +168,18 @@ class Command(BaseCommand):
         return repaired
 
     @staticmethod
-    def _ensure_capacity(plan_code: str, needed: int) -> None:
-        """데모 구독 용량을 시딩 전에 확보한다."""
+    def _ensure_capacity(wallet: str, plan_code: str, needed: int) -> None:
+        """데모 목업 구독은 명시적 mock 거래 식별자로만 활성화한다."""
         from apps.ip.models import CreatorSubscription
 
         active = CreatorSubscription.objects.filter(
-            creator__wallet_address=DEMO_WALLET,
+            creator__wallet_address=wallet,
             status=CreatorSubscription.ACTIVE,
             plan__code=plan_code,
         ).select_related("plan").first()
         if active and active.registrations_used + needed <= active.plan.included_registrations:
             return
 
-        raise CommandError(
-            "demo subscription capacity is insufficient; create an active subscription before seeding"
+        get_subscription_service().activate_mock_subscription(
+            wallet, plan_code, f"mock:demo-catalog-subscription:{timezone.now().timestamp()}"
         )

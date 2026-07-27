@@ -9,13 +9,14 @@ class LicenseAdmin(admin.ModelAdmin):
     list_display = (
         "id",
         "asset",
+        "buyer_user",
         "buyer_wallet",
         "price_usdc",
         "usage_type",
         "payment_tx_sig",
         "granted_at",
     )
-    search_fields = ("buyer_wallet", "payment_tx_sig")
+    search_fields = ("buyer_user__email", "buyer_wallet", "payment_tx_sig")
     readonly_fields = ("granted_at",)
 
 

@@ -29,8 +29,9 @@ from apps.negotiation.models import NegotiationSession
 from apps.settlement.batch_services import BatchValidationError, get_batch_service
 from apps.settlement.models import License
 from services.gemini_service import GeminiResponseError, GeminiUnavailableError
+from services.license_service import get_license_service
 from services.pubsub_publisher import get_pubsub_publisher
-from services.storage_service import get_storage_service
+from services.storage_service import extension_for_mime, get_storage_service
 
 from .services import get_settlement_service
 
@@ -204,8 +205,12 @@ def download(request: HttpRequest, token: str) -> HttpResponse:
     # R10: expiry check.
     from django.utils import timezone
 
-    if license.download_expires_at is not None and license.download_expires_at <= timezone.now():
+    if not get_license_service().is_download_active(license):
         return _error("expired_token", "download token has expired", status=403)
+
+    if license.buyer_user_id is not None:
+        if not request.user.is_authenticated or request.user.id != license.buyer_user_id:
+            return _error("license_not_owned", "download is not available for this account", status=403)
 
     # R11: original purged?
     asset = license.asset
@@ -216,11 +221,16 @@ def download(request: HttpRequest, token: str) -> HttpResponse:
 
     gallery_images = list(asset.gallery_images.all())
     if not gallery_images:
-        response = HttpResponse(original, content_type="application/octet-stream")
-        response["Content-Disposition"] = 'attachment; filename="original.bin"'
+        mime = _download_mime(asset.content_mime_type)
+        response = HttpResponse(original, content_type=mime)
+        response["Content-Disposition"] = (
+            f'attachment; filename="{_download_file_name("original", mime)}"'
+        )
         return response
 
-    files = [("original-1", original)]
+    files = [
+        (_download_file_name("original-1", _download_mime(asset.content_mime_type)), original)
+    ]
     for image in gallery_images:
         image_bytes = storage.read_temporary(image.id)
         if image_bytes is None:
@@ -241,6 +251,17 @@ def _safe_download_name(file_name: str, position: int) -> str:
     """ZIP 항목이 경로 이탈 없이 원래 파일명을 최대한 보존하도록 정규화한다."""
     name = Path(file_name or "").name
     return name or f"image-{position}"
+
+
+def _download_mime(content_mime_type: str | None) -> str:
+    """저장된 원본 MIME이 있으면 그대로 쓰고, 없을 때만 기존 바이너리 응답으로 후퇴한다."""
+    mime = (content_mime_type or "").split(";", 1)[0].strip().lower()
+    return mime or "application/octet-stream"
+
+
+def _download_file_name(stem: str, mime: str) -> str:
+    """구매자가 받는 원본 파일명에 실제 이미지/PDF 확장자를 붙인다."""
+    return f"{stem}{extension_for_mime(mime)}"
 
 
 # === View helpers ===========================================================

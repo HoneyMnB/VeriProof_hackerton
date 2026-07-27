@@ -41,7 +41,13 @@
                 <div><dt data-i18n="detail.delivery">After verification</dt><dd data-i18n="detail.delivery_value">License certificate and time-bound original download</dd></div>
                 <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · SOL</dd></div>
             </dl>
+            {% if active_license %}
+            <a class="asset-detail__pay" href="{{ active_license.download_url }}" download data-solana-pay-download data-download-expires-at="{{ active_license.download_expires_at }}">다운로드</a>
+            {% elif request.user.is_authenticated %}
             <button class="asset-detail__pay" type="button" data-solana-pay-open data-solana-pay-uri="{{ payment.solana_pay.uri }}" data-i18n="detail.pay_now">Pay now with Solpay</button>
+            {% else %}
+            <a class="asset-detail__pay" href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in to purchase</a>
+            {% endif %}
             <p class="asset-detail__note" data-i18n="detail.no_cart">No cart. Payment grants one license and an expiry-bound original download.</p>
         </aside>
     </div>
@@ -62,7 +68,7 @@
             </dl>
             <div class="asset-detail__pay-actions">
                 <button class="asset-detail__send-pay" type="button" data-solana-pay-send>Pay with Phantom</button>
-                <button class="asset-detail__copy-pay" type="button" data-solana-pay-copy>Copy request</button>
+                <button class="asset-detail__copy-pay" type="button" data-solana-pay-copy>Copy address</button>
             </div>
             <p id="solana-pay-status" class="asset-detail__pay-status" role="status"></p>
         </section>
