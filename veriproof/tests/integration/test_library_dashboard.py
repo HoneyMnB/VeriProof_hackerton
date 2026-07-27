@@ -212,8 +212,8 @@ def test_owner_metadata_update_keeps_existing_tags_when_older_terms_client_omits
 
 @pytest.mark.django_db
 def test_workspace_view_renders(client):
-    """``/workspace``는 주석·첨부 메뉴를 숨긴 상태로 렌더링한다."""
-    response = client.get("/workspace")
+    """``/`` 등록 캔버스는 가격 기본값과 허용 단위를 함께 렌더링한다."""
+    response = client.get("/")
     assert response.status_code == 200
     content = response.content.decode()
     # The drop zone + register endpoint hook exist for JS wiring.
@@ -221,6 +221,8 @@ def test_workspace_view_renders(client):
     assert "/api/v1/ip/register" in content
     assert "data-i18n carries" not in content
     assert 'id="composer-add-menu" class="vp-composer-menu" hidden' in content
+    assert 'id="min-price" type="number" min="0" step="0.001" value="0.001"' in content
+    assert 'id="target-price" type="number" min="0" step="0.001" value="0.001"' in content
 
 
 def test_start_registration_opens_canvas_before_wallet_connection():
@@ -236,6 +238,8 @@ def test_start_registration_opens_canvas_before_wallet_connection():
     assert "if (!wallet())" not in open_canvas
     assert "canvas.hidden = false" in open_canvas
     assert "!menu.contains(event.target)" in source
+    assert 'var DEFAULT_REGISTRATION_PRICE = "0.001";' in source
+    assert source.count("DEFAULT_REGISTRATION_PRICE") == 3
 
 
 def test_certificate_close_handles_clicks_on_its_svg_icon():

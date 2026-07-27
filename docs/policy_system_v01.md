@@ -327,27 +327,13 @@ AND registration_certificate_tx_sig IS NOT NULL
 
 동일 규칙은 402 응답, 협상 ACCEPT, 정산 검증에 공통으로 사용한다.
 
-### 9.3 로컬 결제 목업
+### 9.3 결제 검증 정책
 
-`PAYMENT_VERIFIER=mock`이 기본값이다.
+런타임 결제 검증은 실제 Solana verifier만 사용한다. `mock:` 거래 식별자는 결제 완료로 인정하지 않으며, 오프라인 테스트는 `tests.fakes.FakeSolanaService`를 직접 주입한다.
 
-- `LocalMockPaymentVerifier`는 `mock:`으로 시작하는 거래 식별자만 유효한 결제로 인정한다.
-- 목업은 실제 Solana 거래를 만들거나 실제 체인 거래처럼 주장하지 않는다.
-- 실체인 전환 시 `PAYMENT_VERIFIER=solana`로 설정하고 RPC·USDC mint·서명자·SPL
-  transfer adapter를 구성해야 한다.
+### 9.4 Solana 앵커·인증서 정책
 
-### 9.4 로컬 Solana 앵커·인증서 목업
-
-`SOLANA_ADAPTER=mock`이 로컬 기본값이다. `LocalMockSolanaService`는 실제 RPC
-거래를 제출하지 않고 다음과 같이 명시적으로 구분되는 신호만 생성한다.
-
-- 등록 앵커: `mock:solana:anchor:*`
-- 라이선스 인증서: `mock:solana:certificate:*`
-- 로열티 전송: `mock:solana:transfer:*`
-
-따라서 로컬 데모는 등록부터 인증서 화면까지 완결된 흐름을 시연할 수 있지만, 이
-식별자를 실제 Solana 거래나 결제 완료로 표현하지 않는다. Devnet/운영 전환은
-`SOLANA_ADAPTER=real`과 실제 RPC·서명자·SPL 전송 어댑터를 제공해 수행한다.
+등록 앵커, 등록 인증서, 라이선스 인증서는 실제 Solana Memo 트랜잭션으로 제출한다. 원본 URL, 원본 바이트, 다운로드 토큰은 Memo와 인증서 응답에 포함하지 않는다. signer/RPC 누락 시 mock으로 대체하지 않고 실패한다.
 
 ### 9.5 정산 흐름
 
@@ -480,7 +466,7 @@ cd veriproof
 2. 외부 클라이언트로 manifest와 OpenAPI를 요청한다.
 3. 카탈로그에서 asset_id를 얻는다.
 4. 에이전트 Accept/header로 자산 접근을 요청해 402 계약을 확인한다.
-5. 로컬 목업 정산은 `mock:<test-id>` 결제 식별자를 사용한다.
+5. 정산은 실제 Solana 결제 트랜잭션 서명을 제출한다.
 
 ## 14. 주요 코드와 함수 안내
 
@@ -490,7 +476,7 @@ cd veriproof
 | `services/creator_assistant_service.py` | `overview`, `ask`, `history`, `directives`, `actions`, `sales` | 창작자 비서 상태·기록·실행 결과 관리 |
 | `services/creator_action_service.py` | `execute` | 허용 자연어 도구의 실행·사후 검증·감사 기록 |
 | `services/gemini_service.py` | `analyze_asset`, `negotiate`, `quote_batch`, `plan_creator_action` | 실제 Gemini 호출·구조화 계획·응답 검증 |
-| `services/payment_verifier.py` | `PaymentVerifier`, `LocalMockPaymentVerifier`, `get_payment_verifier` | 결제 검증 어댑터 선택 |
+| `services/payment_verifier.py` | `PaymentVerifier`, `get_payment_verifier` | 실제 Solana 결제 검증 어댑터 |
 | `services/_payment.py` | `resolve_pay_to` | 결제 수취인 단일 규칙 |
 | `services/license_service.py` | `LicenseService.grant` | idempotent 라이선스 발급 |
 | `apps/settlement/services.py` | `SettlementService.settle_pipeline` | 검증→라이선스→인증서→감사 파이프라인 |
@@ -506,19 +492,19 @@ cd veriproof
 
 | 영역 | 현재 보장하는 정책 | 검증 상태 |
 |---|---|---|
-| 작품 등록 | 인증된 Django 사용자의 등록 요청만 받고, hash/형식/가격/용량을 검사한다. 다중 이미지는 하나의 작품으로 원자 처리한다. | 실제 Gemini 분석·mock 앵커/등록 인증서·구독 차감 런타임 확인 |
+| 작품 등록 | 인증된 Django 사용자의 등록 요청만 받고, hash/형식/가격/용량을 검사한다. 다중 이미지는 하나의 작품으로 원자 처리하고 실제 Solana Memo 증명을 제출한다. | multipart 등록 회귀와 Solana Memo 제출 단위 테스트 |
 | 공개 여부 | 공개는 명시적 `visibility=public`이고, 대소문자 입력은 정규화한다. 공개 catalog는 공개·앵커·등록 인증서 조건을 함께 적용한다. | `PUBLIC` 실제 HTTP 등록이 `public`으로 저장되고 catalog에 노출됨 확인 |
 | 외부 에이전트 | 공개 API는 manifest/OpenAPI/x402 HTTP 계약을 제공하고, 결제 전 원본을 공개하지 않는다. | 외부 에이전트 역할 E2E에서 402·Gemini ACCEPT·정산·다운로드 성공 |
 | Gemini | 분석·협상·비서는 실제 구성된 Gemini를 사용하며, 실패 시 생성형 fallback 없이 503으로 종료한다. | 등록 대화와 협상에서 실제 응답 확인 |
-| 결제·Solana | 로컬 `mock:` 식별자만 명시적으로 허용하고, mock 결과를 실체인 거래라고 표시하지 않는다. | mock settlement와 라이선스/토큰 발급 확인 |
+| 결제·Solana | 실제 Solana 검증과 Memo 제출만 런타임에서 사용한다. | Solana verifier/Memo 단위 테스트, fake 주입 서비스 테스트 |
 | 품질 | migration drift와 Django 시스템 오류를 차단하고, 등록 가시성 회귀를 테스트한다. | `pytest -q` 329 passed, `check`, `makemigrations --check` 통과 |
 
 ### 15.2 운영 전 P0: 차단 조건
 
 다음 항목은 하나라도 미완료이면 실결제·실체인 운영을 시작하지 않는 차단 조건이다.
 
-1. `SOLANA_ADAPTER=real`, `PAYMENT_VERIFIER=solana`에서 실제 Devnet USDC 거래의 수취자, mint, amount, commitment를 검증하고 SPL `transfer_checked` 경로를 구현한다.
-2. KMS/Secret Manager signer, RPC URL, escrow, webhook secret, Django secret/hosts를 운영용으로 구성하고 누락·mock 설정을 startup/deploy 단계에서 fail-closed 한다.
+1. 실제 Devnet USDC 거래의 수취자, mint, amount, commitment를 검증하고 SPL `transfer_checked` 경로를 구현한다.
+2. KMS/Secret Manager signer, RPC URL, escrow, webhook secret, Django secret/hosts를 운영용으로 구성하고 누락 설정을 startup/deploy 단계에서 fail-closed 한다.
 3. DEBUG 개발자 로그인은 운영에서 제거/차단하고, 지갑 서명 기반 인증 및 API의 creator/agent 권한 검증을 도입한다.
 4. 실제 Devnet E2E에서 등록→공개→402→협상→실결제→라이선스/인증서→다운로드와 실패·재시도·중복 정산을 검증한다.
 

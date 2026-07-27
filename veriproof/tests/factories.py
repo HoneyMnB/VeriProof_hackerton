@@ -8,6 +8,7 @@ from __future__ import annotations
 import secrets
 
 import factory
+from django.utils import timezone
 from factory.fuzzy import FuzzyDecimal, FuzzyInteger
 
 from apps.common.models import AgentEvent
@@ -78,6 +79,10 @@ class LicenseFactory(factory.django.DjangoModelFactory):
     usage_type = "commercial"
     # Unique idempotency key per license.
     payment_tx_sig = factory.Sequence(lambda n: f"pay_sig_{n}_{secrets.token_hex(8)}")
+    download_token = factory.Sequence(lambda n: f"download-token-{n}")
+    download_expires_at = factory.LazyFunction(
+        lambda: timezone.now() + timezone.timedelta(days=7)
+    )
 
 
 class BatchOrderFactory(factory.django.DjangoModelFactory):

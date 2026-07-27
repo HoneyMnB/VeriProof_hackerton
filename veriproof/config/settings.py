@@ -225,12 +225,9 @@ X402_NETWORK = os.environ.get(
 # Empty by default in local; cloud deployment sets the escrow pubkey.
 PLATFORM_ESCROW_PUBKEY = os.environ.get("PLATFORM_ESCROW_PUBKEY", "")
 PLATFORM_ESCROW_SECRET_KEY = os.environ.get("PLATFORM_ESCROW_SECRET_KEY", "")
-# 로컬에서는 ``mock:<test-id>`` 거래만 인정한다. 실제 배포 전에는 반드시
-# PAYMENT_VERIFIER=solana로 변경해 SolanaService 검증을 사용한다.
-PAYMENT_VERIFIER = os.environ.get("PAYMENT_VERIFIER", "mock")
-# 로컬 데모는 앵커·인증서를 명시적 mock 신호로 처리한다. 배포/Devnet에서는
-# ``SOLANA_ADAPTER=real``과 실제 signer/RPC를 제공해야 한다.
-SOLANA_ADAPTER = os.environ.get("SOLANA_ADAPTER", "mock").strip().lower()
+# Runtime Solana paths are real-only. Tests use ``tests.fakes`` through
+# constructor/factory injection; application settings do not select mock
+# adapters or accept fabricated transaction identifiers.
 # 해커톤 로컬 정책: 플랫폼 수수료는 0bps. 실제 수수료 분배 구현 전에는 0만 허용한다.
 PLATFORM_FEE_BPS = int(os.environ.get("PLATFORM_FEE_BPS", "0"))
 KMS_KEY_NAME = os.environ.get("KMS_KEY_NAME", "")
@@ -250,7 +247,7 @@ MAX_NEGOTIATION_ROUNDS = int(os.environ.get("MAX_NEGOTIATION_ROUNDS", "5"))
 MICRO_FLOOR_USDC = os.environ.get("MICRO_FLOOR_USDC", "0.05")  # Decimal string
 BATCH_MAX_ITEMS = int(os.environ.get("BATCH_MAX_ITEMS", "200"))
 ORIGINAL_RETENTION_DAYS = int(os.environ.get("ORIGINAL_RETENTION_DAYS", "7"))
-DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("DOWNLOAD_TOKEN_TTL_SECONDS", "3600"))
+DOWNLOAD_TOKEN_TTL_SECONDS = int(os.environ.get("DOWNLOAD_TOKEN_TTL_SECONDS", "604800"))
 
 # --- Logging -----------------------------------------------------------------
 

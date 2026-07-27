@@ -14,6 +14,8 @@ def test_agent_card_is_available_at_the_standard_well_known_path():
     assert response.status_code == 200
     payload = response.json()
     assert payload["name"] == "VeriProof Seller Agent"
+    assert "SOL" in payload["description"]
+    assert "USDC" not in str(payload)
     assert payload["supportedInterfaces"][0]["protocolBinding"] == "JSONRPC"
     assert payload["supportedInterfaces"][0]["url"].endswith("/a2a/")
 
@@ -39,6 +41,9 @@ def test_agent_catalog_tool_returns_only_public_registered_assets():
 
     assert result["count"] == 1
     assert result["assets"][0]["asset_id"] == str(visible.id)
+    assert result["assets"][0]["license_currency"] == "SOL"
+    assert "min_price_sol" in result["assets"][0]
+    assert "min_price_usdc" not in result["assets"][0]
     assert "original_url" not in result["assets"][0]
 
 

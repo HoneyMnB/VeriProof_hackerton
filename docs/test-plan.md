@@ -8,7 +8,7 @@
 
 ## 1. 원칙
 - **테스트 우선**: 각 SPEC의 인수조건(AC)마다 실패하는 테스트(RED)를 먼저 작성 → 최소 구현(GREEN) → 정리(REFACTOR).
-- **외부 I/O 격리**: Gemini·Solana·GCP(Firestore/BigQuery/PubSub)·pay.sh는 전부 서비스 레이어 뒤에 두고 mock. 네트워크 없이 전 스위트 실행 가능해야 한다.
+- **외부 I/O 격리**: Gemini·Solana·GCP(Firestore/BigQuery/PubSub)·pay.sh는 전부 서비스 레이어 뒤에 두고 테스트 전용 fake/stub을 주입한다. 실제 런타임 factory는 Solana mock 어댑터를 선택하지 않는다.
 - **결정성**: 시간·랜덤·네트워크 의존 제거(고정 시드/주입 시각/mock).
 - **단일 로직 경로**: 정산 후속처리는 Workflows/동기 폴백이 같은 서비스 메서드를 호출 → 테스트는 서비스 메서드 단위로 검증(경로 중복 테스트 불필요).
 
@@ -28,7 +28,7 @@
 
 ## 4. 공용 픽스처 / 팩토리 (`tests/conftest.py`, `factories.py`)
 - `creator_factory`, `ip_asset_factory`, `negotiation_session_factory`, `license_factory`, `batch_order_factory`.
-- `fake_gemini`(analyze/negotiate/quote 반환·실패 주입), `fake_solana`(verify/anchor/transfer/issue_cert·실패 주입), `fake_storage`(in-memory), `fake_firestore`/`fake_bigquery`/`fake_pubsub`(호출 기록).
+- `fake_gemini`(analyze/negotiate/quote 반환·실패 주입), `fake_solana`(verify/anchor/transfer/issue_cert·실패 주입, 테스트 전용), `fake_storage`(in-memory), `fake_firestore`/`fake_bigquery`/`fake_pubsub`(호출 기록).
 - `image_bytes_png`(유효 PNG), `oversize_bytes`, `non_image_bytes`.
 - `settings_local`(FIRESTORE_ENABLED=false, STORAGE_BACKEND=local, AP2_ENABLED=false).
 

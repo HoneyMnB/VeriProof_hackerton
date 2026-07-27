@@ -8,6 +8,7 @@ the same on-chain tx returns the existing license (architecture 8).
 """
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
 from apps.common.models import UUIDPrimaryKey
@@ -17,15 +18,23 @@ class License(UUIDPrimaryKey):
     """A granted license for one asset to one buyer wallet.
 
     Architecture 5.1: UUID PK, FK(asset) PROTECT (legal record preservation),
-    FK(session) SET_NULL (batch-issued licenses have no session), buyer_wallet
-    indexed, price/usage, ``payment_tx_sig`` UNIQUE (idempotency key),
-    certificate tx, expiry-bound download token, granted_at.
+    optional buyer account for browser purchases, FK(session) SET_NULL
+    (batch-issued licenses have no session), buyer wallet indexed, price/usage,
+    ``payment_tx_sig`` UNIQUE (idempotency key), certificate tx, expiry-bound
+    download token, granted_at.
     """
 
     asset = models.ForeignKey(
         "ip.IpAsset",
         on_delete=models.PROTECT,
         related_name="licenses",
+    )
+    buyer_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchased_licenses",
     )
     session = models.ForeignKey(
         "negotiation.NegotiationSession",
@@ -35,7 +44,13 @@ class License(UUIDPrimaryKey):
         related_name="licenses",
     )
     buyer_wallet = models.CharField(max_length=44, db_index=True)
-    price_usdc = models.DecimalField(max_digits=12, decimal_places=6)
+    price_usdc = models.DecimalField(
+        max_digits=12, decimal_places=6, null=True, blank=True
+    )
+    price_sol = models.DecimalField(
+        max_digits=16, decimal_places=9, null=True, blank=True
+    )
+    payment_currency = models.CharField(max_length=8, default="USDC")
     usage_type = models.CharField(max_length=30)
     # Idempotency key: verified on-chain payment signature.
     payment_tx_sig = models.CharField(max_length=90, unique=True)

@@ -53,8 +53,8 @@ Celery 앱과 워커 실행 경로는 현재 존재하지 않는다. `start.sh`�
 | DB | SQLite | PostgreSQL URL, migrate, fixture 복원 |
 | 저장소 | `STORAGE_BACKEND=local` | GCS bucket/권한 또는 운영 저장소 정책 |
 | AI | 키 없음, Gemini 호출 불가 | `GEMINI_API_KEYS` 또는 Vertex ADC/project/location |
-| Solana | `SOLANA_ADAPTER=mock`, Devnet RPC 기본 URL | `SOLANA_ADAPTER=real`, RPC, escrow/KMS signer |
-| 결제 | `PAYMENT_VERIFIER=mock`, `mock:` 거래만 허용 | `PAYMENT_VERIFIER=solana`, mint/수취자/서명 검증 |
+| Solana | Devnet RPC 기본 URL, signer 없으면 Memo 제출 fail-closed | RPC, escrow/KMS signer |
+| 결제 | 실제 Solana verifier 사용, 테스트는 fake 주입 | mint/수취자/서명 검증 |
 | GCP 보조 sink | Firestore/BigQuery/PubSub 비활성 또는 no-op | 각 SDK(`requirements-gcp.txt`), 프로젝트/토픽/데이터셋/권한 |
 
 `requirements.txt`는 Django, Pillow, ReportLab, DB URL 파서, Gemini SDK, Solana/solders와 테스트 도구를 설치한다. `pyproject.toml`의 `ai`, `solana`, `gcp`, `dev` extras는 패키지 배포 관점의 선택 의존성이다. GCP 전용 호환 버전은 `requirements-gcp.txt`를 따른다.
@@ -102,7 +102,7 @@ Browser / external agent
 | `ImageProcessor` | SHA-256, dHash, thumbnail, watermark. |
 | `StorageService` | local `MEDIA_ROOT` 또는 GCS에 영구 preview/supporting 파일과 임시 원본 저장·읽기·삭제. |
 | `RegistrationService`, `RegistrationDraftService`, `SubscriptionService` | 작품 매니페스트 앵커링과 다중 이미지 등록, 확인 토큰이 있는 등록 초안, 구독 잔여 등록 횟수의 원자적 차감. `MAX_WORK_IMAGES`(기본 10)가 작품당 이미지 수를 제한한다. |
-| `X402Service`, `PaymentVerifier`, `SolanaService`, `KmsSigner` | x402 envelope, mock/실제 USDC 검증, Memo 앵커·인증서·분배 송금, 키 서명. |
+| `X402Service`, `PaymentVerifier`, `SolanaService`, `KmsSigner` | x402 envelope, 실제 USDC 검증, Memo 앵커·인증서·분배 송금, 키 서명. |
 | `LicenseService`, `RoyaltyService`, `Batch*Service` | 라이선스 멱등 발급, 2차 창작 로열티, 일괄 quote/settlement. |
 | `CatalogService`, `SalesService`, `CashflowService` | 공개 카탈로그, 검증된 License 기반 판매 집계, 창작자 비용/현금흐름. |
 | `CreatorAssistantService`, `CreatorActionService`, `ConversationAttachmentService` | 비서 대화, 제한된 서버 도구 실행 및 감사, 임시 첨부 분석. |
@@ -114,21 +114,19 @@ Browser / external agent
 
 ### 7.1 현재 활성 연결 상태
 
-현재 설정의 기본값은 `SOLANA_ADAPTER=mock`, `PAYMENT_VERIFIER=mock`이다. 따라서 이 문서 작성 시점의 로컬 실행은 Solana RPC에 접속하거나 트랜잭션을 제출하지 않는다. 등록 앵커, 등록 인증서, 라이선스 인증서, 로열티 송금은 모두 `mock:solana:`로 시작하는 식별자만 만들고 DB에 기록한다. 실제 Solana 검증기는 사용되지 않는다.
+런타임 Solana 경로는 real-only다. 등록 앵커, 등록 인증서, 라이선스 인증서는 `SolanaService.submit_memo()`가 실제 Solana Memo 트랜잭션으로 제출한다. `PLATFORM_ESCROW_SECRET_KEY`가 비어 있거나 RPC/서명이 실패하면 mock 값으로 대체하지 않고 요청을 실패시킨다.
 
-Solana 관련 설정은 `config/settings.py`에 있으며, 기본 RPC URL은 Devnet `https://api.devnet.solana.com`, 기본 mint는 Devnet USDC다. 그러나 `SOLANA_ADAPTER=real`과 유효한 signer가 함께 설정되지 않으면 이 URL은 실제 송신에 사용되지 않는다.
+Solana 관련 설정은 `config/settings.py`에 있으며, 기본 RPC URL은 Devnet `https://api.devnet.solana.com`, 기본 mint는 Devnet USDC다.
 
 | 설정 | 역할 | 현재 기본값 | 실체인 전환 시 |
 |---|---|---|---|
-| `SOLANA_ADAPTER` | 앵커·인증서·로열티 송금 어댑터 선택 | `mock` | `real` |
-| `PAYMENT_VERIFIER` | 정산 전 USDC 결제 증명 검증기 선택 | `mock` | `solana` |
 | `SOLANA_RPC_URL` | Solana JSON-RPC 엔드포인트 | Devnet 공개 RPC | 신뢰 가능한 RPC 또는 GCP Blockchain RPC |
 | `USDC_MINT_ADDRESS` | 검증 대상 SPL 토큰 mint | Devnet USDC | 네트워크에 맞는 정확한 USDC mint |
 | `PLATFORM_ESCROW_PUBKEY` | 2차 창작물 대금 수취/분배용 공개키 | 빈 값 | 실제 escrow 공개키 |
 | `PLATFORM_ESCROW_SECRET_KEY` | Devnet 로컬 서명자 keypair | 빈 값 | Secret Manager 등 비밀 관리 경로 |
 | `KMS_KEY_NAME` | Cloud KMS 키 이름 | 빈 값 | KMS 어댑터가 실제 구현된 경우에만 사용 |
 
-`SOLANA_ADAPTER`와 `PAYMENT_VERIFIER`는 독립 설정이다. 예를 들어 `SOLANA_ADAPTER=real` + `PAYMENT_VERIFIER=mock`이면 앵커/인증서는 실체인 경로를 시도하지만, `mock:` 문자열 결제는 검증을 통과한다. 반대로 `SOLANA_ADAPTER=mock` + `PAYMENT_VERIFIER=solana`도 `get_payment_verifier()`가 mock Solana 서비스를 반환하므로 실제 검증이 되지 않는다. 운영 배포에서는 두 값을 각각 `real`, `solana`로 고정하고, 시작 전 설정 검증을 추가하는 것이 필요하다.
+`get_solana_service()`와 `get_payment_verifier()`는 mock 설정 분기를 갖지 않는다. 오프라인 테스트는 런타임 설정이 아니라 `tests.fakes.FakeSolanaService`를 생성자/factory 경계에 직접 주입한다.
 
 ### 7.2 결제 수취 주소의 단일 규칙
 
@@ -153,13 +151,13 @@ Solana 관련 설정은 `config/settings.py`에 있으며, 기본 RPC URL은 Dev
 
 ### 7.4 실제 Solana 어댑터의 구현 범위와 한계
 
-`SOLANA_ADAPTER=real`일 때 `get_solana_service()`는 `SolanaService`와 `KmsSigner`를 조립한다. `solana`/`solders` import와 RPC client 생성은 lazy 방식이며, 호출 시점에만 의존성이 필요하다.
+`get_solana_service()`는 `SolanaService`를 조립한다. `solders` import와 RPC client 생성은 lazy 방식이며, 호출 시점에만 의존성이 필요하다.
 
 - **결제 검증**: `verify_usdc_payment()`는 RPC 거래에서 recipient, mint, 정확한 USDC 6-decimal 최소 단위, commitment가 `confirmed` 또는 `finalized`인지 확인한다. float 대신 정수 최소 단위를 비교한다.
-- **앵커**: `anchor_hash()`는 최대 3회 Memo 전송을 시도한다. RPC client 또는 signer가 없으면 즉시 `AnchorFailed`다.
-- **인증서**: `issue_certificate()`는 `veriproof:cert:{asset_id}:{buyer}:{memo}` Memo를 작성한다.
+- **앵커**: `anchor_hash()`는 SHA-256 기반 Memo를 전송한다. RPC 또는 signer가 없으면 즉시 `AnchorFailed`다.
+- **인증서**: `issue_registration_certificate()`와 `issue_certificate()`는 원본 URL/바이트/다운로드 토큰 없이 검증용 Memo만 작성한다.
 - **로열티 송금**: `transfer_usdc()`는 인터페이스와 test seam은 있으나, 실제 `_send_spl_transfer()`는 의도적으로 `CertificateIssueError`를 발생시킨다. token account 조회와 `transfer_checked` 트랜잭션 생성은 아직 연결되어 있지 않다.
-- **KMS**: 로컬 base58 keypair의 `solders` 경로는 구현되어 있으나, `_sign_kms()`와 `_public_key_kms()`는 현재 오류를 발생시키는 stub이다. `KMS_KEY_NAME`만 설정해서는 실체인 서명이 가능하지 않다.
+- **KMS**: 현재 Memo 제출 경로는 `PLATFORM_ESCROW_SECRET_KEY`의 Solana CLI 64-byte secret-key array를 사용한다. Cloud KMS 직접 서명은 별도 연결 대상이다.
 - **RPC 파싱**: 실제 `_parse_rpc_payment()`는 token balance 증감에서 수취자/mint/금액을 뽑는 최소 구현이며, sender는 채우지 않는다. 다중 token transfer·ATA 생성·복합 거래를 운영에서 안전하게 검증하려면 instruction/계정 소유권 기반 파서를 보강해야 한다.
 
 따라서 현재 `real` 경로는 Memo 앵커/인증서와 단순 검증의 구조는 있으나, 운영용 SPL 송금 및 Cloud KMS 연결까지 완결된 상태가 아니다. 금전이 걸린 운영 전환 전에 실제 Devnet 및 목표 네트워크에서 거래 단위 통합 시험을 해야 한다.
@@ -218,26 +216,15 @@ agent 402 응답에는 공식 x402 V2 Base64 `PAYMENT-REQUIRED` 헤더가 있다
 
 `workflows/settlement.workflow.yaml`은 목표 배포 구조의 artifact이나, 이 저장소만으로 Pub/Sub→Eventarc→Workflows를 실제 배포·구독·실행하는 IaC는 제공하지 않는다. 따라서 로컬에서 확인되는 것은 동기 fallback이며, cloud 비동기 worker의 실제 end-to-end 동작은 별도 배포 검증이 필요하다.
 
-## 9. 목업 동작 상세
+## 9. 테스트 fake와 비활성 경계
 
-### 9.1 Solana 목업
+### 9.1 Solana 테스트 fake
 
-`LocalMockSolanaService`는 네트워크 I/O가 없는 결정적 시뮬레이터다. 입력을 SHA-256으로 계산한 뒤 앞 32 hex를 붙여 다음 형태의 식별자를 반환한다.
+`tests.fakes.FakeSolanaService`는 네트워크 I/O가 없는 테스트 전용 fake다. 서비스 계약과 실패 경로를 검증하기 위해 테스트에서 생성자 또는 factory 경계에 직접 주입하며, 런타임 factory에서 반환되지 않는다. 실제 DB에 저장되는 등록/인증서 tx signature는 Solana RPC가 반환한 트랜잭션 서명이어야 한다.
 
-| 메서드 | 반환 형식 | 검증/의미 |
-|---|---|---|
-| `anchor_hash` | `mock:solana:anchor:{32hex}` | 64자 콘텐츠 hash와 creator wallet 필요 |
-| `issue_registration_certificate` | `mock:solana:registration-certificate:{32hex}` | asset, creator, 64자 hash 필요 |
-| `issue_certificate` | `mock:solana:certificate:{32hex}` | asset, buyer, memo 필요 |
-| `transfer_usdc` | `mock:solana:transfer:{32hex}` | 양수 Decimal과 수취자 필요 |
+### 9.2 결제 검증
 
-반환값은 DB의 `anchor_tx_sig`, `registration_certificate_tx_sig`, `certificate_tx_sig`, `RoyaltyDistribution.transfer_tx_sig`에 저장될 수 있으나, Solana explorer에서 조회되는 거래가 아니다. 로그와 UI에서 `mock:solana:` 접두사를 실체인 서명으로 오인하지 않도록 유지해야 한다.
-
-### 9.2 결제 목업
-
-`LocalMockPaymentVerifier`는 `tx_signature`가 `mock:`으로 시작하면 유효로 처리하고 `amount=expected_amount`, `sender=local-mock`, `commitment=mock`을 돌려준다. 온체인 거래 조회, 실제 mint, 실제 수취자, 실제 금액을 검사하지 않는다. `LocalMockSolanaService.verify_usdc_payment()`도 `mock:` 접두사와 비어 있지 않은 expected recipient/mint만 확인한다.
-
-따라서 목업은 사용자 흐름·DB 멱등성·다운로드 토큰·이벤트·화면 테스트용이며, 결제 보안 시험이나 실제 자산 이동의 증거가 아니다. `mock:` signature를 production DB/외부 webhook에 허용해서는 안 된다.
+`PaymentVerifier`는 실제 `SolanaService.verify_usdc_payment()`를 사용한다. `mock:` 접두사의 거래 식별자는 런타임에서 결제 완료로 인정하지 않는다.
 
 ### 9.3 그 밖의 로컬 비활성/목업 경계
 
@@ -345,14 +332,14 @@ python manage.py makemigrations --check --dry-run   변경 없음
 ### 12.1 외부 에이전트 구매 및 Gemini 등록 런타임 검증 (2026-07-25)
 
 - 로컬 HTTP 서버에서 DEBUG 개발자 로그인 후 `POST /api/v1/assistant/chat`을 호출했다. 실제 설정된 Gemini가 등록 준비 액션과 한국어 응답을 반환했다.
-- mock 결제 구독을 활성화한 뒤 실제 multipart 등록을 호출했다. Gemini 분석, mock Solana 앵커·등록 인증서, 구독 차감이 모두 성공했다.
-- 외부 에이전트 역할로 manifest·공개 catalog를 조회하고, `X-Agent-Protocol: x402` 요청에서 HTTP 402를 수신했다. Gemini 협상은 `ACCEPT`를 반환했고, `mock:` 결제 증명으로 settle한 뒤 라이선스와 다운로드 URL을 받아 원본 다운로드 HTTP 200을 확인했다. 이는 `PAYMENT_VERIFIER=mock`, `SOLANA_ADAPTER=mock`인 로컬 검증이며 실결제·실체인 검증은 아니다.
+- 당시 로컬 mock 결제 구독과 mock Solana 앵커로 multipart 등록을 검증했다. 이 방식은 현재 런타임에서 제거되었고, 등록/인증서는 실제 Solana Memo signer가 필요하다.
+- 외부 에이전트 역할로 manifest·공개 catalog, HTTP 402, Gemini 협상, settle, 다운로드를 검증했다. 당시 결제 증명은 mock였으므로 실결제·실체인 검증 기록으로 간주하지 않는다.
 - 검증 중 multipart `visibility=PUBLIC`이 `private`로 저장되는 문제를 발견했다. 등록 입력을 소문자로 정규화하고 회귀 테스트를 추가했으며, 수정 후 실제 HTTP 등록 결과가 `public`이고 catalog에 노출됨을 확인했다.
 
 ### 12.2 다중 이미지 작품 런타임 검증 (2026-07-24)
 
 - AI 생성 PNG 3장(각 1448×1086)을 실제 multipart `POST /api/v1/ip/register`로 업로드했다.
-- 등록 응답은 하나의 `asset_id`, 하나의 mock Solana 앵커, 하나의 등록 인증서를 반환했다. 등록 전 활성 구독이 없을 때는 정상적으로 `subscription_required`를 반환하는 것도 확인했다.
+- 등록 응답은 하나의 `asset_id`, 하나의 앵커, 하나의 등록 인증서를 반환했다. 당시 앵커는 mock였으며 현재 런타임은 실제 Solana Memo 서명자를 요구한다.
 - 최신 서버의 `/discover/{asset_id}`는 썸네일 컨트롤 3개와 추가 워터마크 미리보기 경로 2개를 렌더링했고, 추가 미리보기 요청은 HTTP 200이었다.
 - 한 번의 mock settlement는 라이선스 인증서와 단일 다운로드 토큰을 반환했고, 그 토큰의 ZIP에는 대표 이미지와 추가 이미지 2장이 모두 포함됐다.
 
@@ -362,7 +349,7 @@ python manage.py makemigrations --check --dry-run   변경 없음
 
 | 도메인 | 구현 상태 | 실제 검증 근거 |
 |---|---|---|
-| 등록·보호 | SHA-256 매니페스트, 다중 이미지, Gemini 분석, preview/임시 원본, 구독 차감, 등록 인증서를 하나의 유스케이스로 처리 | 실제 multipart 등록으로 Gemini 분석·mock Solana 앵커/인증서·구독 차감 확인 |
+| 등록·보호 | SHA-256 매니페스트, 다중 이미지, Gemini 분석, preview/임시 원본, 등록 인증서를 하나의 유스케이스로 처리 | Solana Memo 제출 단위 테스트와 multipart 등록 회귀 테스트 |
 | 공개·발견 | 공개/앵커/등록 인증서 조건의 catalog, 보호 preview, 원본 비노출 | 공개 catalog와 preview 응답 확인 |
 | 외부 에이전트 | manifest/OpenAPI, x402 402, Gemini 협상, settle, 라이선스/다운로드 토큰 | 외부 에이전트 HTTP E2E에서 402→ACCEPT→settle 200→download 200 확인 |
 | 창작자 비서 | 실제 Gemini 대화, 등록 준비 액션, 제한 도구 allowlist, DB 사후 검증/감사 | `assistant/chat` 실제 Gemini 한국어 응답 및 `prepare_registration` 액션 확인 |

@@ -142,15 +142,19 @@ class X402ProtocolService:
 
         try:
             verification = self.server.verify_payment(payload, requirements)
+            print("[verify_and_settle] verification:--------------------------------- ", verification)
         except Exception as exc:
             raise X402ProtocolError("x402 Facilitator 결제 검증 호출에 실패했습니다.") from exc
         if not verification.is_valid:
+            print("[verify_and_settle] verification is not valid:--------------------------------- ", verification.invalid_reason)
             reason = verification.invalid_reason or "결제 검증에 실패했습니다."
             raise X402PaymentInvalid(reason)
 
         try:
             settlement = self.server.settle_payment(payload, requirements)
+            print("[verify_and_settle] settlement:--------------------------------- ", settlement)
         except Exception as exc:
+            print("[verify_and_settle] settlement error:--------------------------------- ", exc)
             raise X402ProtocolError("x402 Facilitator 결제 정산 호출에 실패했습니다.") from exc
         if not settlement.success:
             reason = settlement.error_reason or "결제 정산에 실패했습니다."
@@ -168,13 +172,15 @@ class X402ProtocolService:
     @staticmethod
     def _to_atomic_usdc(amount_usdc: decimal.Decimal) -> str:
         """USDC 금액을 6자리 최소 단위 문자열로 변환한다."""
-        amount = decimal.Decimal(amount_usdc)
-        if not amount.is_finite() or amount <= 0:
-            raise ValueError("x402 결제 금액은 0보다 큰 유한한 값이어야 합니다.")
-        atomic = amount * (decimal.Decimal(10) ** USDC_DECIMALS)
-        if atomic != atomic.to_integral_value():
-            raise ValueError("USDC 결제 금액은 소수점 6자리까지만 허용됩니다.")
-        return str(int(atomic))
+        print("[_to_atomic_usdc] amount_usdc:--------------------------------- ", amount_usdc)
+        return str(float(amount_usdc))
+        # amount = decimal.Decimal(amount_usdc)
+        # if not amount.is_finite() or amount <= 0:
+        #     raise ValueError("x402 결제 금액은 0보다 큰 유한한 값이어야 합니다.")
+        # atomic = amount * (decimal.Decimal(10) ** USDC_DECIMALS)
+        # if atomic != atomic.to_integral_value():
+        #     raise ValueError("USDC 결제 금액은 소수점 6자리까지만 허용됩니다.")
+        # return str(int(atomic))
 
 
 @lru_cache(maxsize=8)

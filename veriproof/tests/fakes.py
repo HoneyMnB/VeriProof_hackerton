@@ -214,8 +214,10 @@ class FakeStorageService:
         self.permanent[(kind, asset_id)] = data
         return f"memory://{kind}/{asset_id}"
 
-    def save_temporary(self, asset_id: Any, data: bytes, ttl) -> str:
-        self._record("save_temporary", (asset_id, data, ttl), {})
+    def save_temporary(
+        self, asset_id: Any, data: bytes, ttl, content_mime_type: str | None = None
+    ) -> str:
+        self._record("save_temporary", (asset_id, data, ttl, content_mime_type), {})
         self.temporary[asset_id] = data
         return f"memory://original/{asset_id}"
 
@@ -352,11 +354,15 @@ class FakeLicenseService:
         usage_type: str,
         payment_tx: str,
         session: Any = None,
+        buyer_user: Any = None,
     ) -> Any:
         import datetime as _dt
 
         self.calls.append(
-            ((asset, buyer_wallet, price, usage_type, payment_tx), {"session": session})
+            (
+                (asset, buyer_wallet, price, usage_type, payment_tx),
+                {"session": session, "buyer_user": buyer_user},
+            )
         )
         # SPEC-007 R8/AC-8: injected per-asset failure for partial-settle tests.
         asset_id = getattr(asset, "id", None)
@@ -376,6 +382,7 @@ class FakeLicenseService:
         lic.id = _uuid.uuid4()
         lic.asset = asset
         lic.session = session
+        lic.buyer_user = buyer_user
         lic.buyer_wallet = buyer_wallet
         lic.price_usdc = price
         lic.usage_type = usage_type

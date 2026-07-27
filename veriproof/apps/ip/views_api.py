@@ -14,17 +14,24 @@ import logging
 import uuid
 
 from django.conf import settings
-from django.http import HttpRequest, JsonResponse
+from django.db import transaction
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
 from apps.ip.models import IpAsset
+<<<<<<< HEAD
+from apps.ip.browser_license_session import has_browser_payment_request
+=======
+>>>>>>> 299dd88a65129f4a2384d261364d076be0701e70
 from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
 from apps.settlement.services import get_settlement_service
 from services.catalog_service import get_catalog_service
 from services.event_recorder import get_event_recorder
+from services.license_service import get_license_service
+from services._payment import resolve_pay_to
 from services.preview_service import watermark_preview_url
 from services.registration_draft_service import (
     DraftValidationError,
@@ -36,8 +43,11 @@ from services.registration_service import (
     get_registration_service,
 )
 from services.x402_service import get_x402_service
+from services.solana_service import CertificateIssueError, SolanaService
 from services.x402_protocol_service import X402PaymentInvalid, X402ProtocolError
+from services.tools_logger import ToolsLogger
 
+tool_log = ToolsLogger()
 logger = logging.getLogger(__name__)
 
 # SPEC-001 R8: allowed upload MIME types.
@@ -131,6 +141,11 @@ def register(request: HttpRequest) -> JsonResponse:
                 "description": analysis.description,
             },
             "hash_prefix": asset.image_sha256[:16],
+            "pricing": {
+                "currency": "SOL",
+                "min_price_sol": str(asset.min_price_sol),
+                "target_price_sol": str(asset.target_price_sol),
+            },
             "x402_endpoint": f"/api/v1/ip/{asset.id}",
             "watermark_url": watermark_preview_url(asset.id),
         },
@@ -164,7 +179,10 @@ def _metadata_from_draft(wallet: str, fields: dict, upload) -> RegistrationMetad
     min_price = _parse_money(fields.get("min_price"))
     target_price = _parse_money(fields.get("target_price"))
     visibility = str(fields.get("visibility") or "").strip().lower()
-    if min_price is None or target_price is None or min_price < 0 or target_price < min_price or visibility not in {IpAsset.PRIVATE, IpAsset.PUBLIC}:
+    if (
+        not _valid_sol_registration_prices(min_price, target_price)
+        or visibility not in {IpAsset.PRIVATE, IpAsset.PUBLIC}
+    ):
         raise DraftValidationError("The confirmed pricing or visibility is invalid.")
     return RegistrationMetadata(
         creator_wallet=wallet, asset_type=asset_type, visibility=visibility,
@@ -199,9 +217,19 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         return _error("asset_not_found", "asset not found", status=404)
     minimum = _parse_money(data.get("min_price_usdc"))
     target = _parse_money(data.get("target_price_usdc"))
+    sol_target = _parse_money(data.get("target_price_sol"))
     visibility = str(data.get("visibility") or "").strip().lower()
     if minimum is None or target is None or minimum < 0 or target < minimum or visibility not in {IpAsset.PRIVATE, IpAsset.PUBLIC}:
         return _error("invalid_asset_terms", "invalid pricing or visibility", status=422)
+    if sol_target is not None and (
+        sol_target <= 0
+        or sol_target.as_tuple().exponent < -9
+    ):
+        return _error(
+            "invalid_sol_price",
+            "target_price_sol must be positive with at most 9 decimal places",
+            status=422,
+        )
     if visibility == IpAsset.PUBLIC and not asset.registration_certificate_tx_sig:
         logger.warning(
             "public listing rejected without registration certificate user=%s asset_id=%s",
@@ -227,12 +255,14 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         return _error("invalid_asset_metadata", "title must be 120 characters or fewer", status=422)
     asset.min_price_usdc = minimum
     asset.target_price_usdc = target
+    if "target_price_sol" in data:
+        asset.target_price_sol = sol_target
     asset.visibility = visibility
     asset.title = title or None
     asset.description = description or None
     asset.tags = tags
     asset.save(update_fields=[
-        "min_price_usdc", "target_price_usdc", "visibility", "title", "description", "tags"
+        "min_price_usdc", "target_price_usdc", "target_price_sol", "visibility", "title", "description", "tags"
     ])
     logger.info("asset terms updated user=%s asset_id=%s", request.user.get_username(), asset_id)
     return JsonResponse({
@@ -242,8 +272,34 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         "tags": asset.tags,
         "min_price_usdc": str(asset.min_price_usdc),
         "target_price_usdc": str(asset.target_price_usdc),
+        "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else None,
         "visibility": asset.visibility,
     })
+
+
+@csrf_exempt
+def delete_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """소유 창작자가 요청한 작품을 실제 삭제한다."""
+    if request.method != "DELETE":
+        return _error("method_not_allowed", "DELETE required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to manage an IP asset", status=401)
+    asset = IpAsset.objects.filter(id=asset_id, account_owner=request.user).first()
+    if asset is None:
+        logger.warning("asset delete rejected user=%s asset_id=%s", request.user.get_username(), asset_id)
+        return _error("asset_not_found", "asset not found", status=404)
+    with transaction.atomic():
+        asset.derivatives.update(parent_asset=None, royalty_share_bps=None)
+        if hasattr(asset, "source_draft"):
+            asset.source_draft.executed_asset = None
+            asset.source_draft.save(update_fields=["executed_asset", "updated_at"])
+        asset.batch_items.all().delete()
+        asset.licenses.all().delete()
+        if hasattr(asset, "registration_charge"):
+            asset.registration_charge.delete()
+        asset.delete()
+    logger.info("asset deleted user=%s asset_id=%s", request.user.get_username(), asset_id)
+    return HttpResponse(status=204)
 
 
 def _is_valid_pubkey(value: str) -> bool:
@@ -278,6 +334,24 @@ def _parse_money(raw: str | None) -> decimal.Decimal | None:
         return value if value.is_finite() else None
     except (decimal.InvalidOperation, ValueError):
         return None
+
+
+def _valid_sol_registration_prices(
+    minimum: decimal.Decimal | None,
+    target: decimal.Decimal | None,
+) -> bool:
+    """Validate registration-canvas native SOL prices exactly as lamports."""
+    return bool(
+        minimum is not None
+        and target is not None
+        and minimum.is_finite()
+        and target.is_finite()
+        and minimum >= 0
+        and target > 0
+        and target >= minimum
+        and minimum.as_tuple().exponent >= -9
+        and target.as_tuple().exponent >= -9
+    )
 
 
 def _parse_int(raw: str | None) -> int | None:
@@ -318,9 +392,14 @@ def _registration_metadata(
     min_price = _parse_money(request.POST.get("min_price"))
     target_price = _parse_money(request.POST.get("target_price"))
     if min_price is None or min_price < 0:
-        return None, _error("invalid_min_price", "min_price must be a non-negative number")
-    if target_price is None or target_price < min_price:
-        return None, _error("invalid_target_price", "target_price must be at least min_price")
+        return None, _error("invalid_min_price", "min_price must be a non-negative SOL amount")
+    if target_price is None or target_price <= 0 or target_price < min_price:
+        return None, _error("invalid_target_price", "target_price must be a positive SOL amount at least equal to min_price")
+    if not _valid_sol_registration_prices(min_price, target_price):
+        return None, _error(
+            "invalid_sol_price",
+            "SOL prices support at most 9 decimal places",
+        )
 
     visibility_value = (request.POST.get("visibility") or "").strip().lower()
     share_requested = (request.POST.get("share") or "").strip().lower() == "true"
@@ -368,10 +447,11 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     if asset is None:
         return _error("not_found", "asset not found", status=404)
 
-    # R2 / AC-3: licensed path — 실제 DB 라이선스와 토큰이 모두 있어야 한다.
+    # R2 / AC-3: licensed path — 실제 DB 라이선스와 활성 토큰이 모두 있어야 한다.
     tx_sig = request.headers.get("X-Solana-Tx-Sig")
     license = License.objects.filter(asset=asset, payment_tx_sig=tx_sig).first() if tx_sig else None
-    if license is not None:
+    license_service = get_license_service()
+    if license is not None and license_service.is_download_active(license):
         return _licensed_response(asset, license)
 
     # 비공개 자산은 소유자가 명시적으로 공유하기 전 외부 구매·에이전트 탐색
@@ -383,11 +463,14 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     ):
         return _error("not_found", "asset not found", status=404)
 
+    tool_log.info(f"asset: {asset}")
     # Unlicensed — classify the client (R6/R7).
     x402 = get_x402_service()
     if x402.classify_client(request) == "agent":
         session = _accepted_x402_session(request, asset)
+        tool_log.info(f"session: {session}")
         if request.GET.get("session_id") and session is None:
+            tool_log.info(f"session is None , return 409")
             return _error(
                 "invalid_negotiation_session",
                 "accepted negotiation session not found for this asset",
@@ -399,7 +482,9 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             else asset.target_price_usdc
         )
         payment_signature = request.headers.get("PAYMENT-SIGNATURE")
+        tool_log.info(f"[get_asset] payment_signature: {payment_signature}")
         if payment_signature:
+            tool_log.info(f"[get_asset] return _settle_x402_request")
             return _settle_x402_request(
                 request,
                 asset,
@@ -419,17 +504,217 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     return JsonResponse(x402.build_solana_pay_fallback(asset), status=200)
 
 
+@csrf_exempt
+def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Verify a browser Solana Pay native SOL payment by reference on Devnet."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to verify a browser payment", status=401)
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_json", "JSON body required", status=422)
+    reference = str(data.get("reference") or "").strip()
+    if not _is_valid_pubkey(reference):
+        return _error("invalid_reference", "reference must be a valid Solana pubkey", status=422)
+
+    asset = IpAsset.objects.select_related("creator").filter(id=asset_id).first()
+    if (
+        asset is None
+        or asset.visibility != IpAsset.PUBLIC
+        or asset.status not in {IpAsset.ANCHORED, IpAsset.LISTED}
+        or not asset.registration_certificate_tx_sig
+    ):
+        return _error("not_found", "asset not found", status=404)
+    if not has_browser_payment_request(request, asset, reference):
+        return _error("invalid_payment_reference", "payment request is not active for this session", status=403)
+
+    expected_memo = f"VERIPROOF:{asset.id}"
+    solana = SolanaService(rpc_url=settings.SOLANA_RPC_URL)
+    try:
+        verification = solana.verify_sol_payment_by_reference(
+            reference=reference,
+            expected_recipient=resolve_pay_to(asset),
+            expected_amount=asset.target_price_usdc,
+            expected_memo=expected_memo,
+        )
+    except CertificateIssueError as exc:
+        logger.warning("solpay verification failed asset_id=%s: %s", asset.id, exc)
+        return _error("solpay_verification_unavailable", "payment verification is temporarily unavailable", status=503)
+
+    if not verification.is_valid:
+        return JsonResponse(
+            {
+                "status": "PENDING",
+                "asset_id": str(asset.id),
+                "reference": reference,
+            },
+            status=202,
+        )
+    if not verification.tx_signature or not verification.sender:
+        logger.warning("solpay verification missing settlement fields asset_id=%s", asset.id)
+        return _error("solpay_verification_incomplete", "payment verification is incomplete", status=503)
+
+    try:
+        result = get_settlement_service().settle_pipeline(
+            asset=asset,
+            buyer_wallet=verification.sender,
+            usage_type="commercial",
+            tx_signature=verification.tx_signature,
+            session=None,
+            expected_amount=asset.target_price_usdc,
+            payment_already_verified=True,
+            buyer_user=request.user,
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("solpay license grant failed asset_id=%s tx_sig=%s: %s", asset.id, verification.tx_signature, exc)
+        return _error("license_grant_failed", "license could not be granted", status=503)
+
+    if not result.ok or result.license is None:
+        return _error("license_grant_failed", "license could not be granted", status=503)
+    expires_at = result.download_expires_at
+
+    return JsonResponse(
+        {
+            "status": "PAID",
+            "asset_id": str(asset.id),
+            "reference": reference,
+            "payer_wallet": verification.sender,
+            "amount_sol": str(verification.amount),
+            "download_url": result.download_url,
+            "download_expires_at": expires_at.isoformat() if expires_at else None,
+            "slot": verification.slot,
+            "commitment": verification.commitment,
+        },
+        status=200,
+    )
+
+
+def get_agent_sol_payment_terms(
+    request: HttpRequest, asset_id: uuid.UUID
+) -> JsonResponse:
+    """Return the seller-set native Devnet SOL terms for a buyer agent.
+
+    This is intentionally separate from the USDC x402 endpoint. A missing
+    seller price is a configuration error, never a USDC-derived fallback.
+    """
+    if request.method != "GET":
+        return _error("method_not_allowed", "GET required", status=405)
+    asset = IpAsset.objects.filter(id=asset_id).first()
+    if (
+        asset is None
+        or asset.visibility != IpAsset.PUBLIC
+        or asset.status not in {IpAsset.ANCHORED, IpAsset.LISTED}
+        or not asset.registration_certificate_tx_sig
+    ):
+        return _error("not_found", "asset not found", status=404)
+    if asset.target_price_sol is None or asset.target_price_sol <= 0:
+        return _error(
+            "sol_price_not_configured",
+            "the seller has not configured a native SOL price",
+            status=409,
+        )
+    if asset.parent_asset_id is not None:
+        return _error(
+            "sol_payment_unsupported",
+            "native SOL payment is unavailable until SOL royalty settlement is configured",
+            status=409,
+        )
+    return JsonResponse(
+        {
+            "status": "payment_required",
+            "asset_id": str(asset.id),
+            "currency": "SOL",
+            "network": settings.X402_NETWORK,
+            "recipient": resolve_pay_to(asset),
+            "amount_sol": str(asset.target_price_sol),
+            "memo": f"VERIPROOF:{asset.id}:SOL",
+        }
+    )
+
+
+@csrf_exempt
+def settle_agent_sol_payment(
+    request: HttpRequest, asset_id: uuid.UUID
+) -> JsonResponse:
+    """Verify a buyer agent's native SOL transfer and grant its license."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_json", "JSON body required", status=422)
+    tx_signature = str(data.get("tx_signature") or "").strip()
+    buyer_wallet = str(data.get("buyer_wallet") or "").strip()
+    if not tx_signature or not _is_valid_pubkey(buyer_wallet):
+        return _error("invalid_payment_submission", "valid transaction and buyer wallet required", status=422)
+
+    asset = IpAsset.objects.filter(id=asset_id).first()
+    if (
+        asset is None
+        or asset.visibility != IpAsset.PUBLIC
+        or asset.status not in {IpAsset.ANCHORED, IpAsset.LISTED}
+        or not asset.registration_certificate_tx_sig
+    ):
+        return _error("not_found", "asset not found", status=404)
+    amount = asset.target_price_sol
+    if amount is None or amount <= 0:
+        return _error("sol_price_not_configured", "the seller has not configured a native SOL price", status=409)
+    if asset.parent_asset_id is not None:
+        return _error(
+            "sol_payment_unsupported",
+            "native SOL payment is unavailable until SOL royalty settlement is configured",
+            status=409,
+    )
+
+    try:
+        solana = SolanaService(rpc_url=settings.SOLANA_RPC_URL)
+        verification = solana.verify_sol_payment_transaction(
+            signature=tx_signature,
+            expected_recipient=resolve_pay_to(asset),
+            expected_lamports=solana._amount_to_lamports(amount),
+            expected_memo=f"VERIPROOF:{asset.id}:SOL",
+        )
+    except CertificateIssueError as exc:
+        logger.warning("agent SOL verification unavailable asset_id=%s: %s", asset.id, exc)
+        return _error("sol_payment_verification_unavailable", "payment verification is temporarily unavailable", status=503)
+    if not verification.is_valid or verification.sender != buyer_wallet:
+        return _error("invalid_sol_payment", "payment does not match the SOL terms", status=400)
+
+    result = get_settlement_service().settle_pipeline(
+        asset=asset,
+        session=None,
+        tx_signature=tx_signature,
+        buyer_wallet=buyer_wallet,
+        expected_amount=amount,
+        usage_type="commercial",
+        payment_already_verified=True,
+        payment_currency="SOL",
+    )
+    if not result.ok or result.license is None:
+        return _error("license_grant_failed", "license could not be granted", status=503)
+    return JsonResponse(
+        {
+            "status": "purchased",
+            "asset_id": str(asset.id),
+            "currency": "SOL",
+            "amount_sol": str(amount),
+            "transaction": tx_signature,
+            "buyer_wallet": buyer_wallet,
+            "download_url": result.download_url,
+            "download_expires_at": result.download_expires_at.isoformat() if result.download_expires_at else None,
+        }
+    )
+
+
 def _licensed_response(asset: IpAsset, license: License) -> JsonResponse:
     """Build the 200 response for a licensed agent (R2).
 
     저장된 만료 토큰만 반환한다. 임시 또는 조립한 URL은 성공 응답에 넣지 않는다.
     """
     expires_at = license.download_expires_at
-    download_url = (
-        f"/files/{license.download_token}"
-        if license.download_token and (expires_at is None or expires_at > timezone.now())
-        else None
-    )
+    download_url = f"/files/{license.download_token}" if license.download_token else None
     return JsonResponse(
         {
             "status": "LICENSED",
@@ -545,6 +830,7 @@ def _accepted_x402_session(
 ) -> NegotiationSession | None:
     """요청한 자산에 속한 수락 완료 협상만 x402 가격에 반영한다."""
     session_id = request.GET.get("session_id")
+    tool_log.info(f"[accepted_x402_session] session_id: {session_id}")
     if not session_id:
         return None
     try:

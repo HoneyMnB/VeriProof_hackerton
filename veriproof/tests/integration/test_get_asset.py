@@ -226,7 +226,14 @@ def test_browser_without_license_gets_solana_pay_fallback(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["solana_pay"]["address"] == VALID_WALLET
-    assert body["solana_pay"]["amount_usdc"]
+    assert body["solana_pay"]["asset"] == "SOL"
+    assert body["solana_pay"]["cluster"] == "devnet"
+    assert body["solana_pay"]["rpc_url"]
+    assert body["solana_pay"]["reference"]
+    assert body["solana_pay"]["amount_sol"]
+    assert "cluster=devnet" in body["solana_pay"]["uri"]
+    assert "reference=" in body["solana_pay"]["uri"]
+    assert "spl-token" not in body["solana_pay"]["uri"]
 
 
 # === AC-5: 402 body contains USDC mint ======================================
@@ -329,6 +336,48 @@ def test_existing_license_skips_onchain_verify(client, monkeypatch, settings):
     )
     assert response.status_code == 200
     # R10: the on-chain verify was skipped because the DB License pre-existed.
+    verify_calls = [c for c in fake_solana.calls if c[0] == "verify_usdc_payment"]
+    assert len(verify_calls) == 0
+
+
+@pytest.mark.django_db
+def test_expired_license_requires_payment_again(client, monkeypatch, settings):
+    """Expired ledger rows are preserved but no longer return LICENSED."""
+    from django.utils import timezone
+    from apps.ip.models import IpAsset
+    from services.license_service import LicenseService
+    from tests.fakes import FakeSolanaService
+    from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
+
+    settings.PLATFORM_ESCROW_PUBKEY = _ESCROW_PUBKEY
+
+    creator = CreatorFactory(wallet_address=VALID_WALLET)
+    asset = IpAssetFactory(creator=creator, status=IpAsset.LISTED, visibility=IpAsset.PUBLIC)
+    license = LicenseFactory(
+        asset=asset,
+        payment_tx_sig="tx_expired_db_001",
+        download_expires_at=timezone.now() - timezone.timedelta(seconds=1),
+    )
+
+    fake_solana = FakeSolanaService()
+    monkeypatch.setattr(
+        "services.license_service.get_solana_service", lambda: fake_solana
+    )
+    _patch_view_services(
+        monkeypatch,
+        x402=_real_x402(settings),
+        license_service=LicenseService(),
+        storage=None,
+    )
+
+    response = client.get(
+        GET_TEMPLATE.format(asset_id=str(asset.id)),
+        headers={**_AGENT_HEADERS, "X-Solana-Tx-Sig": license.payment_tx_sig},
+    )
+
+    assert response.status_code == 402
+    assert response.json()["error"] == "Payment required"
+    assert license.__class__.objects.filter(id=license.id).exists()
     verify_calls = [c for c in fake_solana.calls if c[0] == "verify_usdc_payment"]
     assert len(verify_calls) == 0
 

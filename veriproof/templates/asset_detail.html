@@ -3,7 +3,7 @@
 {% block title %}{{ asset.title }} | VeriProof{% endblock %}
 {% block main %}
 {# 라이선스 가능 작품 상세 페이지: 보호된 미리보기 갤러리, 작품 메타데이터, 즉시 구매/결제 패널 #}
-<article class="asset-detail" data-asset-detail data-asset-id="{{ asset.asset_id }}" data-settle-url="{{ asset.x402_endpoint }}/settle">
+<article class="asset-detail" data-asset-detail data-asset-id="{{ asset.asset_id }}" data-solpay-verify-url="/api/v1/ip/{{ asset.asset_id }}/solpay/verify" data-solpay-reference="{{ payment.solana_pay.reference }}" data-solpay-recipient="{{ payment.solana_pay.address }}" data-solpay-amount="{{ payment.solana_pay.amount_sol }}" data-solpay-memo="VERIPROOF:{{ asset.asset_id }}" data-solpay-rpc="{{ payment.solana_pay.rpc_url }}">
     <a class="asset-detail__back" href="/discover" data-i18n="detail.back">← Back to Discover</a>
     <div class="asset-detail__grid">
         {# 보호된 미리보기 영역: 워터마크 대표 이미지 + 다중 이미지일 때 썸네일 갤러리 #}
@@ -32,30 +32,60 @@
                 <div><dt data-i18n="detail.proof">Proof</dt><dd data-i18n="detail.proof_value">On-chain certificate after payment</dd></div>
             </dl>
         </section>
-        {# 구매/라이선스 결제 패널: 즉시 구매가, Solana Pay 결제 링크, 결제 검증 폼 #}
+        {# 구매/라이선스 결제 패널: 즉시 구매가, Solana Pay 네이티브 SOL 결제 링크 #}
         <aside class="asset-detail__purchase" aria-labelledby="purchase-title">
             <p data-i18n="detail.buy_eyebrow">BUY-IT-NOW LICENSE</p>
             <h2 id="purchase-title" data-i18n="detail.buy_title">License this work</h2>
-            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ payment.solana_pay.amount_usdc }} USDC</strong></p>
+            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ payment.solana_pay.amount_sol }} SOL</strong></p>
             <dl class="asset-detail__payment-summary">
                 <div><dt data-i18n="detail.delivery">After verification</dt><dd data-i18n="detail.delivery_value">License certificate and time-bound original download</dd></div>
-                <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · USDC</dd></div>
+                <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · SOL</dd></div>
             </dl>
-            <a class="asset-detail__pay" href="{{ payment.solana_pay.uri }}" data-i18n="detail.pay_now">Pay now with Solana Pay</a>
+            {% if active_license %}
+            <a class="asset-detail__pay" href="{{ active_license.download_url }}" download data-solana-pay-download data-download-expires-at="{{ active_license.download_expires_at }}">다운로드</a>
+            {% elif request.user.is_authenticated %}
+            <button class="asset-detail__pay" type="button" data-solana-pay-open data-solana-pay-uri="{{ payment.solana_pay.uri }}" data-i18n="detail.pay_now">Pay now with Solpay</button>
+            {% else %}
+            <a class="asset-detail__pay" href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in to purchase</a>
+            {% endif %}
             <p class="asset-detail__note" data-i18n="detail.no_cart">No cart. Payment grants one license and an expiry-bound original download.</p>
-            {# 결제 완료 후 라이선스 발급 검증 폼 (구매자 지갑 + Solana 트랜잭션 서명 입력) #}
-            <details class="asset-detail__verify">
-                <summary data-i18n="detail.verify_summary">I have completed the payment</summary>
-                <form id="payment-proof-form" class="asset-detail__payment-form">
-                    <label><span data-i18n="detail.wallet">Buyer wallet</span><input id="buyer-wallet" name="buyer_wallet" maxlength="44" required autocomplete="off" spellcheck="false"></label>
-                    <label><span data-i18n="detail.tx">Solana transaction signature</span><input id="payment-tx" name="tx_signature" maxlength="90" required autocomplete="off" spellcheck="false"></label>
-                    <button type="submit" data-i18n="detail.verify_payment">Verify payment and issue license</button>
-                </form>
-                {% if local_mock_payment %}<button id="local-demo-pay" class="asset-detail__demo-pay" type="button" data-i18n="detail.demo_pay">Run local demo payment</button>{% endif %}
-                <p id="payment-status" class="vp-status" role="status"></p>
-            </details>
         </aside>
+    </div>
+    <div id="solana-pay-modal" class="asset-detail__pay-modal" hidden role="dialog" aria-modal="true" aria-labelledby="solana-pay-title">
+        <div class="asset-detail__pay-backdrop" data-solana-pay-close></div>
+        <section class="asset-detail__pay-panel">
+            <header>
+                <div>
+                    <p>Solpay · Devnet</p>
+                    <h2 id="solana-pay-title">SOL payment</h2>
+                </div>
+                <button class="asset-detail__pay-close" type="button" data-solana-pay-close aria-label="Close payment window">×</button>
+            </header>
+            <dl class="asset-detail__pay-fields">
+                <div><dt>Network</dt><dd>Devnet</dd></div>
+                <div><dt>Amount</dt><dd>{{ payment.solana_pay.amount_sol }} SOL</dd></div>
+                <div><dt>Recipient</dt><dd>{{ payment.solana_pay.address }}</dd></div>
+            </dl>
+            <div class="asset-detail__pay-actions">
+                <button class="asset-detail__send-pay" type="button" data-solana-pay-send>Pay with Phantom</button>
+                <button class="asset-detail__copy-pay" type="button" data-solana-pay-copy>Copy address</button>
+            </div>
+            <p id="solana-pay-status" class="asset-detail__pay-status" role="status"></p>
+        </section>
     </div>
 </article>
 {% endblock %}
-{% block page_scripts %}<script src="{% static 'js/asset-detail.js' %}"></script><script src="{% static 'js/payment.js' %}"></script>{% endblock %}
+{% block page_scripts %}
+<script type="module">
+    import { Buffer } from "https://esm.sh/buffer@6.0.3";
+    import * as solanaWeb3 from "https://esm.sh/@solana/web3.js@1.95.8?bundle";
+
+    window.Buffer = Buffer;
+    window.solanaWeb3 = solanaWeb3;
+
+    const detailScript = document.createElement("script");
+    detailScript.src = "{% static 'js/asset-detail.js' %}";
+    detailScript.defer = true;
+    document.body.appendChild(detailScript);
+</script>
+{% endblock %}

@@ -38,17 +38,21 @@ def test_account_preferences_persist_language_and_workspace_controls(client):
     """설정 모달의 언어·지갑 값은 저장되고 입력 컨트롤은 렌더링에 남는다."""
     from django.contrib.auth.models import User
 
+    from apps.ip.models import Creator
+
+    wallet = "11111111111111111111111111111111"
     user = User.objects.create_user("seller@test.com", "seller@test.com", "safe-password-123")
     client.force_login(user)
 
     response = client.post(
         "/accounts/preferences/",
-        data='{"display_name":"Seller","language":"en","recovery_email":"recovery@example.com","contact_phone":"+82 10 1234 5678","creator_wallet":"11111111111111111111111111111111"}',
+        data=f'{{"display_name":"Seller","language":"en","recovery_email":"recovery@example.com","contact_phone":"+82 10 1234 5678","creator_wallet":"{wallet}"}}',
         content_type="application/json",
     )
     assert response.status_code == 200
     assert response.json()["language"] == "en"
     assert response.json()["recovery_email"] == "recovery@example.com"
+    assert Creator.objects.filter(wallet_address=wallet).exists()
 
     workspace = client.get("/")
     content = workspace.content.decode()

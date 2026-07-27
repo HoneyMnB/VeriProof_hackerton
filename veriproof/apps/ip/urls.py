@@ -13,7 +13,11 @@ urlpatterns = [
     # Registration + access (x402 interceptor)
     path("ip/register", views_api.register, name="api-register"),
     path("ip/<uuid:asset_id>", views_api.get_asset, name="api-get-asset"),
+    path("ip/<uuid:asset_id>/solpay/verify", views_api.verify_solpay, name="api-solpay-verify"),
+    path("ip/<uuid:asset_id>/agent-sol-payment", views_api.get_agent_sol_payment_terms, name="api-agent-sol-payment"),
+    path("ip/<uuid:asset_id>/agent-sol-payment/settle", views_api.settle_agent_sol_payment, name="api-agent-sol-payment-settle"),
     path("ip/<uuid:asset_id>/terms", views_api.update_asset_terms, name="api-update-asset-terms"),
+    path("ip/<uuid:asset_id>/delete", views_api.delete_asset, name="api-delete-asset"),
     # Certificate + transaction history
     path(
         "ip/<uuid:asset_id>/certificate/<str:cert_id>",

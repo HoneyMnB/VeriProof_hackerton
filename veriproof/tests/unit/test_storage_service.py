@@ -78,6 +78,46 @@ def test_storage_purge_original_removes_temporary(local_storage):
     assert local_storage.has_temporary("asset-p") is False
 
 
+def test_storage_temporary_uses_image_extension(local_storage, tmp_path):
+    """Image originals are stored with their image extension, not .bin."""
+    url = local_storage.save_temporary(
+        "asset-img",
+        b"image-bytes",
+        datetime.timedelta(days=1),
+        "image/png",
+    )
+
+    assert url == "/media/temporary/asset-img.png"
+    assert (tmp_path / "temporary" / "asset-img.png").read_bytes() == b"image-bytes"
+    assert local_storage.read_temporary("asset-img") == b"image-bytes"
+
+
+def test_storage_temporary_uses_pdf_extension(local_storage, tmp_path):
+    """PDF originals are stored as .pdf, not .bin."""
+    url = local_storage.save_temporary(
+        "asset-pdf",
+        b"%PDF-1.4",
+        datetime.timedelta(days=1),
+        "application/pdf",
+    )
+
+    assert url == "/media/temporary/asset-pdf.pdf"
+    assert (tmp_path / "temporary" / "asset-pdf.pdf").read_bytes() == b"%PDF-1.4"
+    assert local_storage.read_temporary("asset-pdf") == b"%PDF-1.4"
+
+
+def test_storage_purge_original_removes_typed_temporary(local_storage):
+    """Purging removes typed originals as well as legacy .bin originals."""
+    local_storage.save_temporary(
+        "asset-pdf", b"%PDF-1.4", datetime.timedelta(days=1), "application/pdf"
+    )
+    assert local_storage.has_temporary("asset-pdf") is True
+
+    local_storage.purge_original("asset-pdf")
+
+    assert local_storage.has_temporary("asset-pdf") is False
+
+
 def test_storage_signed_download_url_returns_url_when_present(local_storage):
     """signed_download_url returns a URL for a present temporary; None otherwise."""
     assert local_storage.signed_download_url("nope", datetime.timedelta(hours=1)) is None
@@ -156,9 +196,28 @@ def test_storage_gcs_save_temporary_uses_injected_client():
     assert svc.get_temporary_expiry("asset-t") is not None
 
 
-def test_storage_gcs_save_temporary_fails_without_client(tmp_path):
-    """GCS로 설정했으면 로컬 URL을 꾸며내지 않고 실패한다."""
+def test_storage_gcs_save_temporary_uses_pdf_extension():
+    """GCS temporary originals use the upload MIME extension."""
+    stub = _StubGCSClient()
+    svc = StorageService(
+        backend="gcs", gcs_bucket="veriproof-bucket", client=stub
+    )
+    url = svc.save_temporary(
+        "asset-pdf", b"%PDF-1.4", datetime.timedelta(days=2), "application/pdf"
+    )
+
+    assert url == (
+        "https://storage.googleapis.com/veriproof-bucket/"
+        "temporary/asset-pdf.pdf"
+    )
+    bucket = stub.buckets["veriproof-bucket"]
+    assert bucket.blobs["temporary/asset-pdf.pdf"].uploaded == b"%PDF-1.4"
+
+
+def test_storage_gcs_save_temporary_fails_without_client(tmp_path, monkeypatch):
+    """GCS 클라이언트가 없으면 로컬 URL을 꾸며내지 않고 실패한다."""
     svc = StorageService(backend="gcs", gcs_bucket="b", media_root=tmp_path)
+    monkeypatch.setattr(svc, "_get_gcs_client", lambda: None)
     with pytest.raises(RuntimeError):
         svc.save_temporary("aid", b"orig", datetime.timedelta(days=1))
 
@@ -186,9 +245,10 @@ def test_storage_gcs_save_permanent_rejects_unknown_kind():
         svc.save_permanent("unknown-kind", "aid", b"x")
 
 
-def test_storage_gcs_save_permanent_fails_without_client(tmp_path):
-    """GCS 설정 오류는 가짜 로컬 성공으로 대체하지 않는다."""
+def test_storage_gcs_save_permanent_fails_without_client(tmp_path, monkeypatch):
+    """GCS 클라이언트가 없으면 가짜 로컬 성공으로 대체하지 않는다."""
     svc = StorageService(backend="gcs", gcs_bucket="b", media_root=tmp_path)
+    monkeypatch.setattr(svc, "_get_gcs_client", lambda: None)
     with pytest.raises(RuntimeError):
         svc.save_permanent("thumbnail", "aid", b"x")
 

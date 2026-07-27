@@ -17,7 +17,9 @@ SPEC-003 / SPEC-004).
 from __future__ import annotations
 
 import decimal
+import secrets
 from typing import Any
+from urllib.parse import urlencode
 
 from ._payment import resolve_pay_to
 from ._types import SubmittedPayment
@@ -31,6 +33,7 @@ from .x402_protocol_service import (
 )
 # SPEC-002 R7: human-readable label for the Solana Pay QR fallback.
 SOLANA_PAY_LABEL = "VeriProof IP License"
+BASE58_ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 
 
 class InvalidPaymentSubmitted(ValueError):
@@ -56,6 +59,7 @@ class X402Service:
         self.ap2_enabled = ap2_enabled
         self.usdc_mint = usdc_mint
         self.network = network
+        self.rpc_url = rpc_url or "https://api.devnet.solana.com"
         # SPEC-002 R5b: platform escrow pubkey used by the shared recipient
         # resolution rule when ``asset.parent_asset`` is set. ``None`` defers
         # to ``settings.PLATFORM_ESCROW_PUBKEY`` at call time.
@@ -187,16 +191,27 @@ class X402Service:
     def build_solana_pay_fallback(self, asset: Any) -> dict:
         """Build the 200 Solana Pay Buy-It-Now body for non-agent clients.
 
-        The fixed price equals ``asset.target_price_usdc``. The address is
+        The fixed SOL amount equals ``asset.target_price_usdc``. The address is
         routed through the same shared recipient-resolution rule as the 402
         path so browser and agent clients cannot disagree on the recipient.
         """
         pay_to = resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey)
         amount_str = str(asset.target_price_usdc)
-        uri = (
-            f"solana-pay:{pay_to}?amount={amount_str}"
-            f"&spl-token={self.usdc_mint}"
+        reference = _new_reference_pubkey()
+        # Solana Pay transfer requests use the ``solana:<recipient>`` URL
+        # format. ``reference`` lets the server discover the payment on-chain.
+        # Omitting ``spl-token`` makes this a native SOL transfer.
+        params = urlencode(
+            {
+                "amount": amount_str,
+                "cluster": self.network,
+                "reference": reference,
+                "label": SOLANA_PAY_LABEL,
+                "message": f"VeriProof license {asset.id}",
+                "memo": f"VERIPROOF:{asset.id}",
+            }
         )
+        uri = f"solana:{pay_to}?{params}"
         from services.preview_service import watermark_preview_url
 
         return {
@@ -205,8 +220,11 @@ class X402Service:
             "preview_url": watermark_preview_url(asset.id),
             "solana_pay": {
                 "address": pay_to,
-                "mint": self.usdc_mint,
-                "amount_usdc": amount_str,
+                "asset": "SOL",
+                "amount_sol": amount_str,
+                "cluster": self.network,
+                "rpc_url": self.rpc_url,
+                "reference": reference,
                 "label": SOLANA_PAY_LABEL,
                 "uri": uri,
             },
@@ -325,3 +343,19 @@ def get_x402_service() -> X402Service:
         ),
         network=getattr(settings, "X402_NETWORK", SOLANA_DEVNET_CAIP2),
     )
+
+
+def _new_reference_pubkey() -> str:
+    """Return a random 32-byte base58 public key for Solana Pay reference."""
+    return _base58_encode(secrets.token_bytes(32))
+
+
+def _base58_encode(raw: bytes) -> str:
+    """Encode bytes as Solana-compatible base58 without adding a dependency."""
+    number = int.from_bytes(raw, "big")
+    encoded = ""
+    while number:
+        number, remainder = divmod(number, 58)
+        encoded = BASE58_ALPHABET[remainder] + encoded
+    leading_zeroes = len(raw) - len(raw.lstrip(b"\0"))
+    return (BASE58_ALPHABET[0] * leading_zeroes) + (encoded or BASE58_ALPHABET[0])

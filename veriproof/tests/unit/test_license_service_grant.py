@@ -28,7 +28,7 @@ def test_grant_creates_license_with_payment_tx(monkeypatch):
 
     license = svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_create_001",
@@ -37,7 +37,7 @@ def test_grant_creates_license_with_payment_tx(monkeypatch):
     assert isinstance(license, License)
     assert license.payment_tx_sig == "tx_create_001"
     assert license.asset_id == asset.id
-    assert license.buyer_wallet == "BuyerWallet1111111111111111111111111111111111"
+    assert license.buyer_wallet == "BuyerWallet111111111111111111111111111111"
     assert license.price_usdc == decimal.Decimal("1.500000")
     # Exactly one License row for this tx.
     assert License.objects.filter(payment_tx_sig="tx_create_001").count() == 1
@@ -55,14 +55,14 @@ def test_grant_is_idempotent_on_duplicate_tx(monkeypatch):
 
     first = svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_dup_001",
     )
     second = svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_dup_001",  # SAME tx -> idempotent
@@ -70,6 +70,42 @@ def test_grant_is_idempotent_on_duplicate_tx(monkeypatch):
 
     assert second.id == first.id
     assert License.objects.filter(payment_tx_sig="tx_dup_001").count() == 1
+
+
+@pytest.mark.django_db
+def test_distinct_payments_create_distinct_licenses_for_the_same_asset():
+    """각 검증 결제는 같은 작품에 대해서도 별도 구매 License가 된다."""
+    from django.contrib.auth.models import User
+
+    from apps.settlement.models import License
+    from services.license_service import LicenseService
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    asset = IpAssetFactory(creator=CreatorFactory())
+    first_buyer = User.objects.create_user("first@example.com", "first@example.com", "safe-password-123")
+    second_buyer = User.objects.create_user("second@example.com", "second@example.com", "safe-password-123")
+    service = LicenseService(event_recorder=_NoopRecorder())
+
+    first = service.grant(
+        asset,
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
+        price=decimal.Decimal("1.5"),
+        usage_type="commercial",
+        payment_tx="tx_first_purchase_001",
+        buyer_user=first_buyer,
+    )
+    second = service.grant(
+        asset,
+        buyer_wallet="BuyerWallet222222222222222222222222222222",
+        price=decimal.Decimal("1.5"),
+        usage_type="commercial",
+        payment_tx="tx_second_purchase_001",
+        buyer_user=second_buyer,
+    )
+
+    assert first.id != second.id
+    assert License.objects.filter(asset=asset).count() == 2
+    assert {first.buyer_user_id, second.buyer_user_id} == {first_buyer.id, second_buyer.id}
 
 
 @pytest.mark.django_db
@@ -85,7 +121,7 @@ def test_grant_generates_expiring_download_token(monkeypatch):
 
     license = svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_token_001",
@@ -98,6 +134,27 @@ def test_grant_generates_expiring_download_token(monkeypatch):
     now = datetime.datetime.now(datetime.timezone.utc)
     delta = license.download_expires_at - now
     assert datetime.timedelta(seconds=3500) <= delta <= datetime.timedelta(seconds=3700)
+
+
+@pytest.mark.django_db
+def test_default_grant_download_right_lasts_seven_days(settings):
+    """A paid license grants download access for 7 days by default."""
+    from services.license_service import LicenseService
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    settings.DOWNLOAD_TOKEN_TTL_SECONDS = 604800
+    asset = IpAssetFactory(creator=CreatorFactory())
+
+    license = LicenseService(event_recorder=_NoopRecorder()).grant(
+        asset,
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
+        price=decimal.Decimal("1.5"),
+        usage_type="commercial",
+        payment_tx="tx_token_7_days_001",
+    )
+
+    delta = license.download_expires_at - datetime.datetime.now(datetime.timezone.utc)
+    assert datetime.timedelta(days=7, seconds=-5) <= delta <= datetime.timedelta(days=7, seconds=5)
 
 
 @pytest.mark.django_db
@@ -116,7 +173,7 @@ def test_grant_links_session_when_provided(monkeypatch):
 
     license = svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_session_001",
@@ -138,7 +195,7 @@ def test_grant_records_payment_verified_event(monkeypatch):
 
     svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_event_001",
@@ -150,7 +207,7 @@ def test_grant_records_payment_verified_event(monkeypatch):
     # Idempotent re-grant does NOT record a second event.
     svc.grant(
         asset,
-        buyer_wallet="BuyerWallet1111111111111111111111111111111111",
+        buyer_wallet="BuyerWallet111111111111111111111111111111",
         price=decimal.Decimal("1.5"),
         usage_type="commercial",
         payment_tx="tx_event_001",

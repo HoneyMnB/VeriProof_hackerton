@@ -63,10 +63,10 @@ python -m pip install 'solders>=0.21'
 않습니다. 공개키 검증기가 없으면 서비스는 느슨한 정규식으로 대체하지 않고 등록
 요청을 거부합니다.
 
-키가 없는 로컬 환경에서는 기본값 `SOLANA_ADAPTER=mock`이 등록 앵커와 인증서를
-`mock:solana:` 접두사의 명시적 로컬 신호로 처리합니다. 이는 실제 온체인 서명이나
-권리 보호를 의미하지 않습니다. 실제 Devnet/운영에서는 `SOLANA_ADAPTER=real`과
-RPC·서명자 자격 증명을 제공해야 합니다.
+등록 앵커와 등록/라이선스 인증서는 실제 Solana Memo 트랜잭션으로 제출됩니다.
+원본 URL이나 원본 바이트는 온체인 Memo와 인증서 응답에 포함하지 않고, 작품의
+검증 가능한 SHA-256 기반 증명값만 기록합니다. `PLATFORM_ESCROW_SECRET_KEY`가
+비어 있으면 등록/인증서 발급은 mock으로 대체되지 않고 실패합니다.
 
 ## Gemini: real provider path
 
@@ -88,17 +88,13 @@ gcloud auth application-default login
 Check non-secret configuration at `GET /api/v1/assistant/status`. With no API
 key or ADC the chat endpoint returns HTTP 503; it never invents an AI answer.
 
-## Local payment mock and production switch
+## Solana payment verification
 
 Payment verification is isolated behind `services.payment_verifier.PaymentVerifier`.
-Local development defaults to `PAYMENT_VERIFIER=mock`. The mock accepts only a
-transaction identifier beginning with `mock:`, for example `mock:demo-001`; it
-is explicitly a test payment and does not submit anything to Solana.
-
-For a real integration, set `PAYMENT_VERIFIER=solana`, configure the Solana RPC,
-USDC mint and signer credentials, then implement/connect the SPL transfer
-adapter. The settlement pipeline itself is unchanged because it depends only on
-the verifier contract.
+Runtime code always uses the real Solana verifier and never accepts fabricated
+`mock:` transaction identifiers. Offline tests inject `tests.fakes.FakeSolanaService`
+at the service boundary. Configure `SOLANA_RPC_URL`, `USDC_MINT_ADDRESS`, and
+`PLATFORM_ESCROW_SECRET_KEY` for Devnet registration and certificate Memo tests.
 
 ## A2A local check
 

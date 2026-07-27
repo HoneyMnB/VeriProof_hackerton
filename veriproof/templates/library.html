@@ -34,6 +34,7 @@
                 data-asset-id="{{ asset.asset_id }}"
                 data-min-price="{{ asset.min_price_usdc }}"
                 data-target-price="{{ asset.target_price_usdc }}"
+                data-target-price-sol="{{ asset.target_price_sol }}"
                 data-visibility="{{ asset.visibility }}"
                 data-explorer-url="{{ asset.explorer_url|default:'' }}"
                 data-manage="{{ asset.manage_json|escape }}">
@@ -66,7 +67,7 @@
                         {% endif %}
                     </div>
 
-                    <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_price_usdc }} USDC</strong></p>
+                    <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_price_usdc }} SOL</strong></p>
                     <p class="asset-card__wallet"><span data-i18n="library.field.creator_wallet">Creator wallet</span> <code translate="no">{{ asset.certificate.creator_wallet }}</code></p>
 
                     <div class="asset-card__actions">
@@ -109,7 +110,7 @@
             </section>
             <section class="asset-settings-modal__section asset-settings-modal__pricing">
                 <p class="asset-settings-modal__section-title" data-i18n="library.terms.listing">Listing settings</p>
-                <div class="asset-settings-modal__price-fields"><label><span data-i18n="library.terms.minimum">Minimum USDC</span><input name="min_price_usdc" type="number" min="0" step="0.01" required></label><label><span data-i18n="library.terms.target">Target USDC</span><input name="target_price_usdc" type="number" min="0" step="0.01" required></label></div>
+                <div class="asset-settings-modal__price-fields"><label><span data-i18n="library.terms.minimum">Minimum SOL</span><input name="min_price_usdc" type="number" min="0" step="0.01" required></label><label><span data-i18n="library.terms.target">Target SOL</span><input name="target_price_usdc" type="number" min="0" step="0.01" required></label><label><span>Buyer agent price (Devnet SOL)</span><input name="target_price_sol" type="number" min="0.000000001" step="0.000000001"></label></div>
                 <label><span data-i18n="library.terms.visibility">Visibility</span><select name="visibility"><option value="private" data-i18n="library.terms.private">Private</option><option value="public" data-i18n="library.terms.public">Public</option></select></label>
             </section>
             <section class="asset-settings-modal__section asset-settings-modal__sales" aria-labelledby="asset-sales-title">
@@ -118,7 +119,10 @@
                 <ol id="asset-settings-sales-list" class="asset-settings-modal__sales-list"></ol>
             </section>
             <a id="asset-settings-explorer" class="asset-settings-modal__explorer" target="_blank" rel="noopener" hidden data-i18n="library.asset.explorer">Solana Explorer verify</a>
-            <button type="submit" data-i18n="library.terms.save">Save listing settings</button><span class="asset-card__terms-status" role="status"></span>
+            <div class="asset-settings-modal__actions">
+                <button type="submit" data-i18n="library.terms.save">Save listing settings</button>
+            </div>
+            <span class="asset-card__terms-status" role="status"></span>
         </form>
     </section>
 </div>

@@ -55,7 +55,7 @@
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
                 var status = form.querySelector(".asset-card__terms-status");
-                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.elements.title.value, description: form.elements.description.value, tags: parseTags(form.elements.tags.value), min_price_usdc: form.elements.min_price_usdc.value, target_price_usdc: form.elements.target_price_usdc.value, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
+                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.elements.title.value, description: form.elements.description.value, tags: parseTags(form.elements.tags.value), min_price_usdc: form.elements.min_price_usdc.value, target_price_usdc: form.elements.target_price_usdc.value, target_price_sol: form.elements.target_price_sol.value || null, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
                     status.textContent = result.ok ? t("library.terms.saved") : (result.body.detail || t("library.terms.failed"));
                     if (!result.ok) { return; }
                     // 저장 직후 그리드의 핵심 정보도 갱신하여 새로고침 전의 불일치를 막는다.
@@ -63,12 +63,13 @@
                     if (!card) { return; }
                     card.dataset.minPrice = form.elements.min_price_usdc.value;
                     card.dataset.targetPrice = form.elements.target_price_usdc.value;
+                    card.dataset.targetPriceSol = result.body.target_price_sol || "";
                     card.dataset.visibility = form.elements.visibility.value;
                     updateManageData(card, result.body);
                     var title = card.querySelector("h3");
                     if (title) { title.textContent = result.body.title || ""; }
                     var price = card.querySelector(".asset-card__price strong");
-                    if (price) { price.textContent = form.elements.min_price_usdc.value + " USDC"; }
+                    if (price) { price.textContent = form.elements.min_price_usdc.value + " SOL"; }
                 }).catch(function () { status.textContent = t("library.terms.network"); });
             });
         });
@@ -100,11 +101,14 @@
                 form.dataset.assetId = card.dataset.assetId;
                 form.elements.min_price_usdc.value = card.dataset.minPrice;
                 form.elements.target_price_usdc.value = card.dataset.targetPrice;
+                form.elements.target_price_sol.value = card.dataset.targetPriceSol || "";
                 form.elements.visibility.value = card.dataset.visibility;
                 var data = manageData(card);
                 form.elements.title.value = data.title || "";
                 form.elements.description.value = data.description || "";
                 form.elements.tags.value = (data.tags || []).join(", ");
+                var status = form.querySelector(".asset-card__terms-status");
+                if (status) { status.textContent = ""; }
                 document.getElementById("asset-settings-name").textContent = data.title || card.querySelector("h3").textContent;
                 renderRegistration(data);
                 renderSales(data.sales_summary || {}, data.sales || []);
@@ -152,10 +156,10 @@
     function renderSales(summary, sales) {
         var summaryBox = document.getElementById("asset-settings-sales-summary");
         var list = document.getElementById("asset-settings-sales-list");
-        if (summaryBox) { summaryBox.innerHTML = '<span><strong>' + escapeHtml(summary.sale_count || 0) + '</strong>' + escapeHtml(t("library.sales.count")) + '</span><span class="asset-settings-modal__sales-summary--gross"><strong>' + escapeHtml(summary.gross_usdc || "0") + ' USDC</strong>' + escapeHtml(t("library.sales.gross")) + '</span>'; }
+        if (summaryBox) { summaryBox.innerHTML = '<span><strong>' + escapeHtml(summary.sale_count || 0) + '</strong>' + escapeHtml(t("library.sales.count")) + '</span><span class="asset-settings-modal__sales-summary--gross"><strong>' + escapeHtml(summary.gross_usdc || "0") + ' SOL</strong>' + escapeHtml(t("library.sales.gross")) + '</span>'; }
         if (!list) { return; }
         if (!sales.length) { list.innerHTML = "<li>" + escapeHtml(t("library.sales.empty")) + "</li>"; return; }
-        list.innerHTML = sales.map(function (sale) { return "<li><div><strong>" + escapeHtml(sale.price_usdc) + " USDC</strong><span>" + escapeHtml(sale.usage_type) + " · " + escapeHtml(shortWallet(sale.buyer_wallet)) + "</span></div><time>" + escapeHtml(formatTs(sale.granted_at)) + "</time></li>"; }).join("");
+        list.innerHTML = sales.map(function (sale) { return "<li><div><strong>" + escapeHtml(sale.price_usdc) + " SOL</strong><span>" + escapeHtml(sale.usage_type) + " · " + escapeHtml(shortWallet(sale.buyer_wallet)) + "</span></div><time>" + escapeHtml(formatTs(sale.granted_at)) + "</time></li>"; }).join("");
     }
 
     // --- R6 / AC-5: preview toggle -----------------------------------------
@@ -308,7 +312,7 @@
             var ts = formatTs(it.timestamp);
             if (it.kind === "license") {
                 return '<li><strong>' + t("library.timeline.license") + '</strong> · ' + t("library.timeline.buyer") + ' ' + escapeHtml(shortWallet(it.buyer_wallet)) +
-                    " · " + escapeHtml(it.price_usdc) + " USDC (" + escapeHtml(it.usage_type) + ")" +
+                    " · " + escapeHtml(it.price_usdc) + " SOL (" + escapeHtml(it.usage_type) + ")" +
                     ' <span class="ts">' + ts + "</span></li>";
             }
             return "<li><strong>" + escapeHtml(it.type || "event") + "</strong>" +

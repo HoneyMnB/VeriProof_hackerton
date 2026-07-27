@@ -5,6 +5,7 @@ from django.contrib.auth.models import User
 
 DEVELOPER_EMAIL = "admin@test.com"
 DEVELOPER_PASSWORD = "a123456789?"
+BASE58_ALPHABET = frozenset("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 
 
 def ensure_developer_account() -> User:
@@ -21,6 +22,11 @@ def ensure_developer_account() -> User:
         user.set_password(DEVELOPER_PASSWORD)
         user.save()
     return user
+
+
+def is_valid_solana_address(address: str) -> bool:
+    """공개 Solana 주소로 사용할 수 있는 base58 문자열인지 확인한다."""
+    return 32 <= len(address) <= 44 and all(char in BASE58_ALPHABET for char in address)
 
 
 def ensure_creator_wallet(wallet_address: str) -> None:

@@ -19,7 +19,7 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import EmailAuthenticationForm, EmailSignUpForm
 from .models import UserPreference, WalletConfiguration
-from .services import ensure_creator_wallet
+from .services import ensure_creator_wallet, is_valid_solana_address
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,8 @@ def preferences(request: HttpRequest) -> JsonResponse:
     wallet = str(payload.get("creator_wallet") or "").strip()
     if len(display_name) > 80 or len(wallet) > 64 or len(contact_phone) > 30:
         return JsonResponse({"error": "invalid_value", "detail": "A settings value is too long."}, status=400)
+    if wallet and not is_valid_solana_address(wallet):
+        return JsonResponse({"error": "invalid_wallet", "detail": "Enter a valid Solana public address."}, status=400)
     if recovery_email:
         try:
             validate_email(recovery_email)
@@ -111,6 +113,8 @@ def preferences(request: HttpRequest) -> JsonResponse:
     preference.contact_phone = contact_phone
     preference.creator_wallet = wallet
     preference.save(update_fields=["display_name", "language", "recovery_email", "contact_phone", "creator_wallet", "updated_at"])
+    if wallet:
+        ensure_creator_wallet(wallet)
     logger.info("account settings updated user=%s language=%s", request.user.get_username(), language)
     return JsonResponse({"display_name": preference.display_name, "language": preference.language, "recovery_email": preference.recovery_email, "contact_phone": preference.contact_phone, "creator_wallet": preference.creator_wallet})
 
@@ -125,7 +129,7 @@ def wallet_configurations(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"error": "invalid_json", "detail": "Invalid wallet payload."}, status=400)
     address = str(payload.get("address") or "").strip()
     label = str(payload.get("label") or "").strip()
-    if not 32 <= len(address) <= 44 or any(char not in "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz" for char in address):
+    if not is_valid_solana_address(address):
         return JsonResponse({"error": "invalid_wallet", "detail": "Enter a valid Solana public address."}, status=400)
     if not label or len(label) > 40:
         return JsonResponse({"error": "invalid_label", "detail": "Wallet name must be between 1 and 40 characters."}, status=400)

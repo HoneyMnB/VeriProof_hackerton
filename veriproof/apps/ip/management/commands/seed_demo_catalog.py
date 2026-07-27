@@ -57,7 +57,7 @@ class Command(BaseCommand):
     help = "Register the generated local demo works through the normal pipeline."
 
     def handle(self, *args, **options):
-        """이미지·Gemini·저장소·목업 앵커가 모두 준비될 때만 데모를 만든다."""
+        """이미지·Gemini·저장소·Solana Memo signer가 준비될 때만 데모를 만든다."""
         if not settings.DEBUG:
             raise CommandError("seed_demo_catalog is available only when DEBUG=true")
         if getattr(settings, "SOLANA_ADAPTER", "mock") != "mock":
@@ -179,7 +179,6 @@ class Command(BaseCommand):
         ).select_related("plan").first()
         if active and active.registrations_used + needed <= active.plan.included_registrations:
             return
-        from django.utils import timezone
 
         get_subscription_service().activate_mock_subscription(
             wallet, plan_code, f"mock:demo-catalog-subscription:{timezone.now().timestamp()}"

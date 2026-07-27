@@ -211,3 +211,69 @@ Income is not copied into this table: it is calculated from verified
   변경하므로 이번 작업에서는 수행하지 않았다.
 - Alembic 필요 여부: 불필요. DB 스키마 변경 없이 로컬 데모 운영 데이터만
   보정한다.
+
+## 2026-07-27 — 다운로드 권한 7일 만료 정책
+
+- 변경: 결제 후 발급되는 `settlement.License.download_expires_at`의 기본 TTL을
+  604800초(7일)로 조정하고, 라이선스 판정에서 만료된 row를 활성 권한으로
+  인정하지 않는다.
+- 이유: 결제 장부(`License` row, `payment_tx_sig`, `buyer_wallet`, 금액,
+  발급 시각)는 보존하되, 원본 다운로드 권한은 결제 후 7일까지만 제공해야 한다.
+- 영향 범위: 기존 결제 row는 삭제하지 않는다. 7일이 지난 row는 감사/정산
+  장부로 남지만 `/files/<token>`과 `X-Solana-Tx-Sig` 라이선스 확인 경로에서
+  다운로드 권한을 부여하지 않는다. 재구매 시 새 온체인 결제 tx로 새
+  `License` row가 추가된다.
+- 검증: 라이선스 서비스 단위 테스트와 asset 접근 통합 테스트로 만료 row 보존 및
+  재결제 요구를 확인한다.
+- Alembic 필요 여부: 불필요. 기존 `download_expires_at` 필드를 사용하는 정책
+  변경이며 DB 스키마 변경은 없다.
+
+## 2026-07-27 — 브라우저 구매자 계정 귀속 (migration `settlement.0002`)
+
+- 변경: `settlement.License.buyer_user` nullable FK를 추가한다. 브라우저 Solana
+  Pay 구매는 로그인한 계정을 이 필드에 기록하고, `buyer_wallet`은 검증된 온체인
+  결제 지갑으로 계속 보존한다.
+- 이유: 작품(`ip.IpAsset`)은 여러 사용자에게 판매될 수 있고, 각 결제는 별도
+  `License` 행이어야 한다. 다운로드 URL만 아는 제3자가 원본을 받지 못하도록
+  브라우저 라이선스의 권한 주체를 계정과 연결한다.
+- 영향 범위: 기존 License와 에이전트/API 구매는 `buyer_user=NULL`로 유지되어
+  기존 지갑·토큰 전달 계약을 보존한다. 새 브라우저 구매는 해당 계정으로 로그인한
+  경우에만 `/files/<token>` 다운로드를 허용한다. 계정 삭제 시 법적·정산 원장은
+  남기고 FK만 NULL로 만든다.
+- 검증: A/B 계정 간 다운로드 차단, 다른 브라우저에서 동일 구매 계정의 권한 복구,
+  결제 reference 세션 귀속, 익명 결제 확인 거부를 통합 테스트로 검증한다.
+- Alembic 필요 여부: 필요. Django migration
+  `apps/settlement/migrations/0002_license_buyer_user.py`를 적용한다.
+
+## 2026-07-27 — Buyer Agent Devnet SOL 가격·결제 원장
+
+- 변경: `ip.IpAsset.target_price_sol`(nullable decimal 16,9)을 추가했다.
+  판매자가 자산별 Devnet native SOL 가격을 직접 설정할 때만 buyer agent SOL
+  결제가 가능하다. 기존 `min_price_usdc`와 `target_price_usdc`는 변경하지
+  않으며 환산값이나 기본값으로 사용하지 않는다.
+- 변경: `settlement.License.price_sol`과 `payment_currency`를 추가하고,
+  `price_usdc`를 nullable로 전환했다. SOL 결제는 `price_sol`과 `SOL`로,
+  기존 USDC 결제는 기존 `price_usdc`와 기본값 `USDC`로 원장을 보존한다.
+- 이유: 다른 통화의 값을 한 컬럼에 기록하면 정산·감사 데이터가 오염된다.
+  SOL 가격 미설정 자산은 결제 조건을 제공하지 않아 임의 환율 또는 거짓
+  fallback이 발생하지 않는다.
+- 영향 범위: 새 agent SOL 결제만 native SOL 전송의 수취인·lamports·memo를
+  Devnet에서 검증 후 라이선스를 발급한다. 기존 x402 USDC 결제 데이터와
+  실행 경로는 유지된다.
+- 검증: migration check와 buyer payment 정책·SOL 결제 API 테스트를 실행한다.
+- Alembic 필요 여부: 필요. Django migration
+  `ip.0017_ipasset_target_price_sol` 및
+  `settlement.0003_license_sol_payment`를 적용한다.
+
+## 2026-07-27 — 등록 캔버스 SOL 가격 저장 (migration `ip.0018`)
+
+- 변경: `ip.IpAsset.min_price_sol`을 추가하고, 기존 USDC 가격 컬럼을 nullable로
+  변경했다. `#registration-canvas`의 `min_price`와 `target_price` 입력은 이제
+  각각 native Devnet SOL 최소·목표 가격으로 저장된다.
+- 이유: 화면에 SOL로 표시한 값을 USDC 컬럼에 기록하면 결제 통화와 원장이
+  불일치한다. 신규 등록 자산에는 USDC 가격을 만들거나 환산하지 않는다.
+- 영향 범위: 기존 USDC 가격·x402 결제 자산은 값을 그대로 유지한다. 신규 SOL
+  자산은 buyer agent SOL 결제 경로에서만 판매 조건을 제공한다.
+- 검증: migration drift, Django check, buyer agent SOL 정책 테스트를 실행한다.
+- Alembic 필요 여부: 필요. Django migration
+  `apps/ip/migrations/0018_registration_prices_are_sol.py`를 적용한다.

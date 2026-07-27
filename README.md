@@ -11,7 +11,7 @@
 - **체인**: Solana Devnet, **Google Cloud Blockchain RPC**, SPL USDC + Memo, **Cloud KMS/Secret Manager** 서명
 - **비동기/데이터**: **Pub/Sub + Eventarc + Workflows**, **Firestore**(실시간) + **BigQuery**(감사로그)
 
-> 이 절은 목표 배포 구조다. 현재 로컬 런타임은 Django + SQLite + local storage, 실제 Gemini 호출, 명시적 mock Solana/결제 어댑터로 동작한다. Cloud Run·Cloud SQL·GCP 이벤트 파이프라인·실체인 결제는 아직 운영 전환 대상이며, 구현 완료로 간주하지 않는다.
+> 이 절은 목표 배포 구조다. 현재 로컬 런타임은 Django + SQLite + local storage, 실제 Gemini 호출, 실제 Solana RPC/Memo 제출 어댑터로 동작한다. Memo 서명자 키가 없으면 등록 앵커·등록 인증서·라이선스 인증서 발급은 실패한다. Cloud Run·Cloud SQL·GCP 이벤트 파이프라인은 아직 운영 전환 대상이다.
 
 ## 현재 구현 상태와 후속 작업
 
@@ -19,7 +19,7 @@
 
 | 영역 | 현재 동작 | 검증 기준 |
 |---|---|---|
-| 창작자 등록 | 로그인한 사용자가 파일·가격·공개 여부를 입력해 작품을 등록한다. 다중 이미지는 하나의 작품/매니페스트/인증서로 처리한다. | multipart 등록, Gemini 분석, preview 저장, 구독 차감, mock 앵커·인증서 |
+| 창작자 등록 | 로그인한 사용자가 파일·가격·공개 여부를 입력해 작품을 등록한다. 다중 이미지는 하나의 작품/매니페스트/인증서로 처리하고 SHA-256 기반 Memo를 Solana에 제출한다. | multipart 등록, Gemini 분석, preview 저장, Solana Memo 제출 단위 테스트 |
 | Gemini 비서 | 대화·등록 준비·제한된 도구 계획(`record_expense`, `update_asset_terms`, `prepare_registration`)과 감사 기록을 제공한다. | 실제 Gemini 응답과 등록 준비 액션 런타임 확인 |
 | 공개 탐색 | 공개·앵커·등록 인증서 조건을 충족한 작품만 catalog/discover에 노출하고 원본은 숨긴다. | catalog HTTP 200, 워터마크 preview 경로 |
 | 외부 에이전트 구매 | manifest/OpenAPI → catalog → x402 402 → Gemini 협상 → settle → 만료형 다운로드 토큰 흐름을 제공한다. | 외부 에이전트 역할 HTTP E2E: 402, ACCEPT, settle 200, 다운로드 200 |
@@ -30,7 +30,7 @@
 
 | 우선순위 | 작업 | 완료 기준 |
 |---|---|---|
-| P0 — 실결제 전 필수 | 실제 Solana 결제 검증, SPL `transfer_checked`, 실수취 ATA/amount/mint/commitment 검증 | `PAYMENT_VERIFIER=solana`, `SOLANA_ADAPTER=real`에서 Devnet 거래로 등록·정산·인증서·다운로드 E2E 통과 |
+| P0 — 실결제 전 필수 | Devnet/운영 지갑으로 실제 Solana 결제 검증, SPL `transfer_checked`, 실수취 ATA/amount/mint/commitment 검증 | Devnet 거래로 등록·정산·인증서·다운로드 E2E 통과 |
 | P0 — 보안 | 지갑 서명 기반 로그인과 API/creator 소유권 인증, DEBUG quick login의 운영 차단 | 세션/권한 우회 없이 창작자·구매자 경계가 E2E와 침투 테스트에서 보장 |
 | P0 — 키 관리 | signer·RPC·Gemini·webhook secret을 Secret Manager/KMS로 관리하고 시작 시 필수 운영 설정 fail-closed | 키가 로그/DB/응답에 노출되지 않고 누락 설정은 배포를 차단 |
 | P1 — 비동기·운영 | 임시 원본 purge scheduler, Pub/Sub→Eventarc→Workflows, sink 재처리·DLQ·관측성 | Cloud Run 환경에서 재시도/실패 알림/복구를 포함한 배포 E2E 통과 |

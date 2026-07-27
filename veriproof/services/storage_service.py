@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import mimetypes
 import secrets
 from pathlib import Path
 from typing import Any
@@ -16,6 +17,10 @@ logger = logging.getLogger(__name__)
 
 # Permanent artifacts (architecture 4 ``kind`` domain).
 PERMANENT_KINDS = ("thumbnail", "watermark", "supporting")
+_MIME_EXTENSION_OVERRIDES = {
+    "application/pdf": ".pdf",
+    "image/jpeg": ".jpg",
+}
 
 
 class StorageService:
@@ -52,16 +57,21 @@ class StorageService:
         raise ValueError(f"unknown STORAGE_BACKEND: {self.backend!r}")
 
     def save_temporary(
-        self, asset_id: Any, data: bytes, ttl: datetime.timedelta
+        self,
+        asset_id: Any,
+        data: bytes,
+        ttl: datetime.timedelta,
+        content_mime_type: str | None = None,
     ) -> str:
         """Persist the original temporarily for ``ttl``. SPEC-001/004.
 
         Records the expiry (now + ttl) so callers / schedulers can purge.
         """
+        extension = extension_for_mime(content_mime_type)
         if self.backend == "gcs":
-            url = self._save_temporary_gcs(asset_id, data)
+            url = self._save_temporary_gcs(asset_id, data, extension)
         else:
-            url = self._save_temporary(asset_id, data)
+            url = self._save_temporary(asset_id, data, extension)
         # Record the expiry timestamp (UTC, timezone-aware) for the asset.
         now = datetime.datetime.now(datetime.UTC)
         self._temp_expries[asset_id] = now + ttl
@@ -99,8 +109,8 @@ class StorageService:
             # No filesystem configured: callers without a media_root cannot
             # serve bytes; signal absent.
             return None
-        path = self._temporary_path(asset_id)
-        if not path.exists():
+        path = self._existing_temporary_path(asset_id)
+        if path is None:
             return None
         try:
             return path.read_bytes()
@@ -131,7 +141,7 @@ class StorageService:
         """True when a temporary original is still on disk."""
         if self.media_root is None:
             return asset_id in self._temp_expries
-        return self._temporary_path(asset_id).exists()
+        return self._existing_temporary_path(asset_id) is not None
 
     # --- Local backend ------------------------------------------------------
 
@@ -143,28 +153,40 @@ class StorageService:
         path.write_bytes(data)
         return f"/media/permanent/{kind}/{asset_id}.bin"
 
-    def _save_temporary(self, asset_id: Any, data: bytes) -> str:
+    def _save_temporary(self, asset_id: Any, data: bytes, extension: str) -> str:
         """원본을 로컬 임시 경로에 저장한다. media_root가 없으면 URL만 기록용으로 반환한다."""
         if self.media_root is None:
             # No filesystem configured: still record expiry for callers.
-            return f"/media/temporary/{asset_id}.bin"
-        path = self._temporary_path(asset_id)
+            return f"/media/temporary/{asset_id}{extension}"
+        path = self._temporary_path(asset_id, extension)
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
-        return f"/media/temporary/{asset_id}.bin"
+        return f"/media/temporary/{asset_id}{extension}"
 
     def _purge_temporary(self, asset_id: Any) -> None:
         """보존 기간이 만료된 임시 원본을 로컬 디스크에서 삭제한다."""
         if self.media_root is None:
             return
-        path = self._temporary_path(asset_id)
-        try:
-            path.unlink(missing_ok=True)
-        except OSError as exc:  # pragma: no cover (environment-specific)
-            logger.warning("failed to purge temporary %s: %s", asset_id, exc)
+        for path in self._temporary_candidates(asset_id):
+            try:
+                path.unlink(missing_ok=True)
+            except OSError as exc:  # pragma: no cover (environment-specific)
+                logger.warning("failed to purge temporary %s: %s", asset_id, exc)
 
-    def _temporary_path(self, asset_id: Any) -> Path:
-        return self._require_media_root() / "temporary" / f"{asset_id}.bin"
+    def _temporary_path(self, asset_id: Any, extension: str = ".bin") -> Path:
+        return self._require_media_root() / "temporary" / f"{asset_id}{extension}"
+
+    def _existing_temporary_path(self, asset_id: Any) -> Path | None:
+        for path in self._temporary_candidates(asset_id):
+            if path.exists():
+                return path
+        return None
+
+    def _temporary_candidates(self, asset_id: Any) -> list[Path]:
+        root = self._require_media_root() / "temporary"
+        direct = root / f"{asset_id}.bin"
+        matches = sorted(root.glob(f"{asset_id}.*")) if root.exists() else []
+        return [direct, *(path for path in matches if path != direct)]
 
     def _require_media_root(self) -> Path:
         """로컬 백엔드에 media_root가 필수임을 보장하고, 없으면 RuntimeError를 발생시킨다."""
@@ -189,13 +211,13 @@ class StorageService:
         blob.upload_from_string(data)
         return f"https://storage.googleapis.com/{self.gcs_bucket}/{blob_name}"
 
-    def _save_temporary_gcs(self, asset_id: Any, data: bytes) -> str:
+    def _save_temporary_gcs(self, asset_id: Any, data: bytes, extension: str) -> str:
         """임시 원본을 GCS 버킷에 업로드하고 공개 URL을 반환한다 (클라우드 전용)."""
         client = self._get_gcs_client()
         if client is None:
             raise RuntimeError("GCS storage client is unavailable")
         bucket = client.bucket(self.gcs_bucket)
-        blob_name = f"temporary/{asset_id}.bin"
+        blob_name = f"temporary/{asset_id}{extension}"
         bucket.blob(blob_name).upload_from_string(data)
         return f"https://storage.googleapis.com/{self.gcs_bucket}/{blob_name}"
 
@@ -238,3 +260,12 @@ def get_storage_service() -> StorageService:
         gcs_bucket=getattr(settings, "GCS_BUCKET", "") or None,
         media_root=getattr(settings, "MEDIA_ROOT", None),
     )
+
+
+def extension_for_mime(content_mime_type: str | None) -> str:
+    """업로드 MIME에 맞는 원본 확장자를 반환하고, 알 수 없는 경우 기존 .bin 계약을 유지한다."""
+    mime = (content_mime_type or "").split(";", 1)[0].strip().lower()
+    if not mime:
+        return ".bin"
+    extension = _MIME_EXTENSION_OVERRIDES.get(mime) or mimetypes.guess_extension(mime)
+    return extension or ".bin"

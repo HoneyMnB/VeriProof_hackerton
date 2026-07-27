@@ -112,10 +112,28 @@ class IpAsset(UUIDPrimaryKey):
     )
     min_price_usdc = models.DecimalField(
         max_digits=12, decimal_places=6,
+        null=True, blank=True,
         validators=[MinValueValidator(0)],
     )
     target_price_usdc = models.DecimalField(
         max_digits=12, decimal_places=6,
+        null=True, blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    # Native Devnet SOL price for autonomous buyer agents. It is separate from
+    # legacy USDC terms: no currency conversion or inferred fallback is used.
+    target_price_sol = models.DecimalField(
+        max_digits=16,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    min_price_sol = models.DecimalField(
+        max_digits=16,
+        decimal_places=9,
+        null=True,
+        blank=True,
         validators=[MinValueValidator(0)],
     )
     # Permanent original-content hash (64 hex chars).
