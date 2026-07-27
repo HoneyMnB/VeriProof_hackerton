@@ -12,6 +12,7 @@ import mimetypes
 import secrets
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -79,18 +80,23 @@ class StorageService:
 
     def purge_original(self, asset_id: Any) -> None:
         """Delete the temporary original (retention purge). SPEC-001/004."""
-        self._purge_temporary(asset_id)
+        if self.backend == "gcs":
+            self._purge_temporary_gcs(asset_id)
+        else:
+            self._purge_temporary(asset_id)
         self._temp_expries.pop(asset_id, None)
 
     def signed_download_url(
         self, asset_id: Any, ttl: datetime.timedelta
     ) -> str | None:
-        """Return a time-limited signed download URL or None. SPEC-004.
+        """Return a download URL for an existing original or None.
 
-        SPEC-001 only uses the truthiness (present vs absent); the actual
-        signing scheme is wired in SPEC-004. The local path returns a URL
-        when the temporary original is still present.
+        The current public-bucket GCS deployment returns the canonical object
+        URL. The local backend keeps its application-routed token URL.
         """
+        if self.backend == "gcs":
+            blob = self._first_temporary_gcs_blob(asset_id)
+            return self._public_gcs_url(blob.name) if blob is not None else None
         if not self.has_temporary(asset_id):
             return None
         if self.backend in (None, "local"):
@@ -105,6 +111,8 @@ class StorageService:
         this seam. Returns None when the original has been purged (retention
         expiry) so the caller can return HTTP 410 Gone.
         """
+        if self.backend == "gcs":
+            return self._read_temporary_gcs(asset_id)
         if self.media_root is None:
             # No filesystem configured: callers without a media_root cannot
             # serve bytes; signal absent.
@@ -139,6 +147,8 @@ class StorageService:
 
     def has_temporary(self, asset_id: Any) -> bool:
         """True when a temporary original is still on disk."""
+        if self.backend == "gcs":
+            return self._first_temporary_gcs_blob(asset_id) is not None
         if self.media_root is None:
             return asset_id in self._temp_expries
         return self._existing_temporary_path(asset_id) is not None
@@ -209,7 +219,7 @@ class StorageService:
         blob_name = f"permanent/{kind}/{asset_id}.bin"
         blob = bucket.blob(blob_name)
         blob.upload_from_string(data)
-        return f"https://storage.googleapis.com/{self.gcs_bucket}/{blob_name}"
+        return self._public_gcs_url(blob_name)
 
     def _save_temporary_gcs(self, asset_id: Any, data: bytes, extension: str) -> str:
         """임시 원본을 GCS 버킷에 업로드하고 공개 URL을 반환한다 (클라우드 전용)."""
@@ -219,7 +229,64 @@ class StorageService:
         bucket = client.bucket(self.gcs_bucket)
         blob_name = f"temporary/{asset_id}{extension}"
         bucket.blob(blob_name).upload_from_string(data)
-        return f"https://storage.googleapis.com/{self.gcs_bucket}/{blob_name}"
+        return self._public_gcs_url(blob_name)
+
+    def _read_temporary_gcs(self, asset_id: Any) -> bytes | None:
+        """Read an original from GCS through the Cloud Run service identity."""
+        blob = self._first_temporary_gcs_blob(asset_id)
+        if blob is None:
+            return None
+        try:
+            return blob.download_as_bytes()
+        except Exception as exc:  # noqa: BLE001 - cloud adapter errors are unavailable files
+            logger.warning(
+                "failed to read temporary asset_id=%s error=%s", asset_id, exc
+            )
+            return None
+
+    def _purge_temporary_gcs(self, asset_id: Any) -> None:
+        """Delete every typed original stored for an asset in GCS."""
+        for blob in self._temporary_gcs_blobs(asset_id):
+            try:
+                blob.delete()
+            except Exception as exc:  # noqa: BLE001 - purge retries are handled by callers
+                logger.warning(
+                    "failed to purge temporary asset_id=%s blob=%s error=%s",
+                    asset_id,
+                    blob.name,
+                    exc,
+                )
+
+    def _first_temporary_gcs_blob(self, asset_id: Any) -> Any | None:
+        blobs = self._temporary_gcs_blobs(asset_id)
+        return blobs[0] if blobs else None
+
+    def _temporary_gcs_blobs(self, asset_id: Any) -> list[Any]:
+        client = self._get_gcs_client()
+        if client is None:
+            return []
+        prefix = f"temporary/{asset_id}"
+        try:
+            blobs = client.list_blobs(self.gcs_bucket, prefix=prefix)
+            return sorted(
+                (
+                    blob
+                    for blob in blobs
+                    if blob.name[len(prefix) :].startswith(".")
+                ),
+                key=lambda blob: blob.name,
+            )
+        except Exception as exc:  # noqa: BLE001 - cloud adapter errors are unavailable files
+            logger.warning(
+                "failed to list temporary asset_id=%s error=%s", asset_id, exc
+            )
+            return []
+
+    def _public_gcs_url(self, blob_name: str) -> str:
+        if not self.gcs_bucket:
+            raise RuntimeError("GCS storage backend requires GCS_BUCKET")
+        encoded_name = quote(blob_name, safe="/")
+        return f"https://storage.googleapis.com/{self.gcs_bucket}/{encoded_name}"
 
     def _read_permanent_gcs(self, kind: str, asset_id: Any) -> bytes | None:
         """GCS 미리보기는 공개 버킷 URL 대신 애플리케이션 권한 경계로 읽는다."""

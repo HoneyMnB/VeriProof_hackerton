@@ -140,11 +140,20 @@ def test_storage_gcs_backend_not_required_for_local_path():
 
 
 class _StubBlob:
-    def __init__(self) -> None:
+    def __init__(self, name: str) -> None:
+        self.name = name
         self.uploaded: bytes | None = None
 
     def upload_from_string(self, data: bytes) -> None:
         self.uploaded = data
+
+    def download_as_bytes(self) -> bytes:
+        if self.uploaded is None:
+            raise FileNotFoundError(self.name)
+        return self.uploaded
+
+    def delete(self) -> None:
+        self.uploaded = None
 
 
 class _StubBucket:
@@ -152,8 +161,7 @@ class _StubBucket:
         self.blobs: dict[str, _StubBlob] = {}
 
     def blob(self, name: str) -> _StubBlob:
-        self.blobs[name] = _StubBlob()
-        return self.blobs[name]
+        return self.blobs.setdefault(name, _StubBlob(name))
 
 
 class _StubGCSClient:
@@ -162,6 +170,14 @@ class _StubGCSClient:
 
     def bucket(self, name: str) -> _StubBucket:
         return self.buckets.setdefault(name, _StubBucket())
+
+    def list_blobs(self, bucket_name: str, prefix: str = "") -> list[_StubBlob]:
+        bucket = self.bucket(bucket_name)
+        return [
+            blob
+            for name, blob in bucket.blobs.items()
+            if name.startswith(prefix) and blob.uploaded is not None
+        ]
 
 
 def test_storage_gcs_save_permanent_uses_injected_client():
@@ -229,13 +245,42 @@ def test_storage_local_save_permanent_requires_media_root():
         svc.save_permanent("thumbnail", "aid", b"x")
 
 
-def test_storage_signed_url_none_for_gcs_in_spec001():
-    """SPEC-001 returns None for the gcs signed path (full signing is SPEC-004)."""
+def test_storage_gcs_public_download_url_when_original_exists():
+    """Public GCS deployments return the canonical object URL without signing."""
     stub = _StubGCSClient()
     svc = StorageService(backend="gcs", gcs_bucket="b", client=stub)
     svc.save_temporary("aid", b"orig", datetime.timedelta(hours=1))
-    # Present but SPEC-001 returns None for the gcs branch.
-    assert svc.signed_download_url("aid", datetime.timedelta(hours=1)) is None
+
+    assert svc.signed_download_url("aid", datetime.timedelta(hours=1)) == (
+        "https://storage.googleapis.com/b/temporary/aid.bin"
+    )
+
+
+def test_storage_gcs_reads_checks_and_purges_temporary_original():
+    stub = _StubGCSClient()
+    svc = StorageService(backend="gcs", gcs_bucket="b", client=stub)
+    svc.save_temporary(
+        "asset-pdf",
+        b"%PDF-1.4",
+        datetime.timedelta(days=1),
+        "application/pdf",
+    )
+
+    assert svc.has_temporary("asset-pdf") is True
+    assert svc.read_temporary("asset-pdf") == b"%PDF-1.4"
+
+    svc.purge_original("asset-pdf")
+
+    assert svc.has_temporary("asset-pdf") is False
+    assert svc.read_temporary("asset-pdf") is None
+
+
+def test_storage_gcs_temporary_lookup_does_not_match_id_prefix():
+    stub = _StubGCSClient()
+    svc = StorageService(backend="gcs", gcs_bucket="b", client=stub)
+    svc.save_temporary("asset-10", b"other", datetime.timedelta(days=1))
+
+    assert svc.has_temporary("asset-1") is False
 
 
 def test_storage_gcs_save_permanent_rejects_unknown_kind():
