@@ -253,3 +253,20 @@ dist-ssr/
 .vercel/
 .netlify/
 .firebase/
+
+
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.auto.tfvars
+crash.log
+crash.*.log
+
+# Keep Terraform provider lock files
+!**/.terraform.lock.hcl
+
+# Keep variable examples
+!**/*.tfvars.example
