@@ -41,6 +41,11 @@ SECRET_KEY = os.environ.get(
 # TDD/local defaults to DEBUG=True. Production must set DEBUG=False.
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
+# Wallet private keys are encrypted before persistence.  Production must inject
+# a distinct Fernet key from its secret manager; DEBUG derives a local-only key
+# from Django's development secret so the offline test/dev environment boots.
+WALLET_PRIVATE_KEY_ENCRYPTION_KEY = os.environ.get("WALLET_PRIVATE_KEY_ENCRYPTION_KEY", "")
+
 # 로컬 기본값에는 Docker 내부 Seller 별칭을 포함하고 운영은 환경 변수로 제한한다.
 _ALLOWED_HOSTS_RAW = os.environ.get("VERIPROOF_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = ["*"]

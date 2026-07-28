@@ -11,6 +11,7 @@ from django.contrib.auth.decorators import login_required
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
@@ -19,7 +20,12 @@ from django.views.decorators.http import require_http_methods, require_POST
 
 from .forms import EmailAuthenticationForm, EmailSignUpForm
 from .models import UserPreference, WalletConfiguration
-from .services import ensure_creator_wallet, is_valid_solana_address
+from .services import (
+    encrypt_wallet_private_address,
+    ensure_creator_wallet,
+    is_valid_solana_address,
+    private_address_matches_wallet,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,31 +128,59 @@ def preferences(request: HttpRequest) -> JsonResponse:
 @login_required
 @require_POST
 def wallet_configurations(request: HttpRequest) -> JsonResponse:
-    """Store a public receiving address and make one address active for the workspace."""
+    """Store a verified wallet secret and make the first address active."""
     try:
         payload = json.loads(request.body or "{}")
     except json.JSONDecodeError:
         return JsonResponse({"error": "invalid_json", "detail": "Invalid wallet payload."}, status=400)
     address = str(payload.get("address") or "").strip()
     label = str(payload.get("label") or "").strip()
+    private_address = str(payload.get("private_address") or "").strip()
     if not is_valid_solana_address(address):
         return JsonResponse({"error": "invalid_wallet", "detail": "Enter a valid Solana public address."}, status=400)
     if not label or len(label) > 40:
         return JsonResponse({"error": "invalid_label", "detail": "Wallet name must be between 1 and 40 characters."}, status=400)
-    receives_payouts = bool(payload.get("receives_payouts"))
-    accepts_deposits = bool(payload.get("accepts_deposits", True))
-    wallet, created = WalletConfiguration.objects.update_or_create(
-        user=request.user, address=address,
-        defaults={"label": label, "accepts_deposits": accepts_deposits, "receives_payouts": receives_payouts},
-    )
-    if receives_payouts:
-        WalletConfiguration.objects.filter(user=request.user).exclude(pk=wallet.pk).update(receives_payouts=False)
-    if not WalletConfiguration.objects.filter(user=request.user, is_active=True).exists():
-        wallet.is_active = True
-        wallet.save(update_fields=["is_active"])
-        preference, _ = UserPreference.objects.get_or_create(user=request.user)
-        preference.creator_wallet = wallet.address
-        preference.save(update_fields=["creator_wallet", "updated_at"])
+    with transaction.atomic():
+        wallet = WalletConfiguration.objects.select_for_update().filter(user=request.user).first()
+        created = wallet is None
+        is_address_change = wallet is not None and wallet.address != address
+        if (wallet is None or is_address_change) and not private_address_matches_wallet(private_address, address):
+            return JsonResponse({"error": "invalid_private_address", "detail": "Enter the private key for this Solana public address."}, status=400)
+        if private_address and not private_address_matches_wallet(private_address, address):
+            return JsonResponse({"error": "invalid_private_address", "detail": "Enter the private key for this Solana public address."}, status=400)
+        if wallet is not None and is_address_change and WalletConfiguration.objects.filter(user=request.user, address=address).exclude(pk=wallet.pk).exists():
+            return JsonResponse({"error": "wallet_already_registered", "detail": "This wallet is already registered."}, status=400)
+        if wallet is not None and not private_address and not wallet.private_address:
+            return JsonResponse({"error": "private_address_required", "detail": "Enter the private key to update this wallet."}, status=400)
+        encrypted_private_address = wallet.private_address if wallet is not None else ""
+        if private_address:
+            try:
+                encrypted_private_address = encrypt_wallet_private_address(private_address)
+            except RuntimeError:
+                logger.error("wallet private-key encryption is not configured")
+                return JsonResponse({"error": "wallet_encryption_unavailable", "detail": "Wallet storage is temporarily unavailable."}, status=503)
+        if wallet is None:
+            wallet = WalletConfiguration.objects.create(
+                user=request.user,
+                label=label,
+                address=address,
+                private_address=encrypted_private_address,
+                accepts_deposits=True,
+                receives_payouts=True,
+                is_active=True,
+            )
+        else:
+            wallet.label = label
+            wallet.address = address
+            wallet.private_address = encrypted_private_address
+            wallet.save(update_fields=["label", "address", "private_address"])
+        if not WalletConfiguration.objects.filter(user=request.user, is_active=True).exists():
+            wallet.is_active = True
+            wallet.save(update_fields=["is_active"])
+        if wallet.is_active:
+            preference, _ = UserPreference.objects.get_or_create(user=request.user)
+            preference.creator_wallet = wallet.address
+            preference.save(update_fields=["creator_wallet", "updated_at"])
     ensure_creator_wallet(wallet.address)
     return JsonResponse({"id": wallet.id, "created": created})
 
@@ -169,11 +203,40 @@ def activate_wallet(request: HttpRequest, wallet_id: int) -> JsonResponse:
 
 
 @login_required
+@require_http_methods(["DELETE"])
+def delete_wallet(request: HttpRequest, wallet_id: int) -> JsonResponse:
+    """Delete an account-owned wallet and atomically replace its active pointer."""
+    with transaction.atomic():
+        wallet = WalletConfiguration.objects.select_for_update().filter(pk=wallet_id, user=request.user).first()
+        if wallet is None:
+            return JsonResponse({"error": "wallet_not_found"}, status=404)
+        was_active = wallet.is_active
+        wallet.delete()
+        replacement = None
+        if was_active:
+            replacement = WalletConfiguration.objects.filter(user=request.user).order_by("-created_at").first()
+            if replacement is not None:
+                replacement.is_active = True
+                replacement.save(update_fields=["is_active"])
+        if was_active:
+            preference, _ = UserPreference.objects.get_or_create(user=request.user)
+            preference.creator_wallet = replacement.address if replacement else ""
+            preference.save(update_fields=["creator_wallet", "updated_at"])
+    return JsonResponse({"creator_wallet": replacement.address if replacement else ""})
+
+
+@login_required
 @require_http_methods(["GET"])
 def wallet_configuration_list(request: HttpRequest) -> JsonResponse:
-    """현재 사용자가 등록한 모든 수신 지갑과 활성 여부를 반환한다."""
+    """현재 사용자가 등록한 지갑을 비밀값 없이 반환한다."""
     return JsonResponse({"items": [
-        {"id": wallet.id, "label": wallet.label, "address": wallet.address, "accepts_deposits": wallet.accepts_deposits, "receives_payouts": wallet.receives_payouts, "is_active": wallet.is_active}
+        {
+            "id": wallet.id,
+            "label": wallet.label,
+            "address": wallet.address,
+            "is_active": wallet.is_active,
+            "has_private_address": bool(wallet.private_address),
+        }
         for wallet in WalletConfiguration.objects.filter(user=request.user)
     ]})
 

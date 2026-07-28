@@ -192,12 +192,15 @@ class X402Service:
     def build_solana_pay_fallback(self, asset: Any) -> dict:
         """Build the 200 Solana Pay Buy-It-Now body for non-agent clients.
 
-        The fixed SOL amount equals ``asset.target_price_usdc``. The address is
+        The fixed SOL amount equals ``asset.target_price_sol``. The address is
         routed through the same shared recipient-resolution rule as the 402
         path so browser and agent clients cannot disagree on the recipient.
         """
         pay_to = resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey)
-        amount_str = str(asset.target_price_usdc)
+        amount_str = str(asset.target_price_sol)
+        # x402 uses CAIP-2 identifiers, while the Solana Pay URL specification
+        # expects the wallet-network name for its ``cluster`` query parameter.
+        cluster = "devnet" if self.network == SOLANA_DEVNET_CAIP2 else self.network
         reference = _new_reference_pubkey()
         # Solana Pay transfer requests use the ``solana:<recipient>`` URL
         # format. ``reference`` lets the server discover the payment on-chain.
@@ -205,7 +208,7 @@ class X402Service:
         params = urlencode(
             {
                 "amount": amount_str,
-                "cluster": self.network,
+                "cluster": cluster,
                 "reference": reference,
                 "label": SOLANA_PAY_LABEL,
                 "message": f"VeriProof license {asset.id}",
@@ -223,7 +226,7 @@ class X402Service:
                 "address": pay_to,
                 "asset": "SOL",
                 "amount_sol": amount_str,
-                "cluster": self.network,
+                "cluster": cluster,
                 "rpc_url": self.rpc_url,
                 "reference": reference,
                 "label": SOLANA_PAY_LABEL,

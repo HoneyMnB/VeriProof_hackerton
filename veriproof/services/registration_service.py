@@ -89,6 +89,7 @@ class RegistrationService:
         supporting_uploads: tuple[Any, ...] = (),
         gallery_uploads: tuple[Any, ...] = (),
         account_owner: Any | None = None,
+        signer_secret_key: list[int] | None = None,
     ) -> RegistrationOutcome:
         """검증된 업로드를 실제 파이프라인에 등록하고 주요 단계를 기록한다."""
         if gallery_uploads and metadata.asset_type != IpAsset.IMAGE:
@@ -110,7 +111,7 @@ class RegistrationService:
 
         # 앵커와 등록 인증서는 공개 라이선스 게시의 필수 증명이다.
         try:
-            anchor_tx_sig = self.solana.anchor_hash(content_hash, metadata.creator_wallet)
+            anchor_tx_sig = self.solana.anchor_hash(content_hash, metadata.creator_wallet, signer_secret_key)
         except Exception as exc:  # noqa: BLE001 - adapter exceptions are external
             logger.error(
                 "registration anchor failed creator_wallet=%s error=%s",
@@ -125,6 +126,7 @@ class RegistrationService:
                 asset_id,
                 metadata.creator_wallet,
                 content_hash,
+                signer_secret_key,
             )
         except Exception as exc:  # noqa: BLE001 - adapter exceptions are external
             logger.error(

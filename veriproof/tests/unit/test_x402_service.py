@@ -72,6 +72,7 @@ def _make_asset(
 
     Mirrors the IpAsset attributes consumed by X402Service + resolve_pay_to:
     ``id``, ``creator.wallet_address``, ``parent_asset_id``, ``target_price_usdc``,
+    ``target_price_sol``,
     ``watermark_url``.
     """
     creator = SimpleNamespace(wallet_address=wallet)
@@ -82,6 +83,7 @@ def _make_asset(
         parent_asset_id=parent_id,
         parent_asset=parent_id,
         target_price_usdc=decimal.Decimal(target_price),
+        target_price_sol=decimal.Decimal(target_price),
         watermark_url=watermark_url,
     )
 

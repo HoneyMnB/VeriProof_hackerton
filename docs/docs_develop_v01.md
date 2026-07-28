@@ -157,7 +157,7 @@ Solana 관련 설정은 `config/settings.py`에 있으며, 기본 RPC URL은 Dev
 - **앵커**: `anchor_hash()`는 SHA-256 기반 Memo를 전송한다. RPC 또는 signer가 없으면 즉시 `AnchorFailed`다.
 - **인증서**: `issue_registration_certificate()`와 `issue_certificate()`는 원본 URL/바이트/다운로드 토큰 없이 검증용 Memo만 작성한다.
 - **로열티 송금**: `transfer_usdc()`는 인터페이스와 test seam은 있으나, 실제 `_send_spl_transfer()`는 의도적으로 `CertificateIssueError`를 발생시킨다. token account 조회와 `transfer_checked` 트랜잭션 생성은 아직 연결되어 있지 않다.
-- **KMS**: 현재 Memo 제출 경로는 `PLATFORM_ESCROW_SECRET_KEY`의 Solana CLI 64-byte secret-key array를 사용한다. Cloud KMS 직접 서명은 별도 연결 대상이다.
+- **KMS**: 현재 Memo 제출 경로는 `PLATFORM_ESCROW_SECRET_KEY`의 Solana CLI 64-byte secret-key array 또는 동등한 Base58 keypair 문자열을 사용한다. Cloud KMS 직접 서명은 별도 연결 대상이다.
 - **RPC 파싱**: 실제 `_parse_rpc_payment()`는 token balance 증감에서 수취자/mint/금액을 뽑는 최소 구현이며, sender는 채우지 않는다. 다중 token transfer·ATA 생성·복합 거래를 운영에서 안전하게 검증하려면 instruction/계정 소유권 기반 파서를 보강해야 한다.
 
 따라서 현재 `real` 경로는 Memo 앵커/인증서와 단순 검증의 구조는 있으나, 운영용 SPL 송금 및 Cloud KMS 연결까지 완결된 상태가 아니다. 금전이 걸린 운영 전환 전에 실제 Devnet 및 목표 네트워크에서 거래 단위 통합 시험을 해야 한다.

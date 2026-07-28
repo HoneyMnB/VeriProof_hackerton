@@ -65,10 +65,10 @@ class CreatorAssistantService:
             "expense_usdc": str(cashflow.expense_usdc),
             "net_usdc": str(cashflow.income_usdc - cashflow.expense_usdc),
             "sale_count": sales.sale_count,
-            "gross_sales_usdc": str(sales.gross_usdc),
+            "gross_sales_sol": str(sales.gross_sol),
             "platform_fee_bps": sales.platform_fee_bps,
-            "platform_fee_usdc": str(sales.platform_fee_usdc),
-            "creator_proceeds_usdc": str(sales.creator_proceeds_usdc),
+            "platform_fee_sol": str(sales.platform_fee_sol),
+            "creator_proceeds_sol": str(sales.creator_proceeds_sol),
             "pipeline": [
                 "register", "x402_access", "agent_negotiation", "onchain_settlement"
             ],

@@ -11,6 +11,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
+from apps.accounts.services import WalletSigningError, active_wallet_address
 from services.cashflow_service import CashflowValidationError, get_cashflow_service
 from services.conversation_attachment_service import (
     ConversationAttachmentError,
@@ -298,10 +299,15 @@ def registration_drafts(request: HttpRequest, draft_id=None) -> JsonResponse:
         return JsonResponse({"items": _registration_draft_items(wallet)})
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
+    if not request.user.is_authenticated:
+        return JsonResponse({"error": "authentication_required"}, status=401)
     payload, uploads, parse_error = _registration_draft_payload(request)
     if parse_error is not None:
         return parse_error
-    wallet = str(payload.get("creator_wallet") or "").strip()
+    try:
+        wallet = active_wallet_address(request.user)
+    except WalletSigningError as exc:
+        return JsonResponse({"error": "active_wallet_required", "detail": str(exc)}, status=422)
     service = get_registration_draft_service()
     try:
         if draft_id:
