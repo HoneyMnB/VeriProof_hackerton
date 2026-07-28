@@ -57,7 +57,10 @@ def _wallet_private_key_cipher() -> Fernet:
             raise RuntimeError("WALLET_PRIVATE_KEY_ENCRYPTION_KEY is required when DEBUG is false.")
         material = f"{settings.SECRET_KEY}:wallet-private-address:v1".encode()
         encryption_key = base64.urlsafe_b64encode(hashlib.sha256(material).digest()).decode()
-    return Fernet(encryption_key.encode())
+    try:
+        return Fernet(encryption_key.encode())
+    except (TypeError, ValueError) as exc:
+        raise RuntimeError("WALLET_PRIVATE_KEY_ENCRYPTION_KEY is not a valid Fernet key.") from exc
 
 
 def encrypt_wallet_private_address(private_address: str) -> str:

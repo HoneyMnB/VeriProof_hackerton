@@ -107,6 +107,27 @@ def test_wallet_save_prepares_creator_for_registration_drafts(client):
 
 
 @pytest.mark.django_db
+def test_wallet_save_returns_503_when_production_encryption_key_is_invalid(client, settings):
+    """A malformed deployment secret must not surface as an unhandled server error."""
+    from django.contrib.auth.models import User
+
+    wallet, private_address = _wallet_credentials()
+    user = User.objects.create_user(username="invalid-wallet-key@example.com", password="test-password-123")
+    client.force_login(user)
+    settings.DEBUG = False
+    settings.WALLET_PRIVATE_KEY_ENCRYPTION_KEY = "not-a-fernet-key"
+
+    response = client.post(
+        "/accounts/wallets/save/",
+        json.dumps({"address": wallet, "private_address": private_address, "label": "Primary Solana"}),
+        content_type="application/json",
+    )
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "wallet_encryption_unavailable"
+
+
+@pytest.mark.django_db
 def test_registration_draft_uses_authenticated_active_wallet_not_request_wallet(client):
     from django.contrib.auth.models import User
 
