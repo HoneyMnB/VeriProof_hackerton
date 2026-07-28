@@ -151,16 +151,21 @@ def test_library_management_payload_contains_registered_metadata_and_real_sales(
         title="Registered work",
         description="Registration description",
         tags=["portrait", "oil"],
+        min_price_sol=decimal.Decimal("1.250000000"),
+        target_price_sol=decimal.Decimal("2.500000000"),
     )
-    LicenseFactory(asset=asset, price_usdc=decimal.Decimal("3.25"))
+    LicenseFactory(asset=asset, price_usdc=None, price_sol=decimal.Decimal("3.250000000"), payment_currency="SOL")
 
     response = client.get("/library")
     assert response.status_code == 200
     content = response.content.decode()
     assert "Registration description" in content
     assert "data-manage=" in content
+    assert 'data-min-price-sol="1.250000000"' in content
+    assert 'data-target-price-sol="2.500000000"' in content
+    assert "1.250000000 SOL" in content
     assert "sale_count&quot;: 1" in content
-    assert "gross_usdc&quot;: &quot;3.25" in content
+    assert "gross_sol&quot;: &quot;3.25" in content
 
 
 @pytest.mark.django_db
@@ -178,8 +183,8 @@ def test_owner_can_update_work_metadata_and_listing_terms(client):
             "title": "Edited work",
             "description": "Updated creator description",
             "tags": ["editorial", "portrait"],
-            "min_price_usdc": "4.50",
-            "target_price_usdc": "8.00",
+            "min_price_sol": "4.50",
+            "target_price_sol": "8.00",
             "visibility": "private",
         },
         content_type="application/json",
@@ -189,12 +194,12 @@ def test_owner_can_update_work_metadata_and_listing_terms(client):
     assert asset.title == "Edited work"
     assert asset.description == "Updated creator description"
     assert asset.tags == ["editorial", "portrait"]
-    assert str(asset.min_price_usdc) == "4.500000"
+    assert str(asset.min_price_sol) == "4.500000000"
 
 
 @pytest.mark.django_db
-def test_owner_metadata_update_keeps_existing_tags_when_older_terms_client_omits_them(client):
-    """기존 가격 설정 클라이언트도 태그를 지우지 않고 계속 동작한다."""
+def test_owner_metadata_update_keeps_existing_tags_when_terms_client_omits_them(client):
+    """가격만 저장해도 기존 태그를 지우지 않는다."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     owner = CreatorFactory(wallet_address=_OWNER_WALLET)
@@ -202,7 +207,7 @@ def test_owner_metadata_update_keeps_existing_tags_when_older_terms_client_omits
     asset = IpAssetFactory(creator=owner, account_owner=user, tags=["keep-me"])
     response = client.post(
         f"/api/v1/ip/{asset.id}/terms",
-        data={"min_price_usdc": "2", "target_price_usdc": "3", "visibility": "private"},
+        data={"min_price_sol": "2", "target_price_sol": "3", "visibility": "private"},
         content_type="application/json",
     )
     assert response.status_code == 200

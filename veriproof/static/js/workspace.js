@@ -27,6 +27,7 @@
             activeFileIndex: 0,
             fileProfiles: [],
             attachments: [],
+            registrationWalletAddress: "",
             conversationId: new URLSearchParams(window.location.search).get("conversation") || null
         };
 
@@ -160,15 +161,42 @@
             byId("confirm-registration").addEventListener("click", confirmAndRegister);
         }
 
+        function activeRegistrationWallet() {
+            return request("/accounts/wallets/").then(function (result) {
+                if (!result.ok) { throw new Error("wallet_status_unavailable"); }
+                return (result.body.items || []).find(function (item) {
+                    return item.is_active && item.address && item.has_private_address;
+                }) || null;
+            });
+        }
+        function requireRegistrationWallet(continueRegistration) {
+            activeRegistrationWallet().then(function (activeWallet) {
+                if (!activeWallet) { return setStatus(t("workspace.status.wallet_keys_register"), true); }
+                state.registrationWalletAddress = activeWallet.address;
+                continueRegistration(activeWallet.address);
+            }).catch(function () {
+                setStatus(t("workspace.status.wallet_check_failed"), true);
+            });
+        }
         function openCanvas() {
-            // 등록 초안 작성은 지갑 연결 전에도 시작할 수 있어야 한다. 지갑은 실제
-            // 등록·인증서 발급 직전에만 필수이므로, 여기서 패널을 막으면 사용자가
-            // "저작물 등록 시작"을 눌러도 아무 일도 일어나지 않는 것처럼 보인다.
-            canvas.hidden = false;
-            document.body.classList.add("is-registration-canvas-open");
-            canvas.querySelector("#file-input").focus();
+            requireRegistrationWallet(function () {
+                canvas.hidden = false;
+                document.body.classList.add("is-registration-canvas-open");
+                canvas.querySelector("#file-input").focus();
+            });
         }
         function closeCanvas() { canvas.hidden = true; document.body.classList.remove("is-registration-canvas-open"); }
+        function resetRegisteredCanvas() {
+            state.file = null;
+            state.files = [];
+            state.activeFileIndex = 0;
+            state.fileProfiles = [];
+            state.registrationWalletAddress = "";
+            byId("registration-file-queue").replaceChildren();
+            var dropzone = byId("dropzone");
+            dropzone.classList.remove("has-file");
+            dropzone.querySelector(".dropzone__hint").textContent = t("workspace.canvas.drop_hint");
+        }
         /**
          * 선택/드롭된 파일 목록을 상태에 저장하고 첫 파일을 활성 파일로 세팅한 뒤 큐를 렌더링한다.
          */
@@ -224,7 +252,9 @@
             var dropzone = byId("dropzone");
             dropzone.classList.add("has-file");
             dropzone.querySelector(".dropzone__hint").textContent = registrationFiles().length > 1 ? t("workspace.canvas.images_selected", { n: registrationFiles().length }) : file.name;
-            saveDraft().catch(function () {});
+            saveDraft(state.registrationWalletAddress).catch(function (error) {
+                renderDraftError(error.message || t("workspace.status.draft_save_failed"));
+            });
         }
         /**
          * 선택된 파일 목록을 큐 UI로 렌더링하고 활성 파일을 표시한다.
@@ -257,22 +287,19 @@
             }
             return state.file ? [state.file] : [];
         }
-        function saveDraft() {
-            // 계정 설정 전에는 파일과 입력값을 현재 캔버스에만 보존한다.
-            // 서버 초안은 창작자 지갑을 식별자로 사용하므로 지갑 연결 후 저장한다.
-            if (!wallet()) { return Promise.resolve(); }
+        function saveDraft(creatorWallet) {
+            if (!creatorWallet) { return Promise.reject(new Error(t("workspace.status.wallet_keys_register"))); }
             var profile = activeFileProfile();
-            if (!profile) { return Promise.resolve(); }
+            if (!profile) { return Promise.reject(new Error(t("workspace.status.choose_first"))); }
             var data = new FormData();
-            data.append("creator_wallet", wallet());
+            data.append("creator_wallet", creatorWallet);
             data.append("draft_id", profile.draft && profile.draft.draft_id || "");
             data.append("file_name", state.file.name);
             data.append("fields", JSON.stringify(fields()));
             registrationFiles().forEach(function (file) { data.append("files", file); });
             return request("/api/v1/assistant/registration-drafts", { method: "POST", body: data }).then(function (result) {
                 if (!result.ok) {
-                    renderDraftError(result.body.detail || t("workspace.status.draft_save_failed"));
-                    throw new Error("draft_save_failed");
+                    throw new Error(result.body.detail || t("workspace.status.draft_save_failed"));
                 }
                 profile.draft = result.body;
                 renderDraftMessage(t("workspace.status.draft_saved"));
@@ -284,26 +311,27 @@
          */
         function confirmAndRegister() {
             if (!state.file) { return renderDraftError(t("workspace.status.choose_first")); }
-            if (!wallet()) { return setStatus(t("workspace.status.wallet_register"), true); }
-            captureActiveFields();
-            var profile = activeFileProfile();
-            saveDraft().then(function () {
-                if (!profile.draft) { throw new Error("draft_save_failed"); }
-                return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet() }) }).then(function (confirmed) {
-                    if (!confirmed || !confirmed.ok) { return renderDraftError((confirmed && confirmed.body.detail) || t("workspace.status.confirm_incomplete")); }
-                    uploadConfirmed(confirmed.body.confirmation_token, profile.draft.draft_id);
+            requireRegistrationWallet(function (creatorWallet) {
+                captureActiveFields();
+                var profile = activeFileProfile();
+                saveDraft(creatorWallet).then(function () {
+                    if (!profile.draft) { throw new Error(t("workspace.status.draft_save_failed")); }
+                    return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: creatorWallet }) }).then(function (confirmed) {
+                        if (!confirmed || !confirmed.ok) { return renderDraftError((confirmed && confirmed.body.detail) || t("workspace.status.confirm_incomplete")); }
+                        uploadConfirmed(confirmed.body.confirmation_token, profile.draft.draft_id, creatorWallet);
+                    });
+                }).catch(function (error) {
+                    renderDraftError(error.message || t("workspace.status.draft_save_failed"));
                 });
-            }).catch(function () {
-                renderDraftError(t("workspace.status.file_prepare"));
             });
         }
         /**
          * 확정 토큰과 함께 파일을 등록 엔드포인트로 업로드한다. 패키지 모드면 나머지 파일을 지원 파일로 첨부한다.
          */
-        function uploadConfirmed(token, draftId) {
+        function uploadConfirmed(token, draftId, creatorWallet) {
             var data = new FormData();
             data.append("image", state.file);
-            data.append("creator_wallet", wallet());
+            data.append("creator_wallet", creatorWallet);
             data.append("asset_type", fields().asset_type);
             data.append("min_price", fields().min_price);
             data.append("target_price", fields().target_price);
@@ -317,8 +345,12 @@
             renderDraftMessage(t("workspace.status.confirming"));
             request(shell.dataset.registerUrl, { method: "POST", body: data }).then(function (result) {
                 if (!result.ok) { return renderDraftError(result.body.detail || result.body.error || t("workspace.status.register_failed")); }
-                renderDraftMessage(t(result.body.anchor_tx ? "workspace.status.registered_available" : "workspace.status.registered_pending"));
+                var completionMessage = t(result.body.anchor_tx ? "workspace.status.registered_available" : "workspace.status.registered_pending");
+                renderDraftMessage(completionMessage);
                 if (VP.refreshSummary) { VP.refreshSummary(); }
+                resetRegisteredCanvas();
+                closeCanvas();
+                setStatus(completionMessage);
             });
         }
         /**

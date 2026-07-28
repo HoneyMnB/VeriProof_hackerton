@@ -8,6 +8,7 @@ python-dotenv>=1.0
 gunicorn>=22.0
 packaging>=23.0
 whitenoise>=6.12,<7.0
+cryptography>=42.0
 
 # --- AI (Gemini / Vertex) [import-guarded] ---
 google-genai>=0.3

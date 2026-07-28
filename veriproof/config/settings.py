@@ -41,6 +41,10 @@ SECRET_KEY = os.environ.get(
 # TDD/local defaults to DEBUG=True. Production must set DEBUG=False.
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
+# Wallet private keys are encrypted before persistence. This must remain stable
+# while any stored wallet ciphertext exists.
+WALLET_PRIVATE_KEY_ENCRYPTION_KEY = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+
 # 로컬 기본값에는 Docker 내부 Seller 별칭을 포함하고 운영은 환경 변수로 제한한다.
 _ALLOWED_HOSTS_RAW = os.environ.get("VERIPROOF_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = ["*"]

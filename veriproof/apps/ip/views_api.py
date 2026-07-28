@@ -20,6 +20,7 @@ from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
+from apps.accounts.services import WalletSigningError, active_wallet_signer
 from apps.ip.models import IpAsset
 from apps.ip.browser_license_session import has_browser_payment_request
 from apps.negotiation.models import NegotiationSession
@@ -74,7 +75,11 @@ def register(request: HttpRequest) -> JsonResponse:
     upload = request.FILES.get("image")
     if upload is None:
         return _error("missing_content", "a content file is required")
-    metadata, error = _registration_metadata(request, upload)
+    try:
+        creator_wallet, signer_secret_key = active_wallet_signer(request.user)
+    except WalletSigningError as exc:
+        return _error("wallet_signing_unavailable", str(exc), status=422)
+    metadata, error = _registration_metadata(request, upload, creator_wallet=creator_wallet)
     if error is not None:
         return error
     gallery_uploads = tuple(request.FILES.getlist("gallery_images"))
@@ -111,6 +116,7 @@ def register(request: HttpRequest) -> JsonResponse:
             supporting_uploads,
             gallery_uploads=gallery_uploads,
             account_owner=request.user,
+            signer_secret_key=signer_secret_key,
         )
     except RegistrationError as exc:
         logger.warning(
@@ -212,21 +218,14 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
     if asset is None:
         logger.warning("asset terms rejected user=%s asset_id=%s", request.user.get_username(), asset_id)
         return _error("asset_not_found", "asset not found", status=404)
-    minimum = _parse_money(data.get("min_price_usdc"))
-    target = _parse_money(data.get("target_price_usdc"))
-    sol_target = _parse_money(data.get("target_price_sol"))
+    minimum = _parse_money(data.get("min_price_sol"))
+    target = _parse_money(data.get("target_price_sol"))
     visibility = str(data.get("visibility") or "").strip().lower()
-    if minimum is None or target is None or minimum < 0 or target < minimum or visibility not in {IpAsset.PRIVATE, IpAsset.PUBLIC}:
-        return _error("invalid_asset_terms", "invalid pricing or visibility", status=422)
-    if sol_target is not None and (
-        sol_target <= 0
-        or sol_target.as_tuple().exponent < -9
+    if (
+        not _valid_sol_registration_prices(minimum, target)
+        or visibility not in {IpAsset.PRIVATE, IpAsset.PUBLIC}
     ):
-        return _error(
-            "invalid_sol_price",
-            "target_price_sol must be positive with at most 9 decimal places",
-            status=422,
-        )
+        return _error("invalid_asset_terms", "invalid pricing or visibility", status=422)
     if visibility == IpAsset.PUBLIC and not asset.registration_certificate_tx_sig:
         logger.warning(
             "public listing rejected without registration certificate user=%s asset_id=%s",
@@ -250,16 +249,14 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
     tags = [tag.strip() for tag in tags if tag.strip()]
     if len(title) > 120:
         return _error("invalid_asset_metadata", "title must be 120 characters or fewer", status=422)
-    asset.min_price_usdc = minimum
-    asset.target_price_usdc = target
-    if "target_price_sol" in data:
-        asset.target_price_sol = sol_target
+    asset.min_price_sol = minimum
+    asset.target_price_sol = target
     asset.visibility = visibility
     asset.title = title or None
     asset.description = description or None
     asset.tags = tags
     asset.save(update_fields=[
-        "min_price_usdc", "target_price_usdc", "target_price_sol", "visibility", "title", "description", "tags"
+        "min_price_sol", "target_price_sol", "visibility", "title", "description", "tags"
     ])
     logger.info("asset terms updated user=%s asset_id=%s", request.user.get_username(), asset_id)
     return JsonResponse({
@@ -267,9 +264,8 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         "title": asset.title or "",
         "description": asset.description or "",
         "tags": asset.tags,
-        "min_price_usdc": str(asset.min_price_usdc),
-        "target_price_usdc": str(asset.target_price_usdc),
-        "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else None,
+        "min_price_sol": str(asset.min_price_sol),
+        "target_price_sol": str(asset.target_price_sol),
         "visibility": asset.visibility,
     })
 
@@ -369,7 +365,7 @@ def _parse_tags(raw: str | None) -> list[str]:
 
 
 def _registration_metadata(
-    request: HttpRequest, upload
+    request: HttpRequest, upload, *, creator_wallet: str | None = None
 ) -> tuple[RegistrationMetadata | None, JsonResponse | None]:
     """등록 입력만 검증하여 HTTP와 비즈니스 유스케이스의 경계를 유지한다."""
     asset_type = (request.POST.get("asset_type") or IpAsset.IMAGE).strip().lower()
@@ -383,7 +379,7 @@ def _registration_metadata(
     if upload.size > settings.MAX_UPLOAD_BYTES:
         return None, _error("payload_too_large", "file exceeds the configured upload limit", 413)
 
-    wallet = (request.POST.get("creator_wallet") or "").strip()
+    wallet = creator_wallet or (request.POST.get("creator_wallet") or "").strip()
     if not _is_valid_pubkey(wallet):
         return None, _error("invalid_wallet", "creator_wallet is not a valid Solana pubkey")
     min_price = _parse_money(request.POST.get("min_price"))
@@ -533,7 +529,7 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
         verification = solana.verify_sol_payment_by_reference(
             reference=reference,
             expected_recipient=resolve_pay_to(asset),
-            expected_amount=asset.target_price_usdc,
+            expected_amount=asset.target_price_sol,
             expected_memo=expected_memo,
         )
     except CertificateIssueError as exc:
@@ -560,9 +556,10 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             usage_type="commercial",
             tx_signature=verification.tx_signature,
             session=None,
-            expected_amount=asset.target_price_usdc,
+            expected_amount=asset.target_price_sol,
             payment_already_verified=True,
             buyer_user=request.user,
+            payment_currency="SOL",
         )
     except Exception as exc:  # noqa: BLE001
         logger.warning("solpay license grant failed asset_id=%s tx_sig=%s: %s", asset.id, verification.tx_signature, exc)

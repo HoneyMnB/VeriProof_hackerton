@@ -15,6 +15,8 @@ Covers the SPEC-002 §5 integration TDD list (7 tests):
 """
 from __future__ import annotations
 
+import decimal
+
 import pytest
 from types import SimpleNamespace
 
@@ -180,7 +182,11 @@ def test_agent_with_valid_license_gets_200(client, monkeypatch):
     """AC-3 / R2: 저장된 라이선스의 실제 다운로드 토큰만 반환한다."""
     from tests.factories import CreatorFactory, IpAssetFactory, LicenseFactory
 
-    asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET), visibility="public")
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        visibility="public",
+        target_price_sol=decimal.Decimal("1.000000000"),
+    )
     LicenseFactory(
         asset=asset,
         payment_tx_sig="valid_tx_001",
@@ -210,7 +216,11 @@ def test_browser_without_license_gets_solana_pay_fallback(client, monkeypatch):
     """AC-4 / R7: browser request, no license -> 200 Solana Pay Buy-It-Now."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
-    asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET), visibility="public")
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        visibility="public",
+        target_price_sol=decimal.Decimal("1.000000000"),
+    )
 
     class _NotLicensed:
         def is_licensed(self, asset, tx_sig):

@@ -29,15 +29,12 @@ class UserPreference(models.Model):
 
 
 class WalletConfiguration(models.Model):
-    """A public Solana address prepared for a creator's settlement flows.
-
-    This deliberately stores no wallet provider session, signature, seed phrase,
-    or private key.  Connecting a provider remains a separate future step.
-    """
+    """A creator's public wallet settings and encrypted signing secret."""
 
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="wallet_configurations")
     label = models.CharField(max_length=40)
     address = models.CharField(max_length=64)
+    private_address = models.CharField(max_length=512, blank=True)
     accepts_deposits = models.BooleanField(default=True)
     receives_payouts = models.BooleanField(default=False)
     is_active = models.BooleanField(default=False)

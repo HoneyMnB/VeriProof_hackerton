@@ -13,5 +13,6 @@ urlpatterns = [
     path("wallets/", views.wallet_configuration_list, name="wallet-list"),
     path("wallets/save/", views.wallet_configurations, name="wallet-save"),
     path("wallets/<int:wallet_id>/activate/", views.activate_wallet, name="wallet-activate"),
+    path("wallets/<int:wallet_id>/", views.delete_wallet, name="wallet-delete"),
     path("password/", views.password, name="password"),
 ]

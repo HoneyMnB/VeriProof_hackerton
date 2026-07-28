@@ -26,7 +26,7 @@ def get_solana_service() -> Any:
 
 
 def _parse_secret_key(raw: str | list[int] | tuple[int, ...] | None) -> list[int] | None:
-    """Parse a Solana CLI 64-byte secret-key array from settings."""
+    """Parse a Solana CLI array or Base58 keypair from settings."""
     if raw is None or raw == "":
         return None
     if isinstance(raw, (list, tuple)):
@@ -34,10 +34,29 @@ def _parse_secret_key(raw: str | list[int] | tuple[int, ...] | None) -> list[int
     text = str(raw).strip()
     if not text:
         return None
+    if not text.startswith(("[", "(")):
+        return _decode_base58_keypair(text)
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        parsed = ast.literal_eval(text)
+        try:
+            parsed = ast.literal_eval(text)
+        except (SyntaxError, ValueError):
+            raise ValueError(
+                "PLATFORM_ESCROW_SECRET_KEY must be a 64-integer array or Base58 keypair"
+            ) from None
     if not isinstance(parsed, list):
-        raise ValueError("PLATFORM_ESCROW_SECRET_KEY must be a JSON array of 64 integers")
+        raise ValueError("PLATFORM_ESCROW_SECRET_KEY must be a 64-integer array or Base58 keypair")
     return [int(item) for item in parsed]
+
+
+def _decode_base58_keypair(value: str) -> list[int]:
+    """Decode a Base58-encoded Solana keypair into the signer byte array."""
+    try:
+        from solders.keypair import Keypair
+
+        return list(bytes(Keypair.from_base58_string(value)))
+    except (ImportError, ValueError) as exc:
+        raise ValueError(
+            "PLATFORM_ESCROW_SECRET_KEY must be a valid 64-byte Solana Base58 keypair"
+        ) from exc

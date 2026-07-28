@@ -123,8 +123,8 @@ class FakeSolanaService:
         self._sig_counter += 1
         return f"{prefix}_fake_sig_{self._sig_counter}"
 
-    def anchor_hash(self, image_sha256: str, creator_pubkey: str) -> str:
-        self._record("anchor_hash", (image_sha256, creator_pubkey), {})
+    def anchor_hash(self, image_sha256: str, creator_pubkey: str, sender_secret_key=None) -> str:
+        self._record("anchor_hash", (image_sha256, creator_pubkey, sender_secret_key), {})
         if self.fail_anchor:
             # SPEC-001 R14: simulate "all retries exhausted" by raising the
             # real AnchorFailed exception type so the register view's
@@ -172,11 +172,11 @@ class FakeSolanaService:
         return self._next_sig("cert")
 
     def issue_registration_certificate(
-        self, asset_id: Any, creator_pubkey: str, content_sha256: str
+        self, asset_id: Any, creator_pubkey: str, content_sha256: str, sender_secret_key=None
     ) -> str:
         self._record(
             "issue_registration_certificate",
-            (asset_id, creator_pubkey, content_sha256),
+            (asset_id, creator_pubkey, content_sha256, sender_secret_key),
             {},
         )
         if self.fail_issue_cert:

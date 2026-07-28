@@ -326,6 +326,10 @@ def _asset_card(asset: IpAsset) -> dict:
     """
     licenses = list(asset.licenses.all())
     latest_license = licenses[0] if licenses else None
+    sol_licenses = [
+        license for license in licenses
+        if license.payment_currency == "SOL" and license.price_sol is not None
+    ]
     sales = [
         {
             "buyer_wallet": license.buyer_wallet,
@@ -336,11 +340,11 @@ def _asset_card(asset: IpAsset) -> dict:
             "granted_at": license.granted_at.isoformat() if license.granted_at else None,
             "certificate_tx_sig": license.certificate_tx_sig or "",
         }
-        for license in licenses
+        for license in sol_licenses
     ]
     sales_summary = {
-        "sale_count": len(licenses),
-        "gross_usdc": str(sum((license.price_usdc or decimal.Decimal("0") for license in licenses), decimal.Decimal("0"))),
+        "sale_count": len(sol_licenses),
+        "gross_sol": str(sum((license.price_sol for license in sol_licenses), decimal.Decimal("0"))),
         "last_sale_at": sales[0]["granted_at"] if sales else None,
     }
     manage_data = {
@@ -361,8 +365,7 @@ def _asset_card(asset: IpAsset) -> dict:
         "tags": list(asset.tags or []),
         "category": asset.category,
         "originality_score": asset.originality_score,
-        "min_price_usdc": str(asset.min_price_usdc),
-        "target_price_usdc": str(asset.target_price_usdc),
+        "min_price_sol": str(asset.min_price_sol) if asset.min_price_sol is not None else "",
         "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else "",
         # 판매 조건 편집 폼은 서버가 가진 현재 공개 상태를 그대로 렌더링한다.
         # 누락하면 폼이 항상 private처럼 보이는 UI/데이터 불일치가 생긴다.

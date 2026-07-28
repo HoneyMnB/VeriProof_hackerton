@@ -53,6 +53,10 @@ def _patch_services(
         event_recorder=get_event_recorder(),
     )
     monkeypatch.setattr("apps.ip.views_api.get_registration_service", lambda: service)
+    monkeypatch.setattr(
+        "apps.ip.views_api.active_wallet_signer",
+        lambda user: (VALID_WALLET, [7] * 64),
+    )
 
 
 def _post(client, image, **extra):
@@ -90,6 +94,66 @@ def test_register_happy_path_returns_201_with_asset(client, png_bytes, monkeypat
     assert body["anchor_tx"]  # non-empty
     assert body["analysis"]["tags"]  # non-empty (fake returns ["test"])
     assert body["x402_endpoint"].endswith(body["asset_id"])
+
+
+@pytest.mark.django_db
+def test_register_uses_the_authenticated_wallet_for_public_key_and_signing(client, png_bytes, monkeypatch, settings):
+    """The request wallet is ignored; both anchor identity and signer come from the account."""
+    from cryptography.fernet import Fernet
+    from django.contrib.auth.models import User
+    from solders.keypair import Keypair
+
+    from apps.accounts.models import WalletConfiguration
+    from apps.accounts.services import encrypt_wallet_private_address
+
+    keypair = Keypair()
+    settings.WALLET_PRIVATE_KEY_ENCRYPTION_KEY = Fernet.generate_key().decode()
+    user = User.objects.create_user(username="wallet-signer@test.com", password="test-password-123")
+    WalletConfiguration.objects.create(
+        user=user,
+        label="Signing wallet",
+        address=str(keypair.pubkey()),
+        private_address=encrypt_wallet_private_address(str(keypair)),
+        is_active=True,
+    )
+    client.force_login(user)
+    solana = FakeSolanaService()
+    from apps.ip.views_api import active_wallet_signer as real_active_wallet_signer
+
+    _patch_services(monkeypatch, gemini=FakeGeminiService(), solana=solana, storage=FakeStorageService())
+    monkeypatch.setattr("apps.ip.views_api.active_wallet_signer", real_active_wallet_signer)
+
+    response = client.post(
+        REGISTER_URL,
+        {"image": _upload(png_bytes), "creator_wallet": VALID_WALLET, "min_price": "1.5", "target_price": "2.25"},
+        format="multipart",
+    )
+
+    assert response.status_code == 201, response.content
+    anchor_call = next(call for call in solana.calls if call[0] == "anchor_hash")
+    assert anchor_call[1][1] == str(keypair.pubkey())
+    assert anchor_call[1][2] == list(bytes(keypair))
+
+
+@pytest.mark.django_db
+def test_register_rejects_an_account_without_an_active_wallet(client, png_bytes, monkeypatch):
+    from django.contrib.auth.models import User
+
+    user = User.objects.create_user(username="no-wallet@test.com", password="test-password-123")
+    client.force_login(user)
+    monkeypatch.setattr(
+        "apps.ip.views_api.get_registration_service",
+        lambda: pytest.fail("registration dependencies must not run without a wallet"),
+    )
+
+    response = client.post(
+        REGISTER_URL,
+        {"image": _upload(png_bytes), "creator_wallet": VALID_WALLET, "min_price": "1.5", "target_price": "2.25"},
+        format="multipart",
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "wallet_signing_unavailable"
 
 
 @pytest.mark.django_db

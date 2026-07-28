@@ -8,7 +8,7 @@
     }
     function money(value) {
         var amount = Number(value);
-        return (isFinite(amount) ? new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount) : value) + " USDC";
+        return (isFinite(amount) ? new Intl.NumberFormat(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 9 }).format(amount) : value) + " SOL";
     }
     function dateTime(value) {
         var parsed = new Date(value);
@@ -180,7 +180,7 @@
     SalesDashboard.prototype.renderMetrics = function (summary) {
         var metrics = byId("settings-sales-metrics");
         metrics.replaceChildren();
-        [["dashboard.gross", money(summary.gross_usdc || "0")], ["dashboard.proceeds", money(summary.creator_proceeds_usdc || "0")], ["dashboard.sales", summary.sale_count || 0], ["dashboard.fee", money(summary.platform_fee_usdc || "0")]].forEach(function (entry) { metrics.appendChild(createMetric(t(entry[0]), entry[1])); });
+        [["dashboard.gross", money(summary.gross_sol || "0")], ["dashboard.proceeds", money(summary.creator_proceeds_sol || "0")], ["dashboard.sales", summary.sale_count || 0], ["dashboard.fee", money(summary.platform_fee_sol || "0")]].forEach(function (entry) { metrics.appendChild(createMetric(t(entry[0]), entry[1])); });
     };
 
     /**
@@ -217,8 +217,8 @@
             [
                 item.asset_title || item.asset_id,
                 item.sale_count,
-                money(item.gross_usdc || "0"),
-                money(item.average_usdc || "0"),
+                money(item.gross_sol || "0"),
+                money(item.average_sol || "0"),
                 dateTime(item.last_sold_at),
             ].forEach(function (value, index) {
                 var cell = document.createElement("td");
@@ -253,7 +253,7 @@
     SalesDashboard.prototype.saleRow = function (sale) {
         var self = this;
         var row = document.createElement("tr");
-        [[sale.asset_title || sale.asset_id, ""], [dateTime(sale.granted_at), ""], [shortWallet(sale.buyer_wallet), "vp-sales-table__wallet"], [sale.usage_type, ""], [money(sale.price_usdc), "vp-sales-table__amount"]].forEach(function (entry) { var cell = document.createElement("td"); cell.textContent = entry[0]; if (entry[1]) { cell.className = entry[1]; } row.appendChild(cell); });
+        [[sale.asset_title || sale.asset_id, ""], [dateTime(sale.granted_at), ""], [shortWallet(sale.buyer_wallet), "vp-sales-table__wallet"], [sale.usage_type, ""], [money(sale.price_sol), "vp-sales-table__amount"]].forEach(function (entry) { var cell = document.createElement("td"); cell.textContent = entry[0]; if (entry[1]) { cell.className = entry[1]; } row.appendChild(cell); });
         var action = document.createElement("td"); var button = document.createElement("button"); button.type = "button"; button.className = "vp-sales-table__detail"; button.setAttribute("aria-expanded", "false"); button.textContent = t("dashboard.view_details"); button.addEventListener("click", function () { self.toggleDetail(row, sale, button); }); action.appendChild(button); row.appendChild(action);
         return row;
     };
@@ -272,14 +272,14 @@
     SalesDashboard.prototype.totalLabel = function (summary) {
         return t("dashboard.filtered_total")
             .replace("{count}", summary.sale_count || 0)
-            .replace("{gross}", money(summary.gross_usdc || "0"));
+            .replace("{gross}", money(summary.gross_sol || "0"));
     };
 
     SalesDashboard.prototype.workTotalLabel = function (summary, workCount) {
         return t("dashboard.filtered_work_total")
             .replace("{works}", workCount)
             .replace("{count}", summary.sale_count || 0)
-            .replace("{gross}", money(summary.gross_usdc || "0"));
+            .replace("{gross}", money(summary.gross_sol || "0"));
     };
 
     /**

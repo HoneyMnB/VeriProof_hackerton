@@ -14,8 +14,8 @@ class CatalogService:
 
     SORT_MAP = {
         "recent": "-created_at",
-        "price_low": "min_price_usdc",
-        "price_high": "-min_price_usdc",
+        "price_low": "min_price_sol",
+        "price_high": "-min_price_sol",
         "originality": "-originality_score",
     }
 
@@ -52,9 +52,9 @@ class CatalogService:
                 | Q(ai_tags__icontains=query)
             )
         if price_min is not None:
-            queryset = queryset.filter(min_price_usdc__gte=price_min)
+            queryset = queryset.filter(min_price_sol__gte=price_min)
         if price_max is not None:
-            queryset = queryset.filter(min_price_usdc__lte=price_max)
+            queryset = queryset.filter(min_price_sol__lte=price_max)
         order_by = self.SORT_MAP.get(sort, "-created_at")
         results = list(queryset.order_by(order_by))
         logger.info(
@@ -77,8 +77,8 @@ class CatalogService:
             "category": asset.category,
             # 공개 카탈로그에는 앱 권한 경계를 거친 워터마크만 제공한다.
             "watermark_url": watermark_preview_url(asset.id),
-            "min_price_usdc": str(asset.min_price_usdc),
-            "target_price_usdc": str(asset.target_price_usdc),
+            "min_price_sol": str(asset.min_price_sol) if asset.min_price_sol is not None else None,
+            "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else None,
             "originality_score": asset.originality_score,
             "created_at": asset.created_at,
             "x402_endpoint": f"/api/v1/ip/{asset.id}",

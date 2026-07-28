@@ -55,6 +55,12 @@
         return (isFinite(n) ? USD_FORMAT.format(n) : String(value == null ? "0" : value)) + " USDC";
     }
 
+    var SOL_FORMAT = new Intl.NumberFormat("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 9 });
+    function formatSol(value) {
+        var n = Number(value);
+        return (isFinite(n) ? SOL_FORMAT.format(n) : String(value == null ? "0" : value)) + " SOL";
+    }
+
     function setStatus(text, isError) {
         // Workspace exposes #assistant-status; Library/Sandbox have no status
         // surface and rely on a page reload for feedback instead.
@@ -513,29 +519,80 @@
                 list.replaceChildren();
                 requestJson("/accounts/wallets/").then(function (result) {
                     if (!result.ok) { list.textContent = t("shell.status.settings_failed"); return; }
-                    (result.body.items || []).forEach(function (wallet) {
+                    var wallets = result.body.items || [];
+                    wallets.forEach(function (wallet) {
                         var row = document.createElement("article");
                         var details = document.createElement("div");
                         var title = document.createElement("strong");
                         var address = document.createElement("code");
-                        var roles = document.createElement("small");
-                        var activate = document.createElement("button");
+                        var actions = document.createElement("div");
+                        var edit = document.createElement("button");
+                        var remove = document.createElement("button");
+                        var cancelRemove = document.createElement("button");
                         row.className = "vp-wallet-row" + (wallet.is_active ? " is-active" : "");
                         title.textContent = wallet.label;
                         address.textContent = wallet.address;
-                        roles.textContent = [wallet.accepts_deposits ? t("account.wallet_deposits") : "", wallet.receives_payouts ? t("account.wallet_payouts") : ""].filter(Boolean).join(" · ");
-                        activate.type = "button";
-                        activate.textContent = wallet.is_active ? t("account.wallet_active") : t("account.wallet_use");
-                        activate.disabled = wallet.is_active;
-                        activate.addEventListener("click", function () {
-                            requestJson("/accounts/wallets/" + wallet.id + "/activate/", { method: "POST", headers: { "X-CSRFToken": csrfToken() } }).then(function (activateResult) {
-                                if (!activateResult.ok) { return; }
-                                setCreatorWallet(activateResult.body.creator_wallet);
+                        edit.type = "button";
+                        edit.className = "vp-wallet-row__edit";
+                        edit.textContent = t("account.wallet_edit");
+                        edit.addEventListener("click", function () {
+                            walletForm.hidden = false;
+                            walletForm.classList.add("is-editing");
+                            walletForm.dataset.editing = "true";
+                            byId("account-wallet-label").value = wallet.label;
+                            byId("account-creator-wallet").value = wallet.address;
+                            privateAddress.value = "";
+                            privateAddress.required = false;
+                            privateHint.textContent = t("account.wallet_private_edit_hint");
+                            setPrivateAddressState(wallet.has_private_address);
+                            walletCancel.removeAttribute("hidden");
+                            byId("account-wallet-label").focus();
+                        });
+                        remove.type = "button";
+                        remove.className = "vp-wallet-row__delete";
+                        remove.setAttribute("aria-label", t("account.wallet_delete"));
+                        remove.setAttribute("title", t("account.wallet_delete"));
+                        remove.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+                        remove.addEventListener("click", function () {
+                            if (!actions.classList.contains("is-confirming")) {
+                                actions.classList.add("is-confirming");
+                                remove.setAttribute("aria-label", t("account.wallet_delete_confirm"));
+                                remove.setAttribute("title", t("account.wallet_delete_confirm"));
+                                cancelRemove.hidden = false;
+                                return;
+                            }
+                            requestJson("/accounts/wallets/" + wallet.id + "/", { method: "DELETE", headers: { "X-CSRFToken": csrfToken() } }).then(function (deleteResult) {
+                                if (!deleteResult.ok) {
+                                    var walletStatus = byId("account-wallet-status");
+                                    if (walletStatus) {
+                                        walletStatus.textContent = deleteResult.body.detail || t("shell.status.settings_failed");
+                                        walletStatus.classList.add("is-error");
+                                    }
+                                    return;
+                                }
+                                setCreatorWallet(deleteResult.body.creator_wallet);
                                 loadWalletMonitor();
+                            }).catch(function () {
+                                var walletStatus = byId("account-wallet-status");
+                                if (walletStatus) {
+                                    walletStatus.textContent = t("shell.status.settings_network");
+                                    walletStatus.classList.add("is-error");
+                                }
                             });
                         });
-                        details.append(title, address, roles); row.append(details, activate); list.appendChild(row);
+                        cancelRemove.type = "button";
+                        cancelRemove.className = "vp-wallet-row__cancel-delete";
+                        cancelRemove.textContent = t("account.wallet_delete_cancel");
+                        cancelRemove.hidden = true;
+                        cancelRemove.addEventListener("click", function () {
+                            actions.classList.remove("is-confirming");
+                            remove.setAttribute("aria-label", t("account.wallet_delete"));
+                            remove.setAttribute("title", t("account.wallet_delete"));
+                            cancelRemove.hidden = true;
+                        });
+                        details.append(title, address); actions.append(edit, cancelRemove); row.append(details, actions, remove); list.appendChild(row);
                     });
+                    walletForm.hidden = wallets.length > 0;
                     if (!list.children.length) { list.textContent = t("account.wallet_empty"); }
                 }).catch(function () { list.textContent = t("shell.status.settings_network"); });
             }
@@ -566,15 +623,48 @@
             });
             var walletForm = byId("account-wallet-form");
             if (walletForm) {
+                var privateAddress = byId("account-wallet-private-address");
+                var privateToggle = byId("account-wallet-private-toggle");
+                var privateHint = byId("account-wallet-private-hint");
+                var privateState = byId("account-wallet-private-state");
+                var walletCancel = byId("account-wallet-cancel");
+                function setPrivateAddressState(hasPrivateAddress) {
+                    privateState.hidden = false;
+                    privateState.className = "vp-wallet-private-state " + (hasPrivateAddress ? "is-registered" : "is-missing");
+                    privateState.textContent = hasPrivateAddress ? "✓ " + t("account.wallet_private_registered") : "× " + t("account.wallet_private_missing");
+                }
+                function resetWalletForm() {
+                    walletForm.reset();
+                    walletForm.classList.remove("is-editing");
+                    walletForm.dataset.editing = "";
+                    privateAddress.required = true;
+                    privateAddress.type = "password";
+                    privateHint.textContent = t("account.wallet_private_hint");
+                    privateState.hidden = true;
+                    privateToggle.setAttribute("aria-pressed", "false");
+                    privateToggle.textContent = t("account.wallet_private_show");
+                    walletCancel.setAttribute("hidden", "");
+                }
+                privateToggle.addEventListener("click", function () {
+                    var isVisible = privateAddress.type === "text";
+                    privateAddress.type = isVisible ? "password" : "text";
+                    privateToggle.setAttribute("aria-pressed", String(!isVisible));
+                    privateToggle.textContent = t(isVisible ? "account.wallet_private_show" : "account.wallet_private_hide");
+                });
+                walletCancel.addEventListener("click", function () {
+                    resetWalletForm();
+                    walletForm.hidden = true;
+                });
                 walletForm.addEventListener("submit", function (event) {
                     event.preventDefault();
                     var status = byId("account-wallet-status");
                     requestJson("/accounts/wallets/save/", {
                         method: "POST", headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-                        body: JSON.stringify({ label: byId("account-wallet-label").value.trim(), address: byId("account-creator-wallet").value.trim(), accepts_deposits: byId("account-wallet-deposits").checked, receives_payouts: byId("account-wallet-payouts").checked })
+                        body: JSON.stringify({ label: byId("account-wallet-label").value.trim(), address: byId("account-creator-wallet").value.trim(), private_address: privateAddress.value.trim() })
                     }).then(function (result) {
                         if (!result.ok) { status.textContent = result.body.detail || t("shell.status.settings_failed"); status.classList.add("is-error"); return; }
-                        walletForm.reset();
+                        resetWalletForm();
+                        walletForm.hidden = true;
                         status.textContent = t("shell.status.settings_saved");
                         status.classList.remove("is-error");
                         loadWalletMonitor();
@@ -835,9 +925,9 @@
                 var s = result.body.summary;
                 renderPairs(summary, [
                     ["Sales", s.sale_count],
-                    ["Gross", formatUsd(s.gross_usdc || 0)],
-                    ["Fee", formatUsd(s.platform_fee_usdc || 0)],
-                    ["Proceeds", formatUsd(s.creator_proceeds_usdc || 0)]
+                    ["Gross", formatSol(s.gross_sol || 0)],
+                    ["Fee", formatSol(s.platform_fee_sol || 0)],
+                    ["Proceeds", formatSol(s.creator_proceeds_sol || 0)]
                 ]);
                 if (list) {
                     list.replaceChildren();
@@ -846,7 +936,7 @@
                         var title = document.createElement("strong");
                         var detail = document.createElement("p");
                         title.textContent = sale.asset_title || sale.asset_id || "sale";
-                        detail.textContent = formatUsd(sale.price_usdc || 0) + (sale.usage_type ? " · " + sale.usage_type : "");
+                        detail.textContent = formatSol(sale.price_sol || 0) + (sale.usage_type ? " · " + sale.usage_type : "");
                         item.append(title, detail);
                         list.appendChild(item);
                     });
