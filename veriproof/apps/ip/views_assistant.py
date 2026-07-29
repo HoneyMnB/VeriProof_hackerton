@@ -222,6 +222,15 @@ def directives(request: HttpRequest) -> JsonResponse:
 @csrf_exempt
 def chat(request: HttpRequest) -> JsonResponse:
     """사용자 메시지를 비서에 전달하고 응답·수행 액션·대화 식별자를 반환한다."""
+    from services.firestore_mirror import get_firestore_mirror
+    firestore = get_firestore_mirror()
+    if firestore is not None:
+        firestore.set(
+            "chat",
+            str(uuid.uuid4()),
+            json.loads(request.body),
+        )
+
     if request.method != "POST":
         return JsonResponse({"error": "method_not_allowed"}, status=405)
     try:
