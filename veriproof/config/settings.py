@@ -48,6 +48,7 @@ WALLET_PRIVATE_KEY_ENCRYPTION_KEY = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY
 # 로컬 기본값에는 Docker 내부 Seller 별칭을 포함하고 운영은 환경 변수로 제한한다.
 _ALLOWED_HOSTS_RAW = os.environ.get("VERIPROOF_ALLOWED_HOSTS", "")
 ALLOWED_HOSTS = ["*"]
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 # [h.strip() for h in _ALLOWED_HOSTS_RAW.split(",") if h.strip()] or [
 #     "localhost",
 #     "127.0.0.1",

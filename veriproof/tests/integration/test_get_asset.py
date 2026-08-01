@@ -200,12 +200,16 @@ def test_agent_with_valid_license_gets_200(client, monkeypatch):
 
     response = client.get(
         GET_TEMPLATE.format(asset_id=str(asset.id)),
-        headers={**_AGENT_HEADERS, "X-Solana-Tx-Sig": "valid_tx_001"},
+        headers={
+            **_AGENT_HEADERS,
+            "X-Solana-Tx-Sig": "valid_tx_001",
+            "X-Forwarded-Proto": "https",
+        },
     )
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "LICENSED"
-    assert body["download_url"] == "/files/valid-download-token"
+    assert body["download_url"] == "https://testserver/files/valid-download-token"
 
 
 # === AC-4: browser without license -> Solana Pay fallback (200) =============
@@ -433,7 +437,7 @@ def test_payment_signature_retries_same_get_and_returns_payment_response(
 
     assert response.status_code == 200
     assert response.headers["PAYMENT-RESPONSE"] == "encoded-settlement"
-    assert response.json()["download_url"] == "/files/x402-download-token"
+    assert response.json()["download_url"] == "http://testserver/files/x402-download-token"
     assert calls[0]["payment_already_verified"] is True
     assert calls[0]["tx_signature"] == "x402-devnet-tx"
 

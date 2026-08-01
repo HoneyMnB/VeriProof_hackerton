@@ -3,6 +3,35 @@ import decimal
 import pytest
 
 
+def test_download_url_uses_the_seller_https_origin():
+    from django.test import RequestFactory
+
+    from apps.ip.views_api import _absolute_download_url
+
+    request = RequestFactory().post(
+        "/api/v1/ip/asset/agent-sol-payment/settle",
+        HTTP_HOST="seller.example",
+        HTTP_X_FORWARDED_PROTO="https",
+    )
+
+    assert _absolute_download_url(request, "/files/token") == (
+        "https://seller.example/files/token"
+    )
+
+
+def test_download_url_preserves_an_absolute_storage_url():
+    from django.test import RequestFactory
+
+    from apps.ip.views_api import _absolute_download_url
+
+    request = RequestFactory().post("/settle", HTTP_HOST="seller.example")
+
+    assert _absolute_download_url(
+        request,
+        "https://storage.googleapis.com/veriproof/file",
+    ) == "https://storage.googleapis.com/veriproof/file"
+
+
 @pytest.mark.django_db
 def test_accepted_sol_negotiation_sets_the_agent_payment_amount(client):
     from apps.ip.models import IpAsset

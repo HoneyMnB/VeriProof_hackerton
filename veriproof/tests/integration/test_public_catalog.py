@@ -267,12 +267,12 @@ def test_solpay_verify_grants_license_and_returns_download_url(client, monkeypat
 
     assert response.status_code == 200
     assert body["status"] == "PAID"
-    assert body["download_url"].startswith("/files/")
+    assert body["download_url"].startswith("http://testserver/files/")
     assert "tx_signature" not in body
     license = License.objects.get(payment_tx_sig="solpay_tx_001")
     assert license.asset_id == asset.id
     assert license.buyer_user_id == buyer.id
-    assert body["download_url"] == f"/files/{license.download_token}"
+    assert body["download_url"] == f"http://testserver/files/{license.download_token}"
     assert settlement_calls[0]["buyer_user"] == buyer
     assert settlement_calls[0]["payment_already_verified"] is True
     assert settlement_calls[0]["payment_currency"] == "SOL"

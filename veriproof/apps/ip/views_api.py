@@ -445,7 +445,7 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     license = License.objects.filter(asset=asset, payment_tx_sig=tx_sig).first() if tx_sig else None
     license_service = get_license_service()
     if license is not None and license_service.is_download_active(license):
-        return _licensed_response(asset, license)
+        return _licensed_response(request, asset, license)
 
     # 비공개 자산은 소유자가 명시적으로 공유하기 전 외부 구매·에이전트 탐색
     # 경로에 존재하지 않는 것처럼 처리한다. UUID를 안다고 결제 조건을 얻을 수 없다.
@@ -576,7 +576,7 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             "reference": reference,
             "payer_wallet": verification.sender,
             "amount_sol": str(verification.amount),
-            "download_url": result.download_url,
+            "download_url": _absolute_download_url(request, result.download_url),
             "download_expires_at": expires_at.isoformat() if expires_at else None,
             "slot": verification.slot,
             "commitment": verification.commitment,
@@ -712,24 +712,28 @@ def settle_agent_sol_payment(
             "transaction": tx_signature,
             "certificate_tx": result.certificate_tx,
             "buyer_wallet": buyer_wallet,
-            "download_url": result.download_url,
+            "download_url": _absolute_download_url(request, result.download_url),
             "download_expires_at": result.download_expires_at.isoformat() if result.download_expires_at else None,
         }
     )
 
 
-def _licensed_response(asset: IpAsset, license: License) -> JsonResponse:
+def _licensed_response(
+    request: HttpRequest,
+    asset: IpAsset,
+    license: License,
+) -> JsonResponse:
     """Build the 200 response for a licensed agent (R2).
 
     저장된 만료 토큰만 반환한다. 임시 또는 조립한 URL은 성공 응답에 넣지 않는다.
     """
     expires_at = license.download_expires_at
-    download_url = f"/files/{license.download_token}" if license.download_token else None
+    download_path = f"/files/{license.download_token}" if license.download_token else None
     return JsonResponse(
         {
             "status": "LICENSED",
             "asset_id": str(asset.id),
-            "download_url": download_url,
+            "download_url": _absolute_download_url(request, download_path),
             "watermark_url": watermark_preview_url(asset.id),
         },
         status=200,
@@ -828,10 +832,18 @@ def _settle_x402_request(
             status=503,
         )
 
-    response = _licensed_response(asset, result.license)
+    response = _licensed_response(request, asset, result.license)
     response["PAYMENT-RESPONSE"] = settled.response_header
     response["Access-Control-Expose-Headers"] = "PAYMENT-RESPONSE"
     return response
+
+
+def _absolute_download_url(
+    request: HttpRequest,
+    download_url: str | None,
+) -> str | None:
+    """Return a Seller API absolute URL while preserving absolute storage URLs."""
+    return request.build_absolute_uri(download_url) if download_url else None
 
 
 def _accepted_x402_session(
