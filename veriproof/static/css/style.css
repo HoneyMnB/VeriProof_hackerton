@@ -728,6 +728,9 @@ main.vp-main { margin: 0; max-width: none; padding: 0; width: auto; }
 .vp-sales-inline-detail__item.is-wide { grid-column: 1 / -1; }
 .vp-sales-inline-detail dt { color: #72747c; font-size: 10.5px; white-space: nowrap; }
 .vp-sales-inline-detail dd { color: #36373d; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10.5px; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-sales-inline-detail__explorer-link { color: #48634e; font-family: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; }
+.vp-sales-inline-detail__explorer-link:hover { color: #29483a; }
+.vp-sales-inline-detail__explorer-link:focus-visible { border-radius: 2px; outline: 2px solid #6d7078; outline-offset: 2px; }
 @media (max-width: 920px) { #account-modal .vp-modal__panel { height: min(720px, calc(100vh - 32px)); width: calc(100% - 32px); } .vp-settings-layout { grid-template-columns: 1fr; } .vp-settings-nav { border-bottom: 1px solid #e8e8eb; border-right: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); min-height: auto; padding: 10px; } .vp-settings-nav button { text-align: center; } .vp-settings-nav__developer { grid-column: 1 / -1; margin-top: 4px; text-align: center; } .vp-settings-wallet__monitor, .vp-settings-sales__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .vp-sales-filters { grid-template-columns:repeat(2, minmax(0, 1fr)); } .vp-sales-filters label:first-child { grid-column:1 / -1; } }
 @media (max-width: 720px) { .vp-modal__panel { left: 50%; width: calc(100% - 32px); } }
 @media (max-width: 560px) { .vp-sales-section__header { align-items:flex-start; flex-direction:column; gap:4px; }.vp-sales-section__header p { text-align:left; } }
