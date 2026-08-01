@@ -86,6 +86,37 @@ configure_media_mount()
     echo "Media directory: $MEDIA_HOST_DIR -> /app/media"
 }
 
+configure_source_mount()
+{
+    local source_path
+    local source_name
+    local source_docker_path
+
+    SOURCE_RUN_ARGS=()
+
+    if [[ ${MOUNT_SOURCE:-false} != "true" ]]; then
+        return
+    fi
+
+    SOURCE_HOST_DIR="${SOURCE_HOST_PATH:-$ROOT_DIR/veriproof}"
+    for source_path in "$SOURCE_HOST_DIR"/*; do
+        [[ -e $source_path ]] || continue
+        source_name="${source_path##*/}"
+
+        case "$source_name" in
+            db.sqlite3|media|staticfiles)
+                continue
+                ;;
+        esac
+
+        source_docker_path="$(docker_host_path "$source_path")"
+        SOURCE_RUN_ARGS+=(
+            --mount "type=bind,source=$source_docker_path,target=/app/$source_name"
+        )
+    done
+    echo "Source directory: $SOURCE_HOST_DIR -> /app (runtime artifacts excluded)"
+}
+
 build()
 {
     if [[ $1 == "api" ]]; then
@@ -124,6 +155,7 @@ run()
 
     configure_adc_mount
     configure_media_mount
+    configure_source_mount
     DOCKER_ENV_FILE="$(docker_host_path "$ENV_FILE")"
 
     MSYS_NO_PATHCONV=1 docker run -dt \
@@ -132,9 +164,10 @@ run()
     --network "$DOCKER_NETWORK" \
     "${NETWORK_ALIAS_ARGS[@]}" \
     "${ADC_RUN_ARGS[@]}" \
+    "${SOURCE_RUN_ARGS[@]}" \
     "${MEDIA_RUN_ARGS[@]}" \
     $PORT_ARG \
-    "$IMAGE_NAME" $IMAGE_COMMAND
+    "$IMAGE_NAME" "${IMAGE_COMMAND_ARGS[@]}"
 
     log
 }
@@ -193,7 +226,8 @@ case $1 in
         IMAGE_NAME="api"
         SERVICE_NAME="cs-api"
         NETWORK_ALIAS="web"
-        IMAGE_COMMAND=
+        IMAGE_COMMAND_ARGS=()
+        MOUNT_SOURCE=true
         MOUNT_MEDIA=true
         run_command "$@"
         ;;
@@ -203,7 +237,7 @@ case $1 in
         PORT=8001:8080
         IMAGE_NAME="buyer-agent"
         SERVICE_NAME="buyer-agent"
-        IMAGE_COMMAND=
+        IMAGE_COMMAND_ARGS=()
         run_command "$@"
         ;;
 
@@ -212,7 +246,7 @@ case $1 in
         PORT=8002:8002
         IMAGE_NAME="buyer-agent"
         SERVICE_NAME="adk-ui"
-        IMAGE_COMMAND="adk web --host 0.0.0.0 --port 8002 /app/agents"
+        IMAGE_COMMAND_ARGS=(adk web --host 0.0.0.0 --port 8002 /app/agents)
         MOUNT_MEDIA=true
         run_command "$@"
         ;;
