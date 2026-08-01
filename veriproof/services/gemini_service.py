@@ -85,6 +85,16 @@ VISION_RESPONSE_SCHEMA = {
         "description",
     ],
 }
+REGISTRATION_METADATA_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+    },
+    "required": ["reply", "title", "description", "tags"],
+}
 
 # 대화형 비서가 사용할 수 있는 변경 도구는 이 목록으로 제한한다. 자연어의
 # 키워드를 코드가 추측해 실행하지 않고, Gemini의 구조화 계획도 서버에서 다시 검증한다.
@@ -137,6 +147,16 @@ class CreatorActionPlan:
 
     reply: str
     action: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class RegistrationMetadataSuggestion:
+    """첨부 이미지에서 한 번의 모델 호출로 생성한 등록 초안 메타데이터."""
+
+    reply: str
+    title: str
+    description: str
+    tags: list[str]
 
 
 class GeminiUnavailableError(RuntimeError):
@@ -474,6 +494,8 @@ class GeminiService:
             "verified workspace data below. Explain the current registration, "
             "x402 negotiation, settlement, and certificate pipeline clearly. "
             "Never claim a payment or on-chain action that is absent from data.\n"
+            "Reply in Korean when the creator's message is in Korean; otherwise reply "
+            "in the creator's language.\n"
             "Apply the creator-approved behavior instructions in Workspace data. "
             "When an action needs a user input or confirmation, state that exact "
             "next step instead of claiming it was completed.\n"
@@ -509,6 +531,8 @@ class GeminiService:
             "attached file(s) and answer using only the attached content and the "
             "verified workspace data below. Never claim any payment or on-chain "
             "action that is absent from data.\n"
+            "Reply in Korean when the creator's message is in Korean; otherwise reply "
+            "in the creator's language.\n"
             f"Workspace data: {json.dumps(context, ensure_ascii=False)}\n"
             f"Creator message: {message}"
         )
@@ -524,6 +548,76 @@ class GeminiService:
         if not answer.strip():
             raise GeminiResponseError("Gemini attachment-assist returned an empty response")
         return answer.strip()
+
+    def suggest_registration_metadata(
+        self, file_bytes: bytes, mime_type: str, message: str
+    ) -> RegistrationMetadataSuggestion:
+        """이미지 한 장으로 등록 제목·설명·태그를 단일 멀티모달 호출에서 생성한다."""
+        client = self._get_client()
+        if client is None:
+            raise GeminiUnavailableError("Gemini credentials are not configured")
+        try:
+            from google.genai import types
+        except ImportError as exc:
+            raise GeminiUnavailableError("google-genai is not installed") from exc
+        prompt = (
+            "Generate metadata for licensing registration from the attached image. "
+            "Return only the requested JSON. The title and description must describe "
+            "only visible, supported image content; do not invent ownership, licensing "
+            "terms, people, locations, brands, or events. Write the title, description, "
+            "and every tag in Korean. The reply must be a short Korean confirmation "
+            "that the registration draft is ready. Produce a concise title, a useful "
+            "registration description, and no more than six specific discovery tags.\n"
+            f"Creator message: {message}"
+        )
+        try:
+            response = client.models.generate_content(
+                model=self._vision_model_for_call(),
+                contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type), prompt],
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": REGISTRATION_METADATA_RESPONSE_SCHEMA,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("registration metadata generation failed: %s", exc)
+            raise GeminiResponseError("Gemini registration metadata generation failed") from exc
+        return self._parse_registration_metadata(getattr(response, "text", "") or "")
+
+    @staticmethod
+    def _parse_registration_metadata(text: str) -> RegistrationMetadataSuggestion:
+        try:
+            data = json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise GeminiResponseError("Gemini registration metadata is not valid JSON") from exc
+        reply = data.get("reply")
+        title = data.get("title")
+        description = data.get("description")
+        tags = data.get("tags")
+        if (
+            not isinstance(reply, str)
+            or not reply.strip()
+            or not isinstance(title, str)
+            or not title.strip()
+            or not isinstance(description, str)
+            or not description.strip()
+        ):
+            raise GeminiResponseError("Gemini registration metadata is incomplete")
+        if not isinstance(tags, list) or len(tags) > 6:
+            raise GeminiResponseError("Gemini registration metadata has invalid tags")
+        normalized_tags = []
+        for tag in tags:
+            normalized = str(tag).strip().lstrip("#").strip()
+            if not normalized:
+                continue
+            if normalized not in normalized_tags:
+                normalized_tags.append(normalized)
+        return RegistrationMetadataSuggestion(
+            reply=reply.strip()[:300],
+            title=title.strip()[:120],
+            description=description.strip()[:3000],
+            tags=normalized_tags[:6],
+        )
 
     def plan_creator_action(
         self, context: dict[str, Any], message: str
@@ -559,6 +653,8 @@ class GeminiService:
             "settlement, certificates, income, expenses, and sales clearly. "
             "Never claim that a payment, on-chain action, registration, or data "
             "change succeeded: the server independently executes and verifies it.\n"
+            "Write reply in Korean when the creator's message is in Korean; otherwise "
+            "write it in the creator's language.\n"
             "Return an action only for an explicit creator command, never for an "
             "informational question. Allowed action names: none, record_expense, "
             "update_asset_terms, prepare_registration, analyze_attachment. For "

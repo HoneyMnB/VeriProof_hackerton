@@ -56,6 +56,15 @@ class FakeGeminiService:
         self._record("assist_with_attachments", (context, message, files), {})
         return "Reviewed the attached file(s)."
 
+    def suggest_registration_metadata(self, file_bytes, mime_type, message):
+        self._record("suggest_registration_metadata", (file_bytes, mime_type, message), {})
+        from services.gemini_service import RegistrationMetadataSuggestion
+
+        return RegistrationMetadataSuggestion(
+            reply="등록 초안을 준비했습니다.", title="테스트 이미지",
+            description="라이선스 등록을 위한 테스트 이미지입니다.", tags=["테스트"]
+        )
+
     def analyze_asset(self, file_bytes: bytes, mime_type: str) -> AnalysisResult:
         """등록 서비스의 멀티모달 분석 계약을 외부 키 없이 재현한다.
 

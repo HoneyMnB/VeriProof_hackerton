@@ -44,6 +44,7 @@ urlpatterns = [
     path("assistant/status", views_assistant.status, name="api-assistant-status"),
     path("assistant/chat", views_assistant.chat, name="api-assistant-chat"),
     path("assistant/attachments", views_assistant.conversation_attachment, name="api-assistant-attachment"),
+    path("assistant/attachments/<uuid:attachment_id>/file", views_assistant.conversation_attachment_file, name="api-assistant-attachment-file"),
     path("assistant/registration-drafts", views_assistant.registration_drafts, name="api-registration-drafts"),
     path("assistant/registration-drafts/<uuid:draft_id>/confirm", views_assistant.registration_drafts, name="api-registration-draft-confirm"),
     path("assistant/expenses", views_assistant.record_expense, name="api-assistant-expense"),

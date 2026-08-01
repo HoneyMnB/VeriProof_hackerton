@@ -245,6 +245,17 @@ def test_start_registration_opens_canvas_before_wallet_connection():
     assert "!menu.contains(event.target)" in source
     assert 'var DEFAULT_REGISTRATION_PRICE = "0.001";' in source
     assert source.count("DEFAULT_REGISTRATION_PRICE") == 3
+    send_conversation = source.split("function sendConversation(text)", 1)[1].split(
+        "function loadHistory()", 1
+    )[0]
+    assert "attachment_ids: sentAttachments.map" in send_conversation
+    bind_chat = source.split("function bindChat()", 1)[1].split(
+        "function bindAttachmentMenu()", 1
+    )[0]
+    assert "compositionstart" in bind_chat
+    assert "compositionend" in bind_chat
+    assert "event.isComposing" in bind_chat
+    assert "window.setTimeout(function () { form.requestSubmit(); }, 0);" in bind_chat
 
 
 def test_certificate_close_handles_clicks_on_its_svg_icon():

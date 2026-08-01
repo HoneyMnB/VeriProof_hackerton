@@ -47,6 +47,8 @@
          * 입력 줄 수에 따라 textarea를 최대 4줄까지 높이를 키운다.
          */
         function bindChat() {
+            var isComposing = false;
+            var submitAfterComposition = false;
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
                 var text = input.value.trim();
@@ -58,7 +60,22 @@
             });
             // Grow up to 4 lines (~106px), then keep height fixed and let the textarea scroll.
             input.addEventListener("input", function () { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 106) + "px"; });
-            input.addEventListener("keydown", function (event) { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); form.requestSubmit(); } });
+            input.addEventListener("compositionstart", function () { isComposing = true; });
+            input.addEventListener("compositionend", function () {
+                isComposing = false;
+                if (!submitAfterComposition) { return; }
+                submitAfterComposition = false;
+                window.setTimeout(function () { form.requestSubmit(); }, 0);
+            });
+            input.addEventListener("keydown", function (event) {
+                if (event.key !== "Enter" || event.shiftKey) { return; }
+                if (isComposing || event.isComposing || event.keyCode === 229) {
+                    submitAfterComposition = true;
+                    return;
+                }
+                event.preventDefault();
+                form.requestSubmit();
+            });
         }
 
         /**
@@ -179,11 +196,12 @@
             });
         }
         function openCanvas() {
-            requireRegistrationWallet(function () {
-                canvas.hidden = false;
-                document.body.classList.add("is-registration-canvas-open");
-                canvas.querySelector("#file-input").focus();
-            });
+            canvas.hidden = false;
+            document.body.classList.add("is-registration-canvas-open");
+            canvas.querySelector("#file-input").focus();
+            activeRegistrationWallet().then(function (activeWallet) {
+                if (activeWallet) { state.registrationWalletAddress = activeWallet.address; }
+            }).catch(function () {});
         }
         function closeCanvas() { canvas.hidden = true; document.body.classList.remove("is-registration-canvas-open"); }
         function resetRegisteredCanvas() {
@@ -252,9 +270,11 @@
             var dropzone = byId("dropzone");
             dropzone.classList.add("has-file");
             dropzone.querySelector(".dropzone__hint").textContent = registrationFiles().length > 1 ? t("workspace.canvas.images_selected", { n: registrationFiles().length }) : file.name;
-            saveDraft(state.registrationWalletAddress).catch(function (error) {
-                renderDraftError(error.message || t("workspace.status.draft_save_failed"));
-            });
+            if (state.registrationWalletAddress) {
+                saveDraft(state.registrationWalletAddress).catch(function (error) {
+                    renderDraftError(error.message || t("workspace.status.draft_save_failed"));
+                });
+            }
         }
         /**
          * 선택된 파일 목록을 큐 UI로 렌더링하고 활성 파일을 표시한다.
@@ -376,12 +396,16 @@
          * 대화 ID를 갱신하며 첨부를 초기화한다. 실패 시 네트워크 에러를 상태로 표시한다.
          */
         function sendConversation(text) {
-            clearEmpty(); appendMessage("user", text);
+            var sentAttachments = state.attachments.slice();
+            clearEmpty(); appendMessage("user", text, sentAttachments);
+            state.attachments = []; renderComposerAttachments();
             var typing = appendTyping(); setStatus(t("workspace.status.thinking"));
-            request("/api/v1/assistant/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet(), message: text, attachment_ids: state.attachments.map(function (item) { return item.attachment_id; }), conversation_id: state.conversationId }) }).then(function (result) {
+            request("/api/v1/assistant/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: wallet(), message: text, attachment_ids: sentAttachments.map(function (item) { return item.attachment_id; }), conversation_id: state.conversationId }) }).then(function (result) {
                 typing.remove(); if (!result.ok) { return setStatus(result.body.detail || t("workspace.status.respond_failed"), true); }
                 state.conversationId = result.body.conversation_id || state.conversationId;
-                appendMessage("assistant", result.body.answer); state.attachments = []; renderComposerAttachments(); setStatus("");
+                appendMessage("assistant", result.body.answer);
+                applyRegistrationMetadata(result.body.registration_metadata, sentAttachments);
+                setStatus("");
                 window.dispatchEvent(new CustomEvent("vp:history-changed"));
             }).catch(function () { typing.remove(); setStatus(t("workspace.status.network"), true); });
         }
@@ -413,11 +437,35 @@
             request("/api/v1/assistant/attachments", { method: "POST", body: data }).then(function (result) {
                 if (!result.ok) { return setStatus(result.body.detail || t("workspace.status.attachment_failed"), true); }
                 var item = result.body;
+                item.file = file;
                 // Images get a local blob thumbnail — the API returns no preview URL.
                 if (file.type && file.type.indexOf("image/") === 0) { item.preview_url = URL.createObjectURL(file); }
                 state.attachments.push(item);
                 renderComposerAttachments(); setStatus(t("workspace.status.attachment_ready"));
             }).catch(function () { setStatus(t("workspace.status.attachment_failed"), true); });
+        }
+        function applyRegistrationMetadata(metadata, sentAttachments) {
+            if (!metadata) { return; }
+            var attachment = sentAttachments.find(function (item) { return item.attachment_id === metadata.attachment_id; });
+            registrationFile(attachment, metadata).then(function (file) {
+                openCanvas();
+                chooseRegistrationFiles([file]);
+                byId("asset-title").value = metadata.title;
+                byId("asset-description").value = metadata.description;
+                byId("asset-tags").value = (metadata.tags || []).slice(0, 6).join(", ");
+                captureActiveFields();
+            }).catch(function () { setStatus(t("workspace.status.attachment_failed"), true); });
+        }
+        function registrationFile(attachment, metadata) {
+            if (attachment && attachment.file) { return Promise.resolve(attachment.file); }
+            var url = "/api/v1/assistant/attachments/" + encodeURIComponent(metadata.attachment_id)
+                + "/file?creator_wallet=" + encodeURIComponent(wallet());
+            return fetch(url).then(function (response) {
+                if (!response.ok) { throw new Error("attachment_unavailable"); }
+                return response.blob();
+            }).then(function (blob) {
+                return new File([blob], metadata.file_name, { type: metadata.content_mime_type });
+            });
         }
         // Compact attachment chips: images show a thumbnail, everything else shows a
         // type icon derived from its MIME type / extension. Static SVGs (no user data).
@@ -475,7 +523,23 @@
                 chip.append(thumb, remove); tray.appendChild(chip);
             });
         }
-        function appendMessage(role, text) { var item = document.createElement("article"); item.className = "vp-message vp-message--" + role; item.textContent = text; messages.appendChild(item); messages.scrollTop = messages.scrollHeight; }
+        function appendMessage(role, text, attachments) {
+            var item = document.createElement("article");
+            item.className = "vp-message vp-message--" + role;
+            var body = document.createElement("div"); body.className = "vp-message__body"; body.textContent = text;
+            item.appendChild(body);
+            (attachments || []).filter(function (attachment) {
+                return attachmentKind(attachment.content_mime_type, attachment.file_name) === "image" && attachment.preview_url;
+            }).forEach(function (attachment) {
+                var image = document.createElement("img");
+                image.className = "vp-message__image";
+                image.src = attachment.preview_url;
+                image.alt = attachment.file_name || "";
+                image.loading = "lazy";
+                item.appendChild(image);
+            });
+            messages.appendChild(item); messages.scrollTop = messages.scrollHeight;
+        }
         function appendTyping() { var item = document.createElement("div"); item.className = "vp-typing"; item.innerHTML = "<span></span><span></span><span></span>"; messages.appendChild(item); return item; }
         // Empty state built from the dictionary; data-i18n attrs let applyTranslations
         // re-translate it on a language change (e.g. after "New chat" resets the view).

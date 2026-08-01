@@ -7,7 +7,7 @@ import uuid
 from datetime import date
 
 from django.contrib.auth.decorators import login_required
-from django.http import HttpRequest, JsonResponse
+from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 
@@ -258,6 +258,7 @@ def chat(request: HttpRequest) -> JsonResponse:
             "answer": outcome.answer,
             "action": outcome.action,
             "conversation_id": outcome.conversation_id,
+            "registration_metadata": outcome.registration_metadata,
         },
         status=200,
     )
@@ -285,6 +286,26 @@ def conversation_attachment(request: HttpRequest) -> JsonResponse:
         },
         status=201,
     )
+
+
+@csrf_exempt
+@require_http_methods(["GET"])
+def conversation_attachment_file(request: HttpRequest, attachment_id: uuid.UUID) -> HttpResponse:
+    """등록 캔버스가 대화의 기존 첨부 이미지를 다시 전송할 수 있게 원본을 제공한다."""
+    from apps.ip.models import ConversationAttachment
+
+    wallet = str(request.GET.get("creator_wallet") or "").strip()
+    attachment = ConversationAttachment.objects.filter(
+        id=attachment_id, creator__wallet_address=wallet
+    ).first()
+    if attachment is None:
+        return HttpResponse(status=404)
+    content = get_conversation_attachment_service().storage.read_temporary(attachment.id)
+    if not content:
+        return HttpResponse(status=410)
+    response = HttpResponse(content, content_type=attachment.content_mime_type)
+    response["Content-Disposition"] = "inline"
+    return response
 
 
 @csrf_exempt
