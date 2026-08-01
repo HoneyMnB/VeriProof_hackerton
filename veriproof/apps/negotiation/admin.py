@@ -13,7 +13,7 @@ class NegotiationSessionAdmin(admin.ModelAdmin):
         "buyer_agent_id",
         "usage_type",
         "status",
-        "final_price_usdc",
+        "final_price_sol",
         "created_at",
     )
     list_filter = ("status", "usage_type")

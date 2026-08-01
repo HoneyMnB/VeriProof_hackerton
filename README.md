@@ -3,6 +3,125 @@
 > **Agentic IP Protocol & Automated Licensing Marketplace**
 > 창작자 IP를 대화형으로 등록하고, 외부 AI 에이전트와 HTTP 402(x402/a2a-x402/AP2) 기반으로 협상하여 Solana(USDC)로 즉시 정산하는 에이전트 전용 저작권 라이선싱 프로토콜 및 마켓플레이스. (Google Cloud × Solana 해커톤)
 
+## 라이브 데모 (Cloud Run)
+
+별도의 로컬 설치 없이 아래 배포 환경에서 주요 기능을 바로 확인할 수 있습니다. Cloud Run 인스턴스가 중지된 상태라면 첫 요청은 콜드 스타트로 인해 잠시 지연될 수 있습니다.
+
+| 구분 | 주소 | 확인 내용 |
+|---|---|---|
+| 구매 에이전트 테스트 (ADK UI) | [Open ADK UI](https://veriproof-adk-ui-512074822993.asia-northeast3.run.app) | Buyer Agent와 대화하며 작품 검색·협상·구매 흐름 테스트 |
+| VeriProof App | [Open App](https://veriproof-web-512074822993.asia-northeast3.run.app) | 창작자 작품 등록, 공개 카탈로그 및 라이선스 관리 UI |
+| Buyer Agent | [Open Buyer Agent](https://veriproof-buyer-agent-512074822993.asia-northeast3.run.app) | 독립 배포된 Buyer Agent 서비스 엔드포인트 |
+
+라이브 데모의 결제·블록체인 기능은 Solana Devnet 테스트 자산을 사용합니다. Buyer Agent의 대화형 구매 시연은 첫 번째 ADK UI 링크를 사용하십시오.
+
+## 심사위원용 온보딩 (Docker Quick Start)
+
+### 1. 사전 준비
+
+- Docker Desktop 또는 Docker Engine + Compose v2
+- Git Bash(Windows) 또는 Bash(macOS/Linux)
+- 전체 AI 데모 실행 시 Google Cloud CLI와 Vertex AI 사용 권한
+
+저장소 루트에서 환경 파일을 준비합니다.
+
+```bash
+cp .env.example .env
+```
+
+`.env`의 PostgreSQL·Redis·Solana Devnet 기본값은 로컬 실행에 바로 사용할 수 있습니다. 실제 지갑 키 없이 안전하게 확인하려면 `BUYER_AUTONOMOUS_PAYMENT_ENABLED=false`를 유지하십시오. `.env`와 지갑·GCP 자격 증명은 커밋하지 않습니다.
+
+Gemini/ADK 기능까지 확인하려면 `.env`에 아래 값을 설정하고, 호스트에서 ADC(Application Default Credentials)를 한 번 생성합니다. `ctl.sh`가 이 파일을 컨테이너에 읽기 전용으로 마운트합니다.
+
+```dotenv
+GOOGLE_GENAI_USE_VERTEXAI=true
+GOOGLE_CLOUD_PROJECT=<GCP_PROJECT_ID>
+GOOGLE_CLOUD_LOCATION=asia-northeast3
+VERTEX_ENABLED=true
+VERTEX_PROJECT=<GCP_PROJECT_ID>
+VERTEX_LOCATION=asia-northeast3
+```
+
+```bash
+gcloud auth application-default login
+```
+
+ADC 또는 프로젝트 권한이 없으면 웹 서버는 구동되지만 실제 Gemini/ADK 요청은 실패합니다.
+
+### 2. Buyer Agent 테스트 지갑 준비
+
+Buyer Agent의 자율 결제를 테스트할 때만 실제 자산이 없는 **테스트 전용 Phantom 계정**을 별도로 만듭니다. Phantom에서 `Settings → Developer Settings → Testnet Mode → Solana Devnet`을 선택한 뒤 다음 순서로 해당 계정의 Solana 개인키를 내보냅니다.
+
+1. `Settings → Manage Accounts`에서 테스트 계정을 선택합니다.
+2. `Show Private Key`를 누르고 Phantom 비밀번호를 입력합니다.
+3. 네트워크로 `Solana`를 선택하고 표시된 개인키를 복사합니다.
+
+복구 구문(12개 단어)이 아니라 **해당 Solana 계정의 Base58 Private Key**를 사용해야 합니다. 이 값은 Buyer Agent가 거래에 직접 서명할 수 있는 전체 권한이므로 공유하거나 저장소에 커밋하면 안 됩니다. 자세한 내보내기 절차는 [Phantom 공식 안내](https://help.phantom.com/hc/en-us/articles/25334064171795-View-or-export-your-recovery-phrase-or-private-keys-in-Phantom)를 참고하십시오.
+
+루트 `.env`에 다음 값을 설정합니다. `BUYER_MAX_PAYMENT_USDC`에는 심사 과정에서 자동 결제를 허용할 거래당 최대 금액만 작게 지정합니다.
+
+```dotenv
+BUYER_AUTONOMOUS_PAYMENT_ENABLED=true
+BUYER_MAX_PAYMENT_USDC=1.000000
+BUYER_WALLET_SECRET_KEY=<PHANTOM_SOLANA_BASE58_PRIVATE_KEY>
+```
+
+Buyer 테스트 지갑에는 네트워크 수수료용 **Devnet SOL**과 결제용 **Devnet USDC**가 모두 필요합니다. USDC는 `.env`의 `USDC_MINT_ADDRESS`와 같은 Devnet 토큰이어야 합니다. [Solana Faucet](https://faucet.solana.com/)과 [Circle Testnet Faucet](https://faucet.circle.com/)에서 테스트 자산을 받은 뒤 Phantom의 공개 주소와 잔액을 확인합니다. Seller 수취 지갑은 Buyer와 분리하고, Seller의 공개 주소만 `DEMO_CREATOR_WALLET`에 설정합니다.
+
+이미 실행 중인 Buyer Agent에 변경한 `.env`를 반영하려면 아래 명령으로 재시작합니다. 환경 변수 변경만으로는 이미지 재빌드가 필요하지 않습니다.
+
+```bash
+./ctl.sh buyer-agent reload
+```
+
+테스트가 끝나면 `BUYER_AUTONOMOUS_PAYMENT_ENABLED=false`로 되돌립니다. 이 방식은 로컬 Devnet 데모 전용이며, 실제 자산이 있는 지갑이나 운영 환경의 장기 키 관리에는 사용하지 않습니다.
+
+### 3. 데이터 서비스 실행 및 이미지 빌드
+
+```bash
+docker compose up -d
+./ctl.sh build api
+./ctl.sh build buyer-agent
+./db.sh migrate
+```
+
+`docker compose up -d`는 PostgreSQL과 Redis를 시작하고 `google-solana` Docker 네트워크를 생성합니다. 따라서 API/Agent 실행보다 먼저 수행해야 합니다.
+
+### 4. 애플리케이션 실행
+
+각 `run` 명령은 컨테이너 로그를 계속 표시하므로 별도 터미널에서 실행합니다.
+
+```bash
+# Terminal 1: Django Web + Seller Agent(A)
+./ctl.sh api run
+
+# Terminal 2: Buyer Agent(B)
+./ctl.sh buyer-agent run
+
+# Terminal 3: ADK 개발 UI(선택)
+./ctl.sh adk-ui run
+```
+
+| 서비스 | 접속 주소 |
+|---|---|
+| VeriProof Web | http://localhost:8000 |
+| Seller Agent Card | http://localhost:8000/.well-known/agent-card.json |
+| Buyer Agent | http://localhost:8001 |
+| ADK UI | http://localhost:8002 |
+
+코드를 수정한 뒤에는 이미지를 다시 빌드하지 않고 `./ctl.sh api reload` 또는 `./ctl.sh buyer-agent reload`로 반영할 수 있습니다. 의존성·Dockerfile·정적 파일을 변경한 경우에는 해당 이미지를 다시 빌드한 뒤 재시작합니다.
+
+### 5. 종료
+
+```bash
+./ctl.sh adk-ui stop
+./ctl.sh buyer-agent stop
+./ctl.sh api stop
+docker compose down
+```
+
+포트 충돌이 발생하면 먼저 `8000`, `8001`, `8002`, `5432`, `6379` 포트를 사용하는 기존 프로세스나 컨테이너가 있는지 확인하십시오. `docker compose down`은 PostgreSQL named volume을 보존합니다.
+
 ## 목표 아키텍처 (운영 전환 시)
 - **App**: Django 5 + Vanilla HTML/CSS/JS, **PostgreSQL(Cloud SQL)** 시스템 오브 레코드
 - **컴퓨트**: **Cloud Run** (GKE 미사용)

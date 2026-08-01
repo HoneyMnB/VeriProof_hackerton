@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from typing import Any
@@ -20,6 +21,7 @@ class CreatorChatOutcome:
     answer: str
     action: dict[str, Any] | None
     conversation_id: str
+    registration_metadata: dict[str, Any] | None = None
 
 
 class CreatorAssistantService:
@@ -127,8 +129,18 @@ class CreatorAssistantService:
             ConversationAttachment.objects.filter(
                 id__in=[attachment.id for attachment in attachments]
             ).update(source_message=source_message)
+        registration_metadata = None
         try:
-            if hasattr(self.gemini, "plan_creator_action"):
+            registration_attachment = self._license_registration_attachment(
+                message, attachments, creator, conversation_id
+            )
+            if registration_attachment is not None:
+                registration_metadata = self._registration_metadata(
+                    registration_attachment, message
+                )
+                answer = registration_metadata["reply"]
+                planned_action = None
+            elif hasattr(self.gemini, "plan_creator_action"):
                 plan = self.gemini.plan_creator_action(context, message)
                 answer = plan.reply
                 planned_action = plan.action
@@ -192,7 +204,64 @@ class CreatorAssistantService:
             answer=answer,
             action=action_result,
             conversation_id=str(conversation_id),
+            registration_metadata=registration_metadata,
         )
+
+    @staticmethod
+    def _license_registration_attachment(
+        message: str, attachments: list[Any], creator: Any, conversation_id: uuid.UUID
+    ) -> Any | None:
+        """현재 또는 같은 대화의 최근 이미지로 명시적 등록 요청을 처리한다."""
+        if not re.search(r"라이(?:선|센)스\s*등록", message):
+            return None
+        current_images = [
+            attachment
+            for attachment in attachments
+            if str(attachment.content_mime_type or "").startswith("image/")
+        ]
+        if len(current_images) == 1:
+            return current_images[0]
+        if current_images:
+            return None
+        from apps.ip.models import ConversationAttachment
+
+        conversation_image = (
+            ConversationAttachment.objects.filter(
+                creator=creator,
+                source_message__conversation_id=conversation_id,
+                content_mime_type__startswith="image/",
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+        if conversation_image is not None:
+            return conversation_image
+        return (
+            ConversationAttachment.objects.filter(
+                creator=creator,
+                source_message__isnull=True,
+                content_mime_type__startswith="image/",
+            )
+            .order_by("-created_at", "-id")
+            .first()
+        )
+
+    def _registration_metadata(self, attachment: Any, message: str) -> dict[str, Any]:
+        content = self._attachment_storage().read_temporary(attachment.id)
+        if not content:
+            raise ValueError("the attached image is no longer available; please re-upload it")
+        suggestion = self.gemini.suggest_registration_metadata(
+            content, str(attachment.content_mime_type), message
+        )
+        return {
+            "attachment_id": str(attachment.id),
+            "file_name": attachment.file_name,
+            "content_mime_type": attachment.content_mime_type,
+            "reply": suggestion.reply,
+            "title": suggestion.title,
+            "description": suggestion.description,
+            "tags": suggestion.tags[:6],
+        }
 
     def _answer_with_attachments(
         self, context: dict[str, Any], message: str, attachments: list[Any]

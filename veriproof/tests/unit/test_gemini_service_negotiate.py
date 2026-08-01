@@ -1,6 +1,6 @@
-"""SPEC-003 unit tests — GeminiService.negotiate (mocked genai client).
+"""SPEC-003 unit tests ??GeminiService.negotiate (mocked genai client).
 
-Covers the SPEC-003 §5 unit TDD list for GeminiService.negotiate:
+Covers the SPEC-003 짠5 unit TDD list for GeminiService.negotiate:
 - test_negotiate_uses_response_schema (R4 / DD-7: response_schema enforced)
 - test_negotiate_parses_status_price_reason (R5)
 - test_negotiate_falls_back_on_parse_error (R8)
@@ -56,7 +56,7 @@ def test_negotiate_uses_response_schema():
     """The genai call is made with a config carrying response_schema (R4)."""
     from services.gemini_service import GeminiService
 
-    payload = {"status": "ACCEPT", "price_usdc": "2.00", "reason": "ok"}
+    payload = {"status": "ACCEPT", "price_sol": "2.00", "reason": "ok"}
     stub = _StubClient(payload)
     svc = GeminiService(client=stub)
 
@@ -78,14 +78,14 @@ def test_negotiate_uses_response_schema():
     assert stub.models.last_kwargs["model"] == "gemini-3.6-flash"
 
 
-# === R5: parse {status, price_usdc, reason} =================================
+# === R5: parse {status, price_sol, reason} =================================
 
 
 def test_negotiate_parses_status_price_reason():
     """A valid model JSON response is parsed into a NegotiationResult (R5)."""
     from services.gemini_service import GeminiService
 
-    payload = {"status": "COUNTER_OFFER", "price_usdc": "2.25", "reason": "mid"}
+    payload = {"status": "COUNTER_OFFER", "price_sol": "2.25", "reason": "mid"}
     svc = GeminiService(client=_StubClient(payload))
 
     result = svc.negotiate(
@@ -97,7 +97,7 @@ def test_negotiate_parses_status_price_reason():
     )
 
     assert result.status == "COUNTER_OFFER"
-    assert result.price_usdc == decimal.Decimal("2.25")
+    assert result.price_sol == decimal.Decimal("2.25")
     assert result.reason == "mid"
 
 
@@ -107,7 +107,7 @@ def test_negotiate_ignores_extra_schema_fields():
 
     payload = {
         "status": "ACCEPT",
-        "price_usdc": "2.0",
+        "price_sol": "2.0",
         "reason": "ok",
         "confidence": 0.9,  # outside-schema field
         "rationale": "ignored",
@@ -129,7 +129,7 @@ def test_negotiate_ignores_extra_schema_fields():
 
 
 def test_negotiate_reports_error_on_parse_failure():
-    """구조화 응답 오류는 가격 규칙 fallback으로 대체하지 않는다."""
+    """援ъ“???묐떟 ?ㅻ쪟??媛寃?洹쒖튃 fallback?쇰줈 ?泥댄븯吏 ?딅뒗??"""
     from services.gemini_service import GeminiResponseError, GeminiService
 
     # Garbage non-JSON response, retried 3 times then fallback.
@@ -141,7 +141,7 @@ def test_negotiate_reports_error_on_parse_failure():
 
 
 def test_negotiate_reports_error_on_transport_failure():
-    """전송 오류도 임의 협상 결과로 대체하지 않는다."""
+    """?꾩넚 ?ㅻ쪟???꾩쓽 ?묒긽 寃곌낵濡??泥댄븯吏 ?딅뒗??"""
     from services.gemini_service import GeminiResponseError, GeminiService
 
     svc = GeminiService(client=_StubClient({}, fail=True))
@@ -152,7 +152,7 @@ def test_negotiate_reports_error_on_transport_failure():
 
 
 def test_negotiate_reports_unavailable_when_no_client():
-    """모델 미설정은 명시적인 unavailable 오류다."""
+    """紐⑤뜽 誘몄꽕?뺤? 紐낆떆?곸씤 unavailable ?ㅻ쪟??"""
     from services.gemini_service import GeminiService, GeminiUnavailableError
 
     svc = GeminiService()  # no client, no keys
@@ -168,7 +168,7 @@ def test_negotiate_clamps_accept_below_min():
     """Gemini ACCEPT with price < min is clamped UP to min (R10 creator guard)."""
     from services.gemini_service import GeminiService
 
-    payload = {"status": "ACCEPT", "price_usdc": "0.50", "reason": "low"}
+    payload = {"status": "ACCEPT", "price_sol": "0.50", "reason": "low"}
     svc = GeminiService(client=_StubClient(payload))
 
     result = svc.negotiate(
@@ -181,8 +181,8 @@ def test_negotiate_clamps_accept_below_min():
 
     assert result.status == "ACCEPT"
     # R10: clamped up to min_price, never below.
-    assert result.price_usdc >= decimal.Decimal("1.0")
-    assert result.price_usdc == decimal.Decimal("1.0")
+    assert result.price_sol >= decimal.Decimal("1.0")
+    assert result.price_sol == decimal.Decimal("1.0")
 
 
 def test_negotiate_rounds_usdc_to_six_decimals():
@@ -190,7 +190,7 @@ def test_negotiate_rounds_usdc_to_six_decimals():
     from services.gemini_service import GeminiService
 
     # A price with more than 6 decimals must be quantised.
-    payload = {"status": "ACCEPT", "price_usdc": "2.1234567", "reason": "ok"}
+    payload = {"status": "ACCEPT", "price_sol": "2.1234567", "reason": "ok"}
     svc = GeminiService(client=_StubClient(payload))
 
     result = svc.negotiate(
@@ -202,4 +202,4 @@ def test_negotiate_rounds_usdc_to_six_decimals():
     )
 
     # Exactly 6 decimal places.
-    assert result.price_usdc.as_tuple().exponent == -6
+    assert result.price_sol.as_tuple().exponent == -9

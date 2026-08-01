@@ -45,7 +45,7 @@ class FakeGeminiService:
             description="a test asset",
         )
         self.negotiate_result = NegotiationResult(
-            status="ACCEPT", price_usdc=decimal.Decimal("1.50"),
+            status="ACCEPT", price_sol=decimal.Decimal("1.50"),
             reason="fake accept",
         )
 
@@ -55,6 +55,15 @@ class FakeGeminiService:
     def assist_with_attachments(self, context, message, files) -> str:
         self._record("assist_with_attachments", (context, message, files), {})
         return "Reviewed the attached file(s)."
+
+    def suggest_registration_metadata(self, file_bytes, mime_type, message):
+        self._record("suggest_registration_metadata", (file_bytes, mime_type, message), {})
+        from services.gemini_service import RegistrationMetadataSuggestion
+
+        return RegistrationMetadataSuggestion(
+            reply="등록 초안을 준비했습니다.", title="테스트 이미지",
+            description="라이선스 등록을 위한 테스트 이미지입니다.", tags=["테스트"]
+        )
 
     def analyze_asset(self, file_bytes: bytes, mime_type: str) -> AnalysisResult:
         """등록 서비스의 멀티모달 분석 계약을 외부 키 없이 재현한다.
@@ -71,13 +80,13 @@ class FakeGeminiService:
         self,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> NegotiationResult:
         self._record(
             "negotiate",
-            (min_price, target_price, offer_usdc, usage_type, history),
+            (min_price, target_price, offer_sol, usage_type, history),
             {},
         )
         if self.fail_negotiate:

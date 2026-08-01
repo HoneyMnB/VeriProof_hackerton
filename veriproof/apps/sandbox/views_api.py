@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 def run(request: HttpRequest) -> JsonResponse:
     """POST /api/v1/sandbox/run -> 200/202 | 404. SPEC-006 R1/R2.
 
-    Request body: ``{asset_id, buyer_agent_id, offer_usdc, usage_type}``.
+    Request body: ``{asset_id, buyer_agent_id, offer_sol, usage_type}``.
     The runner drives the real endpoints in order; the response carries the
     ``run_id`` the frontend polls ``/api/v1/events`` / subscribes to
     ``sandbox_feed`` with.
@@ -54,10 +54,10 @@ def run(request: HttpRequest) -> JsonResponse:
     usage_type = data.get("usage_type") or "commercial"
     payment_tx_sig = (data.get("payment_tx_sig") or "").strip()
     buyer_wallet = (data.get("buyer_wallet") or "").strip()
-    offer_usdc = _parse_money(data.get("offer_usdc"))
-    if offer_usdc is None or offer_usdc <= 0:
+    offer_sol = _parse_money(data.get("offer_sol"))
+    if offer_sol is None or offer_sol <= 0:
         return _error(
-            "invalid_offer", "offer_usdc must be a positive number", status=422
+            "invalid_offer", "offer_sol must be a positive number", status=422
         )
     if not payment_tx_sig:
         return _error("invalid_payment_tx_sig", "payment_tx_sig is required", status=422)
@@ -68,7 +68,7 @@ def run(request: HttpRequest) -> JsonResponse:
     result = runner.run_simulation(
         asset_id=asset_id,
         buyer_agent_id=buyer_agent_id,
-        initial_offer_usdc=offer_usdc,
+        initial_offer_sol=offer_sol,
         usage_type=usage_type,
         payment_tx_sig=payment_tx_sig,
         buyer_wallet=buyer_wallet,

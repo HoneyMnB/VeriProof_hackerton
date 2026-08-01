@@ -225,6 +225,34 @@ def test_purchase_reuses_the_asset_accepted_in_the_current_agent_session(
     assert FakeBuyer.received_params == {"session_id": accepted_session_id}
 
 
+def test_sol_purchase_reuses_the_accepted_negotiation_session(monkeypatch):
+    asset_id = "4882f2fc-b963-4f36-8c70-69a0e88d11d8"
+    accepted_session_id = "2f97091f-5c59-4d37-a4e0-b4c76b0215d2"
+
+    class FakeContext:
+        state = {}
+
+    class FakeBuyer:
+        received_params = None
+
+        async def purchase(self, resource_url, params=None):
+            type(self).received_params = params
+            return {"status": "purchased"}
+
+    context = FakeContext()
+    tools._remember_accepted_session(
+        context,
+        asset_id,
+        {"status": "ACCEPT", "session_id": accepted_session_id},
+    )
+    monkeypatch.setattr(tools, "AutonomousSolBuyer", FakeBuyer)
+
+    result = asyncio.run(tools.purchase_sol_asset(asset_id, tool_context=context))
+
+    assert result["status"] == "purchased"
+    assert FakeBuyer.received_params == {"session_id": accepted_session_id}
+
+
 def test_accepted_negotiation_response_is_saved_in_agent_session(monkeypatch):
     asset_id = "4882f2fc-b963-4f36-8c70-69a0e88d11d8"
     accepted_session_id = "2f97091f-5c59-4d37-a4e0-b4c76b0215d2"
@@ -252,7 +280,7 @@ def test_accepted_negotiation_response_is_saved_in_agent_session(monkeypatch):
         tools.negotiate_license(
             asset_id,
             buyer_agent_id="buyer-1",
-            offer_usdc=0.5,
+            offer_sol=0.5,
             tool_context=context,
         )
     )
@@ -310,7 +338,7 @@ def test_counter_offer_clears_a_previously_accepted_session(monkeypatch):
         tools.negotiate_license(
             asset_id,
             buyer_agent_id="buyer-1",
-            offer_usdc=0.4,
+            offer_sol=0.4,
             tool_context=context,
         )
     )

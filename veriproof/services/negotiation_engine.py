@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from ._payment import resolve_pay_to
-from ._types import NegotiationResult, quantize_usdc
+from ._types import NegotiationResult, quantize_sol
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class NegotiationEngine:
         self,
         asset: Any,
         session: Any,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
     ) -> NegotiationResult:
         """Execute one negotiation round.
@@ -54,14 +54,18 @@ class NegotiationEngine:
         """
         max_rounds = self._resolve_max_rounds()
         rounds = list(getattr(session, "rounds", None) or [])
-        offer_meets_min = offer_usdc >= asset.min_price_usdc
+        min_price = asset.min_price_sol
+        target_price = asset.target_price_sol
+        if min_price is None or target_price is None:
+            raise ValueError("native SOL negotiation prices are not configured")
+        offer_meets_min = offer_sol >= min_price
 
         # R9 / AC-6: a below-min offer past the round cap REJECTs. A late offer
         # that meets min still ACCEPTs (creator-friendly; money is money).
         if not offer_meets_min and len(rounds) >= max_rounds:
             return NegotiationResult(
                 status="REJECT",
-                price_usdc=None,
+                price_sol=None,
                 reason="max rounds exceeded",
                 pay_address=None,
             )
@@ -70,9 +74,9 @@ class NegotiationEngine:
             raise NegotiationUnavailableError("Gemini negotiation service is unavailable")
         try:
             raw = self.gemini.negotiate(
-                asset.min_price_usdc,
-                asset.target_price_usdc,
-                offer_usdc,
+                min_price,
+                target_price,
+                offer_sol,
                 usage_type,
                 rounds,
             )
@@ -106,12 +110,12 @@ class NegotiationEngine:
           model answer can never undercut the creator's floor.
         - pay_address is resolved via the shared ``resolve_pay_to`` SSOT on
           ACCEPT (§8); None for COUNTER/REJECT.
-        - USDC prices are rounded to 6 decimals.
+        - Native SOL prices are rounded to 9 decimals (lamport precision).
         """
         status = raw.status
-        price = raw.price_usdc
+        price = raw.price_sol
         reason = raw.reason
-        min_price = asset.min_price_usdc
+        min_price = asset.min_price_sol
 
         if status == "ACCEPT":
             if price is None or price < min_price:
@@ -126,10 +130,10 @@ class NegotiationEngine:
             pay_address = None
 
         if price is not None:
-            price = quantize_usdc(price)
+            price = quantize_sol(price)
 
         return NegotiationResult(
-            status=status, price_usdc=price, reason=reason, pay_address=pay_address
+            status=status, price_sol=price, reason=reason, pay_address=pay_address
         )
 
 

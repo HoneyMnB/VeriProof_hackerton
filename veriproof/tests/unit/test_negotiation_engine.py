@@ -1,6 +1,6 @@
-"""SPEC-003 unit tests — NegotiationEngine.run_round (rule-based, no Gemini).
+"""SPEC-003 unit tests ??NegotiationEngine.run_round (rule-based, no Gemini).
 
-Covers the SPEC-003 §5 unit TDD list for the engine:
+Covers the SPEC-003 짠5 unit TDD list for the engine:
 - test_accept_when_offer_ge_min (R2 / AC-1)
 - test_counter_between_min_and_target_when_offer_below_min (R3 / AC-2)
 - test_counter_price_never_below_min (R10 invariant)
@@ -10,9 +10,9 @@ Plus one extra test (test_run_round_applies_invariants_to_gemini_result) that
 exercises the Gemini-wired branch + the shared invariant finaliser so the
 Gemini-success path is covered too.
 
-The engine is pure over (asset, session, offer_usdc); no DB, no network. Asset
+The engine is pure over (asset, session, offer_sol); no DB, no network. Asset
 and session are SimpleNamespace stand-ins exposing exactly the attributes the
-engine reads (min_price_usdc, target_price_usdc, parent_asset_id, creator,
+engine reads (min_price_sol, target_price_sol, parent_asset_id, creator,
 rounds).
 """
 from __future__ import annotations
@@ -34,8 +34,8 @@ def _asset(*, min_price, target_price, parent=False):
     return SimpleNamespace(
         parent_asset_id=_ESCROW if parent else None,
         parent_asset=_ESCROW if parent else None,
-        min_price_usdc=decimal.Decimal(str(min_price)),
-        target_price_usdc=decimal.Decimal(str(target_price)),
+        min_price_sol=decimal.Decimal(str(min_price)),
+        target_price_sol=decimal.Decimal(str(target_price)),
         creator=SimpleNamespace(wallet_address=_CREATOR_WALLET),
     )
 
@@ -46,11 +46,11 @@ def _session(rounds=None):
 
 
 class _NegotiationDouble:
-    """테스트 전용 모델 더블: 실행 코드에는 가격 규칙을 두지 않는다."""
+    """?뚯뒪???꾩슜 紐⑤뜽 ?붾툝: ?ㅽ뻾 肄붾뱶?먮뒗 媛寃?洹쒖튃???먯? ?딅뒗??"""
 
-    def negotiate(self, min_price, target_price, offer_usdc, usage_type, history):
-        if offer_usdc >= min_price:
-            return NegotiationResult("ACCEPT", offer_usdc, "test acceptance")
+    def negotiate(self, min_price, target_price, offer_sol, usage_type, history):
+        if offer_sol >= min_price:
+            return NegotiationResult("ACCEPT", offer_sol, "test acceptance")
         return NegotiationResult(
             "COUNTER_OFFER",
             (min_price + max(min_price, target_price)) / decimal.Decimal("2"),
@@ -75,7 +75,7 @@ def test_accept_when_offer_ge_min():
     )
 
     assert result.status == "ACCEPT"
-    assert result.price_usdc == decimal.Decimal("2.0")
+    assert result.price_sol == decimal.Decimal("2.0")
     assert result.pay_address == _CREATOR_WALLET
 
 
@@ -89,7 +89,7 @@ def test_accept_when_offer_equals_min_boundary():
     )
 
     assert result.status == "ACCEPT"
-    assert result.price_usdc == decimal.Decimal("1.5")
+    assert result.price_sol == decimal.Decimal("1.5")
 
 
 # === R3 / AC-2: COUNTER_OFFER in [min, target] when offer below min =========
@@ -107,7 +107,7 @@ def test_counter_between_min_and_target_when_offer_below_min():
     assert result.status == "COUNTER_OFFER"
     assert result.pay_address is None
     # R3: counter must lie inside [min_price, target_price].
-    assert asset.min_price_usdc <= result.price_usdc <= asset.target_price_usdc
+    assert asset.min_price_sol <= result.price_sol <= asset.target_price_sol
 
 
 # === R10 invariant: counter never below min =================================
@@ -123,7 +123,7 @@ def test_counter_price_never_below_min():
     )
 
     assert result.status == "COUNTER_OFFER"
-    assert result.price_usdc >= asset.min_price_usdc
+    assert result.price_sol >= asset.min_price_sol
 
 
 # === R9 / AC-6: REJECT after max rounds =====================================
@@ -142,7 +142,7 @@ def test_reject_after_max_rounds():
     assert result.status == "REJECT"
     assert result.reason == "max rounds exceeded"
     assert result.pay_address is None
-    assert result.price_usdc is None
+    assert result.price_sol is None
 
 
 def test_accept_still_honoured_at_max_rounds():
@@ -173,7 +173,7 @@ def test_run_round_applies_invariants_to_gemini_result(monkeypatch):
     fake = FakeGeminiService()
     # Sneaky Gemini: ACCEPT at a price BELOW the creator minimum.
     fake.negotiate_result = NegotiationResult(
-        status="ACCEPT", price_usdc=decimal.Decimal("0.80"), reason="model-low"
+        status="ACCEPT", price_sol=decimal.Decimal("0.80"), reason="model-low"
     )
 
     result = NegotiationEngine(gemini=fake, max_rounds=5).run_round(
@@ -182,14 +182,14 @@ def test_run_round_applies_invariants_to_gemini_result(monkeypatch):
 
     assert result.status == "ACCEPT"
     # R10 clamp: never below min on ACCEPT.
-    assert result.price_usdc >= asset.min_price_usdc
+    assert result.price_sol >= asset.min_price_sol
     assert result.pay_address == _CREATOR_WALLET
     # Gemini was actually consulted.
     assert any(c[0] == "negotiate" for c in fake.calls)
 
 
 def test_run_round_reports_model_failure_without_price_fallback():
-    """모델 실패 시 임의 수락·반대 가격을 만들지 않는다."""
+    """紐⑤뜽 ?ㅽ뙣 ???꾩쓽 ?섎씫쨌諛섎? 媛寃⑹쓣 留뚮뱾吏 ?딅뒗??"""
     from tests.fakes import FakeGeminiService
     from services.negotiation_engine import NegotiationUnavailableError
 
@@ -203,7 +203,7 @@ def test_run_round_reports_model_failure_without_price_fallback():
 
 
 def test_accept_pay_address_routes_secondary_to_escrow(settings):
-    """2nd-creation asset (parent_asset_id set) -> pay_address == escrow (§8).
+    """2nd-creation asset (parent_asset_id set) -> pay_address == escrow (짠8).
 
     The engine delegates to the shared ``resolve_pay_to`` SSOT, which reads
     ``settings.PLATFORM_ESCROW_PUBKEY`` lazily for parented assets; configure
@@ -228,7 +228,7 @@ def test_run_round_clamps_gemini_counter_below_min():
     fake = FakeGeminiService()
     fake.negotiate_result = NegotiationResult(
         status="COUNTER_OFFER",
-        price_usdc=decimal.Decimal("0.80"),  # below min
+        price_sol=decimal.Decimal("0.80"),  # below min
         reason="model-low-counter",
     )
 
@@ -237,7 +237,7 @@ def test_run_round_clamps_gemini_counter_below_min():
     )
 
     assert result.status == "COUNTER_OFFER"
-    assert result.price_usdc >= asset.min_price_usdc
+    assert result.price_sol >= asset.min_price_sol
     assert result.pay_address is None
 
 
@@ -248,7 +248,7 @@ def test_run_round_passes_gemini_reject_through():
     asset = _asset(min_price="1.5", target_price="3.0")
     fake = FakeGeminiService()
     fake.negotiate_result = NegotiationResult(
-        status="REJECT", price_usdc=None, reason="model rejected"
+        status="REJECT", price_sol=None, reason="model rejected"
     )
 
     result = NegotiationEngine(gemini=fake, max_rounds=5).run_round(
@@ -257,7 +257,7 @@ def test_run_round_passes_gemini_reject_through():
 
     assert result.status == "REJECT"
     assert result.pay_address is None
-    assert result.price_usdc is None
+    assert result.price_sol is None
 
 
 def test_max_rounds_defaults_when_unset(monkeypatch):

@@ -245,7 +245,7 @@
                 headers: { "Content-Type": "application/json", Accept: "application/json" },
                 body: JSON.stringify({
                     asset_id: assetId, buyer_agent_id: "sandbox-ui",
-                    offer_usdc: offer, usage_type: usage,
+                    offer_sol: offer, usage_type: usage,
                     payment_tx_sig: paymentTx, buyer_wallet: buyerWallet
                 })
             })

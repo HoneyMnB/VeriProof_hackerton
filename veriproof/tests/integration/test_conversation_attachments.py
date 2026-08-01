@@ -1,6 +1,8 @@
 """대화 첨부의 실제 저장·분석·메시지 연결 계약을 검증한다."""
 from __future__ import annotations
 
+import uuid
+
 import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 
@@ -94,6 +96,102 @@ def test_attachment_sent_to_llm_only_when_analysis_requested(png_bytes):
     assert double.files is not None
     assert double.files[0][0] == png_bytes
     assert double.files[0][1] == "image/png"
+
+
+@pytest.mark.django_db
+def test_license_registration_keyword_generates_one_image_metadata_prompt(png_bytes):
+    from tests.factories import CreatorFactory
+    from services.gemini_service import RegistrationMetadataSuggestion
+
+    CreatorFactory(wallet_address=VALID_WALLET)
+    attachment_service = _attachment_service()
+    attachment = attachment_service.attach(
+        VALID_WALLET, SimpleUploadedFile("work.png", png_bytes, content_type="image/png")
+    )
+
+    class RegistrationGemini:
+        def __init__(self):
+            self.calls = []
+
+        def suggest_registration_metadata(self, file_bytes, mime_type, message):
+            self.calls.append((file_bytes, mime_type, message))
+            return RegistrationMetadataSuggestion(
+                reply="이미지의 라이선스 등록 초안을 준비했습니다.", title="햇살이 비치는 해안",
+                description="따뜻한 햇살 아래의 해안 풍경입니다.",
+                tags=["coast", "sunlight", "landscape", "travel", "water", "summer", "extra"],
+            )
+
+    double = RegistrationGemini()
+    outcome = CreatorAssistantService(gemini=double, attachment_service=attachment_service).ask(
+        VALID_WALLET, "위 이미지에 대해서 라이선스 등록", [str(attachment.id)]
+    )
+
+    assert double.calls == [(png_bytes, "image/png", "위 이미지에 대해서 라이선스 등록")]
+    assert outcome.registration_metadata == {
+        "attachment_id": str(attachment.id), "file_name": "work.png", "content_mime_type": "image/png",
+        "reply": "이미지의 라이선스 등록 초안을 준비했습니다.",
+        "title": "햇살이 비치는 해안", "description": "따뜻한 햇살 아래의 해안 풍경입니다.",
+        "tags": ["coast", "sunlight", "landscape", "travel", "water", "summer"],
+    }
+
+
+@pytest.mark.django_db
+def test_license_registration_uses_the_latest_image_from_the_same_conversation(png_bytes):
+    from apps.ip.models import AssistantMessage, ConversationAttachment
+    from tests.factories import CreatorFactory
+    from services.gemini_service import RegistrationMetadataSuggestion
+
+    creator = CreatorFactory(wallet_address=VALID_WALLET)
+    attachment_service = _attachment_service()
+    attachment = attachment_service.attach(
+        VALID_WALLET, SimpleUploadedFile("work.png", png_bytes, content_type="image/png")
+    )
+    conversation_id = uuid.uuid4()
+    source_message = AssistantMessage.objects.create(
+        creator=creator, conversation_id=conversation_id, role=AssistantMessage.USER,
+        content="이 이미지를 봐 주세요.",
+    )
+    ConversationAttachment.objects.filter(id=attachment.id).update(source_message=source_message)
+
+    class RegistrationGemini:
+        def suggest_registration_metadata(self, file_bytes, mime_type, message):
+            return RegistrationMetadataSuggestion(
+                reply="등록 초안을 준비했습니다.", title="테스트 이미지",
+                description="테스트용 이미지입니다.", tags=["테스트"],
+            )
+
+    outcome = CreatorAssistantService(
+        gemini=RegistrationGemini(), attachment_service=attachment_service
+    ).ask(VALID_WALLET, "라이선스 등록", conversation_id=conversation_id)
+
+    assert outcome.registration_metadata is not None
+    assert outcome.registration_metadata["attachment_id"] == str(attachment.id)
+
+
+@pytest.mark.django_db
+def test_license_registration_uses_the_latest_unlinked_image_when_client_omits_attachment_id(png_bytes):
+    from tests.factories import CreatorFactory
+    from services.gemini_service import RegistrationMetadataSuggestion
+
+    CreatorFactory(wallet_address=VALID_WALLET)
+    attachment_service = _attachment_service()
+    attachment = attachment_service.attach(
+        VALID_WALLET, SimpleUploadedFile("work.png", png_bytes, content_type="image/png")
+    )
+
+    class RegistrationGemini:
+        def suggest_registration_metadata(self, file_bytes, mime_type, message):
+            return RegistrationMetadataSuggestion(
+                reply="등록 초안을 준비했습니다.", title="테스트 이미지",
+                description="테스트용 이미지입니다.", tags=["테스트"],
+            )
+
+    outcome = CreatorAssistantService(
+        gemini=RegistrationGemini(), attachment_service=attachment_service
+    ).ask(VALID_WALLET, "라이선스 등록")
+
+    assert outcome.registration_metadata is not None
+    assert outcome.registration_metadata["attachment_id"] == str(attachment.id)
 
 
 @pytest.mark.django_db

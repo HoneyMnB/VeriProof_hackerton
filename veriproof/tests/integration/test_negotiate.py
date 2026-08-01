@@ -1,11 +1,11 @@
-"""SPEC-003 integration tests — POST /api/v1/ip/{asset_id}/negotiate.
+"""SPEC-003 integration tests ??POST /api/v1/ip/{asset_id}/negotiate.
 
 Drives the full view through Django's test client with the engine + event
 recorder + x402 service swapped via the ``get_*()`` factory seam in
 ``apps.negotiation.views_api`` (monkeypatched per-test). Mirrors the SPEC-002
 ``test_get_asset.py`` DI pattern.
 
-Covers the SPEC-003 §5 integration TDD list (10 tests):
+Covers the SPEC-003 짠5 integration TDD list (10 tests):
 - AC-1  accept returns creator pay_address
 - AC-1b accept routes secondary-creation to escrow
 - AC-2  counter-offer price range, pay_address null
@@ -59,7 +59,7 @@ def _patch_view_services(
 
 
 def _rule_engine():
-    """테스트 전용 Gemini 더블로 엔진의 경계·불변식을 검증한다."""
+    """?뚯뒪???꾩슜 Gemini ?붾툝濡??붿쭊??寃쎄퀎쨌遺덈??앹쓣 寃利앺븳??"""
     import decimal as _decimal
 
     from services.negotiation_engine import NegotiationEngine
@@ -67,9 +67,9 @@ def _rule_engine():
     from tests.fakes import FakeGeminiService
 
     class _PricingDouble(FakeGeminiService):
-        def negotiate(self, min_price, target_price, offer_usdc, usage_type, history):
-            if offer_usdc >= min_price:
-                return NegotiationResult("ACCEPT", offer_usdc, "test acceptance")
+        def negotiate(self, min_price, target_price, offer_sol, usage_type, history):
+            if offer_sol >= min_price:
+                return NegotiationResult("ACCEPT", offer_sol, "test acceptance")
             return NegotiationResult(
                 "COUNTER_OFFER",
                 (min_price + max(min_price, target_price)) / _decimal.Decimal("2"),
@@ -111,8 +111,8 @@ def test_negotiate_accept_returns_pay_address(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -120,7 +120,7 @@ def test_negotiate_accept_returns_pay_address(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -130,7 +130,7 @@ def test_negotiate_accept_returns_pay_address(client, monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ACCEPT"
-    assert decimal.Decimal(body["price_usdc"]) == decimal.Decimal("2.0")
+    assert decimal.Decimal(body["price_sol"]) == decimal.Decimal("2.0")
     assert body["pay_address"] == VALID_WALLET
     assert body["session_id"]
 
@@ -151,8 +151,8 @@ def test_negotiate_accept_routes_secondary_to_escrow(client, monkeypatch, settin
         creator=creator,
         parent_asset=parent,
         royalty_share_bps=3000,
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -160,7 +160,7 @@ def test_negotiate_accept_routes_secondary_to_escrow(client, monkeypatch, settin
         NEGOTIATE_TEMPLATE.format(asset_id=str(child.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -183,8 +183,8 @@ def test_negotiate_counter_offer_range(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -192,7 +192,7 @@ def test_negotiate_counter_offer_range(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "1.0",
+            "offer_sol": "1.0",
             "usage_type": "editorial",
         },
         content_type="application/json",
@@ -203,7 +203,7 @@ def test_negotiate_counter_offer_range(client, monkeypatch):
     body = response.json()
     assert body["status"] == "COUNTER_OFFER"
     assert body["pay_address"] is None
-    price = decimal.Decimal(body["price_usdc"])
+    price = decimal.Decimal(body["price_sol"])
     assert decimal.Decimal("1.5") <= price <= decimal.Decimal("3.0")
 
 
@@ -218,8 +218,8 @@ def test_negotiate_creates_and_updates_session(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -227,7 +227,7 @@ def test_negotiate_creates_and_updates_session(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -237,7 +237,7 @@ def test_negotiate_creates_and_updates_session(client, monkeypatch):
 
     session = NegotiationSession.objects.get(asset_id=asset.id, buyer_agent_id="buyer-1")
     assert session.status == NegotiationSession.ACCEPTED
-    assert session.final_price_usdc == decimal.Decimal("2.0")
+    assert session.final_price_sol == decimal.Decimal("2.0")
     assert len(session.rounds) >= 1
     assert session.pay_address == VALID_WALLET
 
@@ -250,8 +250,8 @@ def test_negotiate_resumes_existing_session_by_buyer(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -260,7 +260,7 @@ def test_negotiate_resumes_existing_session_by_buyer(client, monkeypatch):
             NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
             data={
                 "buyer_agent_id": buyer,
-                "offer_usdc": "2.0",
+                "offer_sol": "2.0",
                 "usage_type": "commercial",
             },
             content_type="application/json",
@@ -282,8 +282,8 @@ def test_negotiate_records_rounds_and_events(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -291,7 +291,7 @@ def test_negotiate_records_rounds_and_events(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "1.0",  # below min -> COUNTER_OFFER
+            "offer_sol": "1.0",  # below min -> COUNTER_OFFER
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -303,7 +303,7 @@ def test_negotiate_records_rounds_and_events(client, monkeypatch):
     assert len(session.rounds) == 1
     round_entry = session.rounds[0]
     assert round_entry["status"] == "COUNTER_OFFER"
-    assert round_entry["offer"] is not None
+    assert round_entry["offer_sol"] is not None
     assert round_entry["ts"] is not None
 
     # R6 / AC-9: an event of the round's type was recorded.
@@ -317,7 +317,7 @@ def test_negotiate_records_rounds_and_events(client, monkeypatch):
 
 @pytest.mark.django_db
 def test_negotiate_rejects_negative_offer_422(client, monkeypatch):
-    """AC-7: offer_usdc <= 0 -> 422."""
+    """AC-7: offer_sol <= 0 -> 422."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET))
@@ -327,7 +327,7 @@ def test_negotiate_rejects_negative_offer_422(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "-1",
+            "offer_sol": "-1",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -339,7 +339,7 @@ def test_negotiate_rejects_negative_offer_422(client, monkeypatch):
 
 @pytest.mark.django_db
 def test_negotiate_rejects_non_numeric_offer_422(client, monkeypatch):
-    """AC-7: non-numeric offer_usdc -> 422."""
+    """AC-7: non-numeric offer_sol -> 422."""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     asset = IpAssetFactory(creator=CreatorFactory(wallet_address=VALID_WALLET))
@@ -349,7 +349,7 @@ def test_negotiate_rejects_non_numeric_offer_422(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "not-a-number",
+            "offer_sol": "not-a-number",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -373,7 +373,7 @@ def test_negotiate_rejects_bad_usage_type_422(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "unknown",
         },
         content_type="application/json",
@@ -395,7 +395,7 @@ def test_negotiate_unknown_asset_404(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(uuid.uuid4())),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -410,13 +410,13 @@ def test_negotiate_unknown_asset_404(client, monkeypatch):
 
 @pytest.mark.django_db
 def test_negotiate_gemini_failure_returns_unavailable(client, monkeypatch):
-    """Gemini 실패 시 임의의 계약 조건을 만들지 않는다."""
+    """Gemini ?ㅽ뙣 ???꾩쓽??怨꾩빟 議곌굔??留뚮뱾吏 ?딅뒗??"""
     from tests.factories import CreatorFactory, IpAssetFactory
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_failing_gemini_engine())
 
@@ -424,7 +424,7 @@ def test_negotiate_gemini_failure_returns_unavailable(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -439,8 +439,8 @@ def test_negotiate_gemini_failure_returns_unavailable(client, monkeypatch):
 
 
 @pytest.mark.django_db
-def test_negotiate_ap2_mandate_when_enabled(client, monkeypatch, settings):
-    """AC-10: AP2_ENABLED + ACCEPT -> session.ap2_cart_mandate is populated."""
+def test_sol_negotiate_does_not_create_usdc_ap2_mandate(client, monkeypatch, settings):
+    """Native SOL negotiation must not create a USDC AP2 mandate."""
     from apps.negotiation.models import NegotiationSession
     from tests.factories import CreatorFactory, IpAssetFactory
 
@@ -448,16 +448,16 @@ def test_negotiate_ap2_mandate_when_enabled(client, monkeypatch, settings):
     settings.PLATFORM_ESCROW_PUBKEY = _ESCROW_PUBKEY
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
-    _patch_view_services(monkeypatch, engine=_rule_engine(), x402=_ap2_x402(settings))
+    _patch_view_services(monkeypatch, engine=_rule_engine())
 
     response = client.post(
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",
@@ -468,12 +468,7 @@ def test_negotiate_ap2_mandate_when_enabled(client, monkeypatch, settings):
     assert response.json()["status"] == "ACCEPT"
 
     session = NegotiationSession.objects.get(asset_id=asset.id)
-    # R14 / AC-10: an AP2 Cart Mandate VDC was stored on the session.
-    assert session.ap2_cart_mandate is not None
-    mandate = session.ap2_cart_mandate
-    assert mandate["kind"] == "cart"
-    assert mandate["asset_id"] == str(asset.id)
-    assert mandate["session_id"] == str(session.id)
+    assert session.ap2_cart_mandate is None
 
 
 @pytest.mark.django_db
@@ -484,8 +479,8 @@ def test_negotiate_ap2_disabled_leaves_mandate_null(client, monkeypatch):
 
     asset = IpAssetFactory(
         creator=CreatorFactory(wallet_address=VALID_WALLET),
-        min_price_usdc=decimal.Decimal("1.5"),
-        target_price_usdc=decimal.Decimal("3.0"),
+        min_price_sol=decimal.Decimal("1.5"),
+        target_price_sol=decimal.Decimal("3.0"),
     )
     _patch_view_services(monkeypatch, engine=_rule_engine())
 
@@ -493,7 +488,7 @@ def test_negotiate_ap2_disabled_leaves_mandate_null(client, monkeypatch):
         NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
         data={
             "buyer_agent_id": "buyer-1",
-            "offer_usdc": "2.0",
+            "offer_sol": "2.0",
             "usage_type": "commercial",
         },
         content_type="application/json",

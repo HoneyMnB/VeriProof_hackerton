@@ -445,7 +445,7 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     license = License.objects.filter(asset=asset, payment_tx_sig=tx_sig).first() if tx_sig else None
     license_service = get_license_service()
     if license is not None and license_service.is_download_active(license):
-        return _licensed_response(asset, license)
+        return _licensed_response(request, asset, license)
 
     # 비공개 자산은 소유자가 명시적으로 공유하기 전 외부 구매·에이전트 탐색
     # 경로에 존재하지 않는 것처럼 처리한다. UUID를 안다고 결제 조건을 얻을 수 없다.
@@ -576,7 +576,7 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             "reference": reference,
             "payer_wallet": verification.sender,
             "amount_sol": str(verification.amount),
-            "download_url": result.download_url,
+            "download_url": _absolute_download_url(request, result.download_url),
             "download_expires_at": expires_at.isoformat() if expires_at else None,
             "slot": verification.slot,
             "commitment": verification.commitment,
@@ -603,7 +603,15 @@ def get_agent_sol_payment_terms(
         or not asset.registration_certificate_tx_sig
     ):
         return _error("not_found", "asset not found", status=404)
-    if asset.target_price_sol is None or asset.target_price_sol <= 0:
+    session = _accepted_sol_session(request, asset)
+    if request.GET.get("session_id") and session is None:
+        return _error(
+            "invalid_negotiation_session",
+            "accepted SOL negotiation session not found for this asset",
+            status=409,
+        )
+    amount = session.final_price_sol if session is not None else asset.target_price_sol
+    if amount is None or amount <= 0:
         return _error(
             "sol_price_not_configured",
             "the seller has not configured a native SOL price",
@@ -622,8 +630,8 @@ def get_agent_sol_payment_terms(
             "currency": "SOL",
             "network": settings.X402_NETWORK,
             "recipient": resolve_pay_to(asset),
-            "amount_sol": str(asset.target_price_sol),
-            "memo": f"VERIPROOF:{asset.id}:SOL",
+            "amount_sol": str(amount),
+            "memo": _sol_payment_memo(asset, session),
         }
     )
 
@@ -652,7 +660,14 @@ def settle_agent_sol_payment(
         or not asset.registration_certificate_tx_sig
     ):
         return _error("not_found", "asset not found", status=404)
-    amount = asset.target_price_sol
+    session = _accepted_sol_session(request, asset)
+    if request.GET.get("session_id") and session is None:
+        return _error(
+            "invalid_negotiation_session",
+            "accepted SOL negotiation session not found for this asset",
+            status=409,
+        )
+    amount = session.final_price_sol if session is not None else asset.target_price_sol
     if amount is None or amount <= 0:
         return _error("sol_price_not_configured", "the seller has not configured a native SOL price", status=409)
     if asset.parent_asset_id is not None:
@@ -668,7 +683,7 @@ def settle_agent_sol_payment(
             signature=tx_signature,
             expected_recipient=resolve_pay_to(asset),
             expected_lamports=solana._amount_to_lamports(amount),
-            expected_memo=f"VERIPROOF:{asset.id}:SOL",
+            expected_memo=_sol_payment_memo(asset, session),
         )
     except CertificateIssueError as exc:
         logger.warning("agent SOL verification unavailable asset_id=%s: %s", asset.id, exc)
@@ -678,11 +693,11 @@ def settle_agent_sol_payment(
 
     result = get_settlement_service().settle_pipeline(
         asset=asset,
-        session=None,
+        session=session,
         tx_signature=tx_signature,
         buyer_wallet=buyer_wallet,
         expected_amount=amount,
-        usage_type="commercial",
+        usage_type=session.usage_type if session is not None else "commercial",
         payment_already_verified=True,
         payment_currency="SOL",
     )
@@ -695,25 +710,30 @@ def settle_agent_sol_payment(
             "currency": "SOL",
             "amount_sol": str(amount),
             "transaction": tx_signature,
+            "certificate_tx": result.certificate_tx,
             "buyer_wallet": buyer_wallet,
-            "download_url": result.download_url,
+            "download_url": _absolute_download_url(request, result.download_url),
             "download_expires_at": result.download_expires_at.isoformat() if result.download_expires_at else None,
         }
     )
 
 
-def _licensed_response(asset: IpAsset, license: License) -> JsonResponse:
+def _licensed_response(
+    request: HttpRequest,
+    asset: IpAsset,
+    license: License,
+) -> JsonResponse:
     """Build the 200 response for a licensed agent (R2).
 
     저장된 만료 토큰만 반환한다. 임시 또는 조립한 URL은 성공 응답에 넣지 않는다.
     """
     expires_at = license.download_expires_at
-    download_url = f"/files/{license.download_token}" if license.download_token else None
+    download_path = f"/files/{license.download_token}" if license.download_token else None
     return JsonResponse(
         {
             "status": "LICENSED",
             "asset_id": str(asset.id),
-            "download_url": download_url,
+            "download_url": _absolute_download_url(request, download_path),
             "watermark_url": watermark_preview_url(asset.id),
         },
         status=200,
@@ -812,10 +832,18 @@ def _settle_x402_request(
             status=503,
         )
 
-    response = _licensed_response(asset, result.license)
+    response = _licensed_response(request, asset, result.license)
     response["PAYMENT-RESPONSE"] = settled.response_header
     response["Access-Control-Expose-Headers"] = "PAYMENT-RESPONSE"
     return response
+
+
+def _absolute_download_url(
+    request: HttpRequest,
+    download_url: str | None,
+) -> str | None:
+    """Return a Seller API absolute URL while preserving absolute storage URLs."""
+    return request.build_absolute_uri(download_url) if download_url else None
 
 
 def _accepted_x402_session(
@@ -836,6 +864,34 @@ def _accepted_x402_session(
         ).first()
     except (TypeError, ValueError):
         return None
+
+
+def _accepted_sol_session(
+    request: HttpRequest,
+    asset: IpAsset,
+) -> NegotiationSession | None:
+    """Resolve an accepted SOL negotiation belonging to the requested asset."""
+    session_id = request.GET.get("session_id")
+    if not session_id:
+        return None
+    try:
+        return NegotiationSession.objects.filter(
+            id=session_id,
+            asset=asset,
+            status=NegotiationSession.ACCEPTED,
+            final_price_sol__isnull=False,
+        ).first()
+    except (TypeError, ValueError):
+        return None
+
+
+def _sol_payment_memo(
+    asset: IpAsset,
+    session: NegotiationSession | None,
+) -> str:
+    """Bind negotiated transfers to their accepted session."""
+    suffix = f":{session.id}" if session is not None else ""
+    return f"VERIPROOF:{asset.id}:SOL{suffix}"
 
 
 # === GET /api/v1/ip/{asset_id}/certificate/{cert_id} (SPEC-004) ==============
@@ -1050,9 +1106,9 @@ def ai_plugin(request: HttpRequest) -> JsonResponse:
                 "creator-approved works. GET /api/v1/ip/{asset_id} with "
                 "X-Agent-Protocol: x402 to receive HTTP 402 payment terms for an "
                 "unlicensed work. POST /api/v1/ip/{asset_id}/negotiate with "
-                "buyer_agent_id, offer_usdc, and usage_type. After the accepted "
-                "Solana USDC payment is confirmed, POST /api/v1/ip/{asset_id}/settle "
-                "with tx_signature, buyer_wallet, and the optional session_id. A "
+                "buyer_agent_id, offer_sol, and usage_type. After acceptance, GET "
+                "/api/v1/ip/{asset_id}/agent-sol-payment with the session_id and "
+                "submit the verified Devnet SOL transaction to its /settle route. A "
                 "successful settlement returns the license certificate and an "
                 "expiry-bound download URL. Do not expect the original file in the "
                 "catalog or an unlicensed asset response. Read the OpenAPI contract "

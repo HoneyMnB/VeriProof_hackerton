@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ._types import AnalysisResult, BatchQuote, NegotiationResult, quantize_usdc
+from ._types import AnalysisResult, BatchQuote, NegotiationResult, quantize_sol, quantize_usdc
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ NEGOTIATION_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
         "status": {"type": "string", "enum": list(NEGOTIATION_STATUSES)},
-        "price_usdc": {"type": "number"},
+        "price_sol": {"type": "number"},
         "reason": {"type": "string"},
     },
-    "required": ["status", "price_usdc", "reason"],
+    "required": ["status", "price_sol", "reason"],
 }
 BATCH_MAX_RETRIES = 3
 # SPEC-007 R2: structured-output JSON schema forced on the batch pricing call.
@@ -85,6 +85,16 @@ VISION_RESPONSE_SCHEMA = {
         "description",
     ],
 }
+REGISTRATION_METADATA_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string"},
+        "title": {"type": "string"},
+        "description": {"type": "string"},
+        "tags": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+    },
+    "required": ["reply", "title", "description", "tags"],
+}
 
 # 대화형 비서가 사용할 수 있는 변경 도구는 이 목록으로 제한한다. 자연어의
 # 키워드를 코드가 추측해 실행하지 않고, Gemini의 구조화 계획도 서버에서 다시 검증한다.
@@ -137,6 +147,16 @@ class CreatorActionPlan:
 
     reply: str
     action: dict[str, Any] | None
+
+
+@dataclass(frozen=True)
+class RegistrationMetadataSuggestion:
+    """첨부 이미지에서 한 번의 모델 호출로 생성한 등록 초안 메타데이터."""
+
+    reply: str
+    title: str
+    description: str
+    tags: list[str]
 
 
 class GeminiUnavailableError(RuntimeError):
@@ -203,7 +223,7 @@ class GeminiService:
         self,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> NegotiationResult:
@@ -226,7 +246,7 @@ class GeminiService:
         for _ in range(NEGOTIATE_MAX_RETRIES):
             try:
                 text = self._call_negotiate(
-                    client, min_price, target_price, offer_usdc, usage_type, history
+                    client, min_price, target_price, offer_sol, usage_type, history
                 )
                 return self._parse_negotiate_response(text, min_price, target_price)
             except Exception as exc:  # noqa: BLE001 (SDK errors are broad)
@@ -474,6 +494,8 @@ class GeminiService:
             "verified workspace data below. Explain the current registration, "
             "x402 negotiation, settlement, and certificate pipeline clearly. "
             "Never claim a payment or on-chain action that is absent from data.\n"
+            "Reply in Korean when the creator's message is in Korean; otherwise reply "
+            "in the creator's language.\n"
             "Apply the creator-approved behavior instructions in Workspace data. "
             "When an action needs a user input or confirmation, state that exact "
             "next step instead of claiming it was completed.\n"
@@ -509,6 +531,8 @@ class GeminiService:
             "attached file(s) and answer using only the attached content and the "
             "verified workspace data below. Never claim any payment or on-chain "
             "action that is absent from data.\n"
+            "Reply in Korean when the creator's message is in Korean; otherwise reply "
+            "in the creator's language.\n"
             f"Workspace data: {json.dumps(context, ensure_ascii=False)}\n"
             f"Creator message: {message}"
         )
@@ -524,6 +548,76 @@ class GeminiService:
         if not answer.strip():
             raise GeminiResponseError("Gemini attachment-assist returned an empty response")
         return answer.strip()
+
+    def suggest_registration_metadata(
+        self, file_bytes: bytes, mime_type: str, message: str
+    ) -> RegistrationMetadataSuggestion:
+        """이미지 한 장으로 등록 제목·설명·태그를 단일 멀티모달 호출에서 생성한다."""
+        client = self._get_client()
+        if client is None:
+            raise GeminiUnavailableError("Gemini credentials are not configured")
+        try:
+            from google.genai import types
+        except ImportError as exc:
+            raise GeminiUnavailableError("google-genai is not installed") from exc
+        prompt = (
+            "Generate metadata for licensing registration from the attached image. "
+            "Return only the requested JSON. The title and description must describe "
+            "only visible, supported image content; do not invent ownership, licensing "
+            "terms, people, locations, brands, or events. Write the title, description, "
+            "and every tag in Korean. The reply must be a short Korean confirmation "
+            "that the registration draft is ready. Produce a concise title, a useful "
+            "registration description, and no more than six specific discovery tags.\n"
+            f"Creator message: {message}"
+        )
+        try:
+            response = client.models.generate_content(
+                model=self._vision_model_for_call(),
+                contents=[types.Part.from_bytes(data=file_bytes, mime_type=mime_type), prompt],
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": REGISTRATION_METADATA_RESPONSE_SCHEMA,
+                },
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("registration metadata generation failed: %s", exc)
+            raise GeminiResponseError("Gemini registration metadata generation failed") from exc
+        return self._parse_registration_metadata(getattr(response, "text", "") or "")
+
+    @staticmethod
+    def _parse_registration_metadata(text: str) -> RegistrationMetadataSuggestion:
+        try:
+            data = json.loads(text)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            raise GeminiResponseError("Gemini registration metadata is not valid JSON") from exc
+        reply = data.get("reply")
+        title = data.get("title")
+        description = data.get("description")
+        tags = data.get("tags")
+        if (
+            not isinstance(reply, str)
+            or not reply.strip()
+            or not isinstance(title, str)
+            or not title.strip()
+            or not isinstance(description, str)
+            or not description.strip()
+        ):
+            raise GeminiResponseError("Gemini registration metadata is incomplete")
+        if not isinstance(tags, list) or len(tags) > 6:
+            raise GeminiResponseError("Gemini registration metadata has invalid tags")
+        normalized_tags = []
+        for tag in tags:
+            normalized = str(tag).strip().lstrip("#").strip()
+            if not normalized:
+                continue
+            if normalized not in normalized_tags:
+                normalized_tags.append(normalized)
+        return RegistrationMetadataSuggestion(
+            reply=reply.strip()[:300],
+            title=title.strip()[:120],
+            description=description.strip()[:3000],
+            tags=normalized_tags[:6],
+        )
 
     def plan_creator_action(
         self, context: dict[str, Any], message: str
@@ -559,6 +653,8 @@ class GeminiService:
             "settlement, certificates, income, expenses, and sales clearly. "
             "Never claim that a payment, on-chain action, registration, or data "
             "change succeeded: the server independently executes and verifies it.\n"
+            "Write reply in Korean when the creator's message is in Korean; otherwise "
+            "write it in the creator's language.\n"
             "Return an action only for an explicit creator command, never for an "
             "informational question. Allowed action names: none, record_expense, "
             "update_asset_terms, prepare_registration, analyze_attachment. For "
@@ -625,7 +721,7 @@ class GeminiService:
         client: Any,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> str:
@@ -635,7 +731,7 @@ class GeminiService:
         shape as the vision path so injected test stubs work identically.
         """
         prompt = self._negotiation_prompt(
-            min_price, target_price, offer_usdc, usage_type, history
+            min_price, target_price, offer_sol, usage_type, history
         )
         config = {
             "response_mime_type": "application/json",
@@ -652,7 +748,7 @@ class GeminiService:
     def _negotiation_prompt(
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> str:
@@ -662,12 +758,12 @@ class GeminiService:
             "You are the seller's autonomous pricing agent for an IP license. "
             "Given the creator's constraints and the buyer's offer, decide "
             "ACCEPT, COUNTER_OFFER, or REJECT.\n"
-            f"Constraints: min_price_usdc={min_price}, "
-            f"target_price_usdc={target_price}, usage_type={usage_type}.\n"
-            f"Buyer offer: offer_usdc={offer_usdc}.\n"
+            f"Constraints: min_price_sol={min_price}, "
+            f"target_price_sol={target_price}, usage_type={usage_type}.\n"
+            f"Buyer offer: offer_sol={offer_sol}.\n"
             f"Prior rounds: {history_json}\n"
             "Return JSON with exactly: status (ACCEPT|COUNTER_OFFER|REJECT), "
-            "price_usdc (number, your proposed final/counter price), "
+            "price_sol (number, your proposed final/counter price), "
             "reason (short string). Never accept below min_price."
         )
 
@@ -687,7 +783,7 @@ class GeminiService:
         if status not in NEGOTIATION_STATUSES:
             # Unknown status -> let the fallback handle it.
             raise ValueError(f"unknown negotiation status: {status!r}")
-        price_raw = data.get("price_usdc")
+        price_raw = data.get("price_sol")
         price: decimal.Decimal | None
         try:
             price = decimal.Decimal(str(price_raw)) if price_raw is not None else None
@@ -699,9 +795,9 @@ class GeminiService:
         if status in ("ACCEPT", "COUNTER_OFFER") and (price is None or price < min_price):
             price = min_price
         if price is not None:
-            price = quantize_usdc(price)
+            price = quantize_sol(price)
 
-        return NegotiationResult(status=status, price_usdc=price, reason=reason)
+        return NegotiationResult(status=status, price_sol=price, reason=reason)
 
     def _parse_vision_response(self, text: str) -> AnalysisResult:
         """Parse the model JSON into an AnalysisResult (non-degraded)."""

@@ -18,7 +18,7 @@ def test_sandbox_rejects_missing_payment_proof(client):
     asset = IpAssetFactory()
     response = client.post(
         "/api/v1/sandbox/run",
-        data={"asset_id": str(asset.id), "offer_usdc": "1.0", "usage_type": "commercial"},
+        data={"asset_id": str(asset.id), "offer_sol": "1.0", "usage_type": "commercial"},
         content_type="application/json",
     )
     assert response.status_code == 422
@@ -32,7 +32,7 @@ def test_sandbox_rejects_unknown_asset_before_execution(client):
         "/api/v1/sandbox/run",
         data={
             "asset_id": str(uuid.uuid4()),
-            "offer_usdc": "1.0",
+            "offer_sol": "1.0",
             "usage_type": "commercial",
             "payment_tx_sig": "submitted-transaction",
             "buyer_wallet": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
