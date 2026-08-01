@@ -331,3 +331,15 @@ Income is not copied into this table: it is calculated from verified
 - 검증: migration drift, Django check, buyer agent SOL 정책 테스트를 실행한다.
 - Alembic 필요 여부: 필요. Django migration
   `apps/ip/migrations/0018_registration_prices_are_sol.py`를 적용한다.
+## 2026-08-01 — A2A native SOL negotiation prices (migration `negotiation.0002`)
+
+- Added nullable `NegotiationSession.initial_offer_sol` and `final_price_sol`
+  as decimal(16,9), matching native SOL/lamport precision.
+- Made legacy `initial_offer_usdc` nullable so new SOL-only sessions do not
+  persist a false USDC amount. Existing USDC session values are preserved.
+- Accepted A2A SOL negotiations now carry `final_price_sol` through payment
+  terms and on-chain verification; `IpAsset.min_price_sol` and
+  `target_price_sol` are the price-floor source of truth.
+- Impact: deploy must apply Django migration
+  `apps/negotiation/migrations/0002_sol_negotiation_prices.py`. Alembic is not
+  used by this Django project.

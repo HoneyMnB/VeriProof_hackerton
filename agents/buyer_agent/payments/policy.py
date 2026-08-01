@@ -72,6 +72,7 @@ class AutonomousPaymentPolicy:
         enabled = _read_enabled(
             os.environ.get("BUYER_AUTONOMOUS_PAYMENT_ENABLED", "false")
         )
+        print("enabled", enabled)
         max_amount = os.environ.get("BUYER_MAX_PAYMENT_USDC", "0").strip()
         if enabled:
             max_atomic_amount = _to_atomic_usdc(max_amount)

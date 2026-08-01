@@ -1,6 +1,6 @@
 """Negotiation app M2M API view: autonomous negotiation round (SPEC-003).
 
-POST /api/v1/ip/{asset_id}/negotiate -> 200 NegotiateResponse | 404/422.
+POST /api/v1/ip/{asset_id}/negotiate -> 200 SOL NegotiateResponse | 404/409/422.
 
 Orchestration decision:
     The view delegates the round to ``NegotiationEngine.run_round``. Gemini의
@@ -21,7 +21,6 @@ import decimal
 import json
 import logging
 
-from django.conf import settings
 from django.http import HttpRequest, JsonResponse
 from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
@@ -33,7 +32,6 @@ from services.negotiation_engine import (
     NegotiationUnavailableError,
     get_negotiation_engine,
 )
-from services.x402_service import get_x402_service
 
 logger = logging.getLogger(__name__)
 
@@ -70,13 +68,23 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
         return _error("invalid_json", "request body must be a JSON object", status=422)
 
     buyer_agent_id = (data.get("buyer_agent_id") or "").strip()
-    offer_usdc = _parse_money(data.get("offer_usdc"))
+    offer_sol = _parse_money(data.get("offer_sol"))
     usage_type = data.get("usage_type")
 
-    # R11 / AC-7: offer_usdc must be a positive number.
-    if offer_usdc is None or offer_usdc <= 0:
+    if offer_sol is None or offer_sol <= 0:
         return _error(
-            "invalid_offer", "offer_usdc must be a positive number", status=422
+            "invalid_offer", "offer_sol must be a positive number", status=422
+        )
+    if (
+        asset.min_price_sol is None
+        or asset.target_price_sol is None
+        or asset.min_price_sol <= 0
+        or asset.target_price_sol < asset.min_price_sol
+    ):
+        return _error(
+            "sol_price_not_configured",
+            "valid min_price_sol and target_price_sol are required for negotiation",
+            status=409,
         )
 
     # R12 / AC-8: usage_type allowlist.
@@ -100,14 +108,16 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
         buyer_agent_id=buyer_agent_id,
         defaults={
             "usage_type": usage_type,
-            "initial_offer_usdc": offer_usdc,
+            "initial_offer_sol": offer_sol,
         },
     )
+    if session.initial_offer_sol is None:
+        session.initial_offer_sol = offer_sol
 
     # Gemini 결과에만 세션 불변식을 적용한다. 모델 오류는 503으로 경계 처리한다.
     engine = get_negotiation_engine()
     try:
-        result = engine.run_round(asset, session, offer_usdc, usage_type)
+        result = engine.run_round(asset, session, offer_sol, usage_type)
     except NegotiationUnavailableError as exc:
         logger.error(
             "negotiation unavailable buyer_agent_id=%s asset_id=%s error=%s",
@@ -122,9 +132,9 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     rounds = list(session.rounds or [])
     rounds.append(
         {
-            "offer": str(offer_usdc),
-            "counter": (
-                str(result.price_usdc) if result.price_usdc is not None else None
+            "offer_sol": str(offer_sol),
+            "counter_sol": (
+                str(result.price_sol) if result.price_sol is not None else None
             ),
             "status": result.status,
             "reason": result.reason,
@@ -137,15 +147,8 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     # pay_address via the shared resolve_pay_to SSOT).
     if result.status == "ACCEPT":
         session.status = NegotiationSession.ACCEPTED
-        session.final_price_usdc = result.price_usdc
+        session.final_price_sol = result.price_sol
         session.pay_address = result.pay_address
-
-    # R14 / AC-10: AP2 Cart Mandate when enabled + ACCEPT.
-    if result.status == "ACCEPT" and getattr(settings, "AP2_ENABLED", False):
-        x402 = get_x402_service()
-        mandate = x402.build_ap2_mandate(session, "cart")
-        if mandate is not None:
-            session.ap2_cart_mandate = mandate
 
     session.save()
 
@@ -156,10 +159,10 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
         {
             "asset_id": str(asset.id),
             "session_id": str(session.id),
-            "offer_usdc": str(offer_usdc),
+            "offer_sol": str(offer_sol),
             "status": result.status,
-            "price_usdc": (
-                str(result.price_usdc) if result.price_usdc is not None else None
+            "price_sol": (
+                str(result.price_sol) if result.price_sol is not None else None
             ),
             "reason": result.reason,
         },
@@ -172,8 +175,8 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     return JsonResponse(
         {
             "status": result.status,
-            "price_usdc": (
-                str(result.price_usdc) if result.price_usdc is not None else None
+            "price_sol": (
+                str(result.price_sol) if result.price_sol is not None else None
             ),
             "reason": result.reason,
             "pay_address": result.pay_address,

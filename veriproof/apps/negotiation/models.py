@@ -13,7 +13,8 @@ class NegotiationSession(UUIDPrimaryKey):
     """A single buyer-agent negotiation thread for one IpAsset.
 
     Architecture 5.1: UUID PK, FK(asset), buyer_agent_id, usage_type,
-    initial/final price, status, rounds JSON log, pay_address (set on ACCEPT),
+    currency-specific initial/final price, status, rounds JSON log,
+    pay_address (set on ACCEPT),
     optional AP2 Cart Mandate (VDC), timestamps.
     """
 
@@ -36,9 +37,17 @@ class NegotiationSession(UUIDPrimaryKey):
     buyer_agent_id = models.CharField(max_length=80)
     # commercial / non-commercial / editorial.
     usage_type = models.CharField(max_length=30)
-    initial_offer_usdc = models.DecimalField(max_digits=12, decimal_places=6)
+    initial_offer_usdc = models.DecimalField(
+        max_digits=12, decimal_places=6, null=True, blank=True
+    )
     final_price_usdc = models.DecimalField(
         max_digits=12, decimal_places=6, null=True, blank=True
+    )
+    initial_offer_sol = models.DecimalField(
+        max_digits=16, decimal_places=9, null=True, blank=True
+    )
+    final_price_sol = models.DecimalField(
+        max_digits=16, decimal_places=9, null=True, blank=True
     )
     status = models.CharField(
         max_length=20, choices=STATUS_CHOICES, default=NEGOTIATING

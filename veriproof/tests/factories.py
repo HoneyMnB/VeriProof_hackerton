@@ -47,6 +47,8 @@ class IpAssetFactory(factory.django.DjangoModelFactory):
     # FuzzyDecimal takes float low/high (returns a Decimal).
     min_price_usdc = FuzzyDecimal(0.50, 2.00)
     target_price_usdc = FuzzyDecimal(2.00, 10.00)
+    min_price_sol = FuzzyDecimal(0.05, 0.20)
+    target_price_sol = FuzzyDecimal(0.20, 1.00)
     image_sha256 = factory.LazyFunction(_unique_sha256)
     thumbnail_url = factory.Sequence(lambda n: f"https://cdn.test/thumb-{n}.png")
     watermark_url = factory.Sequence(lambda n: f"https://cdn.test/wm-{n}.png")
@@ -62,6 +64,7 @@ class NegotiationSessionFactory(factory.django.DjangoModelFactory):
     buyer_agent_id = factory.Sequence(lambda n: f"buyer-agent-{n}")
     usage_type = "commercial"
     initial_offer_usdc = FuzzyDecimal(0.50, 2.00)
+    initial_offer_sol = FuzzyDecimal(0.05, 0.20)
     status = NegotiationSession.NEGOTIATING
     rounds = factory.List([])
 

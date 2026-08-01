@@ -24,13 +24,13 @@
         <p class="sandbox-guide__result" data-i18n="sandbox.guide.result">A successful run shows the 402 request, negotiated terms, verified transaction, and settlement result. Failed runs identify the failing stage.</p>
     </section>
 
-    {# 검증 입력 폼: 작품 ID, 초기 오퍼(USDC), 사용 유형, 결제 트랜잭션 서명, 구매자 지갑 #}
+    {# 검증 입력 폼: 작품 ID, 초기 오퍼(SOL), 사용 유형, 결제 트랜잭션 서명, 구매자 지갑 #}
     <form id="sandbox-form" class="sandbox-controls">
         <label><span data-i18n="sandbox.asset_id">Asset ID</span>
             <input id="sandbox-asset-id" name="sandbox-asset-id" type="text" autocomplete="off" spellcheck="false" autocapitalize="none" placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000…" data-i18n-placeholder="sandbox.asset_id_placeholder" required>
         </label>
-        <label><span data-i18n="sandbox.offer">Initial offer (USDC)</span>
-            <input id="sandbox-offer" name="sandbox-offer" type="number" autocomplete="off" min="0.01" step="0.01" value="1.50" required>
+        <label><span data-i18n="sandbox.offer">Initial offer (SOL)</span>
+            <input id="sandbox-offer" name="sandbox-offer" type="number" autocomplete="off" min="0.000000001" step="0.000000001" value="0.1" required>
         </label>
         <label><span data-i18n="sandbox.usage">Usage</span>
             <select id="sandbox-usage">
@@ -63,7 +63,7 @@
             <ul class="stream" data-pane="buyer"></ul>
         </div>
 
-        <!-- R6: network inspector — 402 -> JSON negotiation -> USDC tx -->
+        <!-- R6: network inspector — payment terms -> JSON negotiation -> SOL tx -->
         <div class="pane pane-inspector" id="pane-inspector" aria-label="Network inspector" data-i18n-aria-label="sandbox.pane.inspector_aria">
             <h2><span data-i18n="sandbox.pane.inspector">Network Inspector</span> <small data-i18n="sandbox.pane.inspector_sub">(402 &rarr; negotiate &rarr; tx)</small></h2>
             <ul class="stream" data-pane="inspector"></ul>

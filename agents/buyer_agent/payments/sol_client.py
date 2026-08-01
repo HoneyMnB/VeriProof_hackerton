@@ -31,10 +31,18 @@ class AutonomousSolBuyer:
         self._private_key = (private_key if private_key is not None else os.environ.get("BUYER_WALLET_SECRET_KEY", "")).strip()
         self._rpc_url = (rpc_url if rpc_url is not None else os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")).strip()
 
-    async def purchase(self, resource_url: str) -> dict[str, Any]:
+    async def purchase(
+        self,
+        resource_url: str,
+        params: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         terms_url = f"{resource_url.rstrip('/')}/agent-sol-payment"
         async with httpx.AsyncClient(timeout=60) as client:
-            terms_response = await client.get(terms_url, headers={"Accept": "application/json"})
+            terms_response = await client.get(
+                terms_url,
+                params=params,
+                headers={"Accept": "application/json"},
+            )
             if terms_response.status_code != 200:
                 raise PaymentExecutionError(self._detail(terms_response, "SOL payment terms are unavailable."))
             terms = self._json_object(terms_response)
@@ -49,6 +57,7 @@ class AutonomousSolBuyer:
             )
             settle_response = await client.post(
                 f"{terms_url}/settle",
+                params=params,
                 json={"tx_signature": signature, "buyer_wallet": str(payer.pubkey())},
             )
             if settle_response.status_code != 200:

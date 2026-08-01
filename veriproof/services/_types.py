@@ -44,14 +44,14 @@ class NegotiationResult:
     ``GeminiService.negotiate`` and ``NegotiationEngine.run_round``.
 
     SPEC-003 extensions:
-    - ``price_usdc`` is ``None`` on REJECT (no price is agreed).
+    - ``price_sol`` is ``None`` on REJECT (no price is agreed).
     - ``pay_address`` is the resolved recipient on ACCEPT (creator wallet or
       platform escrow per architecture §8) and ``None`` for COUNTER/REJECT.
       The view layer adds ``session_id`` when projecting to the wire contract.
     """
 
     status: str
-    price_usdc: decimal.Decimal | None
+    price_sol: decimal.Decimal | None
     reason: str
     pay_address: str | None = None
 
@@ -68,6 +68,14 @@ def quantize_usdc(value: decimal.Decimal) -> decimal.Decimal:
     GeminiService.negotiate and NegotiationEngine.run_round cannot drift.
     """
     return value.quantize(_USDC_QUANTUM, rounding=decimal.ROUND_HALF_UP)
+
+
+_SOL_QUANTUM = decimal.Decimal("0.000000001")
+
+
+def quantize_sol(value: decimal.Decimal) -> decimal.Decimal:
+    """Round a Decimal to native SOL precision (lamports)."""
+    return value.quantize(_SOL_QUANTUM, rounding=decimal.ROUND_HALF_UP)
 
 
 @dataclass(frozen=True)

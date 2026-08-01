@@ -603,7 +603,15 @@ def get_agent_sol_payment_terms(
         or not asset.registration_certificate_tx_sig
     ):
         return _error("not_found", "asset not found", status=404)
-    if asset.target_price_sol is None or asset.target_price_sol <= 0:
+    session = _accepted_sol_session(request, asset)
+    if request.GET.get("session_id") and session is None:
+        return _error(
+            "invalid_negotiation_session",
+            "accepted SOL negotiation session not found for this asset",
+            status=409,
+        )
+    amount = session.final_price_sol if session is not None else asset.target_price_sol
+    if amount is None or amount <= 0:
         return _error(
             "sol_price_not_configured",
             "the seller has not configured a native SOL price",
@@ -622,8 +630,8 @@ def get_agent_sol_payment_terms(
             "currency": "SOL",
             "network": settings.X402_NETWORK,
             "recipient": resolve_pay_to(asset),
-            "amount_sol": str(asset.target_price_sol),
-            "memo": f"VERIPROOF:{asset.id}:SOL",
+            "amount_sol": str(amount),
+            "memo": _sol_payment_memo(asset, session),
         }
     )
 
@@ -652,7 +660,14 @@ def settle_agent_sol_payment(
         or not asset.registration_certificate_tx_sig
     ):
         return _error("not_found", "asset not found", status=404)
-    amount = asset.target_price_sol
+    session = _accepted_sol_session(request, asset)
+    if request.GET.get("session_id") and session is None:
+        return _error(
+            "invalid_negotiation_session",
+            "accepted SOL negotiation session not found for this asset",
+            status=409,
+        )
+    amount = session.final_price_sol if session is not None else asset.target_price_sol
     if amount is None or amount <= 0:
         return _error("sol_price_not_configured", "the seller has not configured a native SOL price", status=409)
     if asset.parent_asset_id is not None:
@@ -668,7 +683,7 @@ def settle_agent_sol_payment(
             signature=tx_signature,
             expected_recipient=resolve_pay_to(asset),
             expected_lamports=solana._amount_to_lamports(amount),
-            expected_memo=f"VERIPROOF:{asset.id}:SOL",
+            expected_memo=_sol_payment_memo(asset, session),
         )
     except CertificateIssueError as exc:
         logger.warning("agent SOL verification unavailable asset_id=%s: %s", asset.id, exc)
@@ -678,11 +693,11 @@ def settle_agent_sol_payment(
 
     result = get_settlement_service().settle_pipeline(
         asset=asset,
-        session=None,
+        session=session,
         tx_signature=tx_signature,
         buyer_wallet=buyer_wallet,
         expected_amount=amount,
-        usage_type="commercial",
+        usage_type=session.usage_type if session is not None else "commercial",
         payment_already_verified=True,
         payment_currency="SOL",
     )
@@ -695,6 +710,7 @@ def settle_agent_sol_payment(
             "currency": "SOL",
             "amount_sol": str(amount),
             "transaction": tx_signature,
+            "certificate_tx": result.certificate_tx,
             "buyer_wallet": buyer_wallet,
             "download_url": result.download_url,
             "download_expires_at": result.download_expires_at.isoformat() if result.download_expires_at else None,
@@ -836,6 +852,34 @@ def _accepted_x402_session(
         ).first()
     except (TypeError, ValueError):
         return None
+
+
+def _accepted_sol_session(
+    request: HttpRequest,
+    asset: IpAsset,
+) -> NegotiationSession | None:
+    """Resolve an accepted SOL negotiation belonging to the requested asset."""
+    session_id = request.GET.get("session_id")
+    if not session_id:
+        return None
+    try:
+        return NegotiationSession.objects.filter(
+            id=session_id,
+            asset=asset,
+            status=NegotiationSession.ACCEPTED,
+            final_price_sol__isnull=False,
+        ).first()
+    except (TypeError, ValueError):
+        return None
+
+
+def _sol_payment_memo(
+    asset: IpAsset,
+    session: NegotiationSession | None,
+) -> str:
+    """Bind negotiated transfers to their accepted session."""
+    suffix = f":{session.id}" if session is not None else ""
+    return f"VERIPROOF:{asset.id}:SOL{suffix}"
 
 
 # === GET /api/v1/ip/{asset_id}/certificate/{cert_id} (SPEC-004) ==============
@@ -1050,9 +1094,9 @@ def ai_plugin(request: HttpRequest) -> JsonResponse:
                 "creator-approved works. GET /api/v1/ip/{asset_id} with "
                 "X-Agent-Protocol: x402 to receive HTTP 402 payment terms for an "
                 "unlicensed work. POST /api/v1/ip/{asset_id}/negotiate with "
-                "buyer_agent_id, offer_usdc, and usage_type. After the accepted "
-                "Solana USDC payment is confirmed, POST /api/v1/ip/{asset_id}/settle "
-                "with tx_signature, buyer_wallet, and the optional session_id. A "
+                "buyer_agent_id, offer_sol, and usage_type. After acceptance, GET "
+                "/api/v1/ip/{asset_id}/agent-sol-payment with the session_id and "
+                "submit the verified Devnet SOL transaction to its /settle route. A "
                 "successful settlement returns the license certificate and an "
                 "expiry-bound download URL. Do not expect the original file in the "
                 "catalog or an unlicensed asset response. Read the OpenAPI contract "

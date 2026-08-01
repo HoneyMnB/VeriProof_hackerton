@@ -45,7 +45,7 @@ class FakeGeminiService:
             description="a test asset",
         )
         self.negotiate_result = NegotiationResult(
-            status="ACCEPT", price_usdc=decimal.Decimal("1.50"),
+            status="ACCEPT", price_sol=decimal.Decimal("1.50"),
             reason="fake accept",
         )
 
@@ -80,13 +80,13 @@ class FakeGeminiService:
         self,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> NegotiationResult:
         self._record(
             "negotiate",
-            (min_price, target_price, offer_usdc, usage_type, history),
+            (min_price, target_price, offer_sol, usage_type, history),
             {},
         )
         if self.fail_negotiate:

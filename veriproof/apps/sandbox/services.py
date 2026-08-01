@@ -100,7 +100,7 @@ class SandboxRunner:
         *,
         asset_id: str,
         buyer_agent_id: str,
-        initial_offer_usdc: Any,
+        initial_offer_sol: Any,
         usage_type: str,
         payment_tx_sig: str,
         buyer_wallet: str,
@@ -135,7 +135,7 @@ class SandboxRunner:
                 return self._result(state, session_id=None)
             self._step_negotiate(
                 asset, asset_uuid, buyer_agent_id,
-                initial_offer_usdc, usage_type, state,
+                initial_offer_sol, usage_type, state,
             )
             if state.aborted:
                 return self._result(state, session_id=None)
@@ -150,16 +150,16 @@ class SandboxRunner:
     # --- Steps --------------------------------------------------------------
 
     def _step_get(self, asset, asset_uuid, state):
-        """Step 1: agent GET -> observe the 402 payment-required envelope."""
-        from apps.ip.views_api import get_asset
+        """Step 1: agent GET -> observe native SOL payment terms."""
+        from apps.ip.views_api import get_agent_sol_payment_terms
 
         request = self._factory.get(
-            f"/api/v1/ip/{asset.id}",
+            f"/api/v1/ip/{asset.id}/agent-sol-payment",
             HTTP_X_AGENT_PROTOCOL="x402",
             HTTP_ACCEPT="application/json",
             HTTP_X_BUYER_AGENT_ID="sandbox-buyer",
         )
-        resp = get_asset(request, asset_id=asset_uuid)
+        resp = get_agent_sol_payment_terms(request, asset_id=asset_uuid)
         if resp.status_code == 404:
             self._fail(state, "inspector", "SIMULATION_FAILED",
                        "asset not found during GET", {"status": 404},
@@ -167,14 +167,14 @@ class SandboxRunner:
             return
         body = _decode_json(resp)
         headers = {k: v for k, v in resp.items()}
-        # R3: push the 402 observation to the inspector pane.
+        # R3: push the seller-published SOL terms to the inspector pane.
         self._emit(state, "http_402", "inspector", "HTTP_402",
-                   "x402 payment required",
+                   "native SOL payment terms",
                    {"status": resp.status_code, "headers": headers, "body": body})
 
     def _step_negotiate(
         self, asset, asset_uuid, buyer_agent_id,
-        offer_usdc, usage_type, state,
+        offer_sol, usage_type, state,
     ):
         """Step 2: buyer posts an offer -> ACCEPT / COUNTER / REJECT."""
         import json as _json
@@ -183,7 +183,7 @@ class SandboxRunner:
 
         body_str = _json.dumps({
             "buyer_agent_id": buyer_agent_id,
-            "offer_usdc": str(offer_usdc),
+            "offer_sol": str(offer_sol),
             "usage_type": usage_type,
         })
         request = self._factory.post(
@@ -198,15 +198,15 @@ class SandboxRunner:
 
         # R5: the buyer's offer action.
         self._emit(state, "offer", "buyer", "OFFER",
-                   f"buyer offers {offer_usdc} USDC",
-                   {"offer_usdc": str(offer_usdc), "usage_type": usage_type})
+                   f"buyer offers {offer_sol} SOL",
+                   {"offer_sol": str(offer_sol), "usage_type": usage_type})
 
         status = body.get("status")
         if status == "COUNTER_OFFER":
             # R4: seller (Gemini) counters.
             self._emit(state, "counter", "seller", "COUNTER",
-                       f"seller counters {body.get('price_usdc')} USDC",
-                       {"price_usdc": body.get("price_usdc"),
+                       f"seller counters {body.get('price_sol')} SOL",
+                       {"price_sol": body.get("price_sol"),
                         "reason": body.get("reason")})
         if status != "ACCEPT":
             # R9: negotiation did not accept -> abort before settle.
@@ -218,33 +218,33 @@ class SandboxRunner:
 
         # R5: buyer accepts the deal.
         self._emit(state, "accept", "buyer", "ACCEPT",
-                   f"deal at {body.get('price_usdc')} USDC",
-                   {"price_usdc": body.get("price_usdc"),
+                   f"deal at {body.get('price_sol')} SOL",
+                   {"price_sol": body.get("price_sol"),
                     "pay_address": body.get("pay_address")})
         state.session_id = body.get("session_id")
-        state.final_price = body.get("price_usdc")
+        state.final_price = body.get("price_sol")
 
     def _step_settle(self, asset, asset_uuid, state):
         """Step 3: 제출된 실제 체인 거래를 검증하고 라이선스를 정산한다."""
         import json as _json
 
-        from apps.settlement.views_api import settle
+        from apps.ip.views_api import settle_agent_sol_payment
 
         body_str = _json.dumps({
-            "session_id": state.session_id,
             "tx_signature": state.submitted_payment_tx_sig,
             "buyer_wallet": state.buyer_wallet,
-            "amount_usdc": state.final_price,
         })
         request = self._factory.post(
-            f"/api/v1/ip/{asset.id}/settle",
+            f"/api/v1/ip/{asset.id}/agent-sol-payment/settle?session_id={state.session_id}",
             data=body_str,
             content_type="application/json",
             HTTP_X_AGENT_PROTOCOL="x402",
             HTTP_ACCEPT="application/json",
         )
         started = time.monotonic()
-        resp = settle(request, asset_id=asset_uuid)
+        request.GET = request.GET.copy()
+        request.GET["session_id"] = state.session_id
+        resp = settle_agent_sol_payment(request, asset_id=asset_uuid)
         duration_ms = int((time.monotonic() - started) * 1000)
         body = _decode_json(resp)
 

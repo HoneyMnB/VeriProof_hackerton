@@ -212,7 +212,7 @@ async def get_sol_payment_terms(asset_id: str) -> dict:
 async def negotiate_license(
     asset_id: str,
     buyer_agent_id: str,
-    offer_usdc: float,
+    offer_sol: float,
     usage_type: str = "commercial",
     tool_context: ToolContext | None = None,
 ) -> dict:
@@ -221,7 +221,7 @@ async def negotiate_license(
     Args:
         asset_id: 협상할 VeriProof 자산 UUID.
         buyer_agent_id: 구매자 에이전트의 안정적인 식별자.
-        offer_usdc: 구매자가 제시하는 USDC 금액.
+        offer_sol: 구매자가 제시하는 native SOL 금액.
         usage_type: commercial, non-commercial, editorial 중 사용 목적.
     """
     async with httpx.AsyncClient(timeout=30) as client:
@@ -233,7 +233,7 @@ async def negotiate_license(
             },
             json={
                 "buyer_agent_id": buyer_agent_id,
-                "offer_usdc": offer_usdc,
+                "offer_sol": offer_sol,
                 "usage_type": usage_type,
             },
         )
@@ -284,14 +284,22 @@ async def purchase_x402_asset(
         }
 
 
-async def purchase_sol_asset(asset_id: str) -> dict:
+async def purchase_sol_asset(
+    asset_id: str,
+    session_id: str = "",
+    tool_context: ToolContext | None = None,
+) -> dict:
     """판매자 설정 Devnet SOL 가격으로 자산을 자율 결제한다.
 
     비밀키는 환경에서만 읽는다. 서버가 거래의 수취인·lamports·memo를
     Devnet에서 확인하고 라이선스를 발급한 경우에만 ``purchased``를 반환한다.
     """
     try:
-        return await AutonomousSolBuyer().purchase(_asset_url(asset_id))
+        resolved_session_id = _resolve_session_id(asset_id, session_id, tool_context)
+        return await AutonomousSolBuyer().purchase(
+            _asset_url(asset_id),
+            params=_session_query(resolved_session_id),
+        )
     except AutonomousPaymentError as exc:
         return {
             "status": "payment_rejected",
@@ -361,7 +369,7 @@ def build_seller_agent() -> RemoteA2aAgent:
         name="veriproof_seller_agent",
         description=(
             "Remote VeriProof seller that discovers registered works and "
-            "returns public USDC licensing terms."
+            "returns public native SOL licensing terms."
         ),
         agent_card=get_seller_agent_card_url(),
     )

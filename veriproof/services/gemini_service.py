@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from ._types import AnalysisResult, BatchQuote, NegotiationResult, quantize_usdc
+from ._types import AnalysisResult, BatchQuote, NegotiationResult, quantize_sol, quantize_usdc
 
 logger = logging.getLogger(__name__)
 
@@ -28,10 +28,10 @@ NEGOTIATION_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
         "status": {"type": "string", "enum": list(NEGOTIATION_STATUSES)},
-        "price_usdc": {"type": "number"},
+        "price_sol": {"type": "number"},
         "reason": {"type": "string"},
     },
-    "required": ["status", "price_usdc", "reason"],
+    "required": ["status", "price_sol", "reason"],
 }
 BATCH_MAX_RETRIES = 3
 # SPEC-007 R2: structured-output JSON schema forced on the batch pricing call.
@@ -223,7 +223,7 @@ class GeminiService:
         self,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> NegotiationResult:
@@ -246,7 +246,7 @@ class GeminiService:
         for _ in range(NEGOTIATE_MAX_RETRIES):
             try:
                 text = self._call_negotiate(
-                    client, min_price, target_price, offer_usdc, usage_type, history
+                    client, min_price, target_price, offer_sol, usage_type, history
                 )
                 return self._parse_negotiate_response(text, min_price, target_price)
             except Exception as exc:  # noqa: BLE001 (SDK errors are broad)
@@ -721,7 +721,7 @@ class GeminiService:
         client: Any,
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> str:
@@ -731,7 +731,7 @@ class GeminiService:
         shape as the vision path so injected test stubs work identically.
         """
         prompt = self._negotiation_prompt(
-            min_price, target_price, offer_usdc, usage_type, history
+            min_price, target_price, offer_sol, usage_type, history
         )
         config = {
             "response_mime_type": "application/json",
@@ -748,7 +748,7 @@ class GeminiService:
     def _negotiation_prompt(
         min_price: decimal.Decimal,
         target_price: decimal.Decimal,
-        offer_usdc: decimal.Decimal,
+        offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
     ) -> str:
@@ -758,12 +758,12 @@ class GeminiService:
             "You are the seller's autonomous pricing agent for an IP license. "
             "Given the creator's constraints and the buyer's offer, decide "
             "ACCEPT, COUNTER_OFFER, or REJECT.\n"
-            f"Constraints: min_price_usdc={min_price}, "
-            f"target_price_usdc={target_price}, usage_type={usage_type}.\n"
-            f"Buyer offer: offer_usdc={offer_usdc}.\n"
+            f"Constraints: min_price_sol={min_price}, "
+            f"target_price_sol={target_price}, usage_type={usage_type}.\n"
+            f"Buyer offer: offer_sol={offer_sol}.\n"
             f"Prior rounds: {history_json}\n"
             "Return JSON with exactly: status (ACCEPT|COUNTER_OFFER|REJECT), "
-            "price_usdc (number, your proposed final/counter price), "
+            "price_sol (number, your proposed final/counter price), "
             "reason (short string). Never accept below min_price."
         )
 
@@ -783,7 +783,7 @@ class GeminiService:
         if status not in NEGOTIATION_STATUSES:
             # Unknown status -> let the fallback handle it.
             raise ValueError(f"unknown negotiation status: {status!r}")
-        price_raw = data.get("price_usdc")
+        price_raw = data.get("price_sol")
         price: decimal.Decimal | None
         try:
             price = decimal.Decimal(str(price_raw)) if price_raw is not None else None
@@ -795,9 +795,9 @@ class GeminiService:
         if status in ("ACCEPT", "COUNTER_OFFER") and (price is None or price < min_price):
             price = min_price
         if price is not None:
-            price = quantize_usdc(price)
+            price = quantize_sol(price)
 
-        return NegotiationResult(status=status, price_usdc=price, reason=reason)
+        return NegotiationResult(status=status, price_sol=price, reason=reason)
 
     def _parse_vision_response(self, text: str) -> AnalysisResult:
         """Parse the model JSON into an AnalysisResult (non-degraded)."""
