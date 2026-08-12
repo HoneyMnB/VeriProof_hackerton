@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # --- Paths -------------------------------------------------------------------
@@ -31,19 +31,28 @@ load_dotenv(BASE_DIR.parent / ".env")
 
 # --- Security ----------------------------------------------------------------
 
-# SECURITY WARNING: keep the secret key used in production secret.
-# Local default is only safe for dev/TDD; override via env in production.
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-veriproof-local-dev-only-do-not-use-in-prod",
-)
-
 # TDD/local defaults to DEBUG=True. Production must set DEBUG=False.
 DEBUG = os.environ.get("DJANGO_DEBUG", "true").lower() == "true"
 
-# Wallet private keys are encrypted before persistence. This must remain stable
-# while any stored wallet ciphertext exists.
-WALLET_PRIVATE_KEY_ENCRYPTION_KEY = "MDEyMzQ1Njc4OUFCQ0RFRjAxMjM0NTY3ODlBQkNERUY="
+# SECURITY WARNING: keep the secret key used in production secret.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "").strip()
+if not SECRET_KEY:
+    if DEBUG:
+        SECRET_KEY = "django-insecure-veriproof-local-dev-only-do-not-use-in-prod"
+    else:
+        raise ImproperlyConfigured(
+            "DJANGO_SECRET_KEY is required when DJANGO_DEBUG=false."
+        )
+
+# Wallet private keys are encrypted before persistence. Production receives
+# this stable Fernet key from Secret Manager through a Cloud Run secret env.
+WALLET_PRIVATE_KEY_ENCRYPTION_KEY = os.environ.get(
+    "WALLET_PRIVATE_KEY_ENCRYPTION_KEY", ""
+).strip()
+if not DEBUG and not WALLET_PRIVATE_KEY_ENCRYPTION_KEY:
+    raise ImproperlyConfigured(
+        "WALLET_PRIVATE_KEY_ENCRYPTION_KEY is required when DJANGO_DEBUG=false."
+    )
 
 # 로컬 기본값에는 Docker 내부 Seller 별칭을 포함하고 운영은 환경 변수로 제한한다.
 _ALLOWED_HOSTS_RAW = os.environ.get("VERIPROOF_ALLOWED_HOSTS", "")

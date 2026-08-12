@@ -9,6 +9,8 @@ so the real keypair derivation path is import-guarded and marked
 """
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 
@@ -64,3 +66,61 @@ def test_factory_returns_empty_signer_when_unset(settings):
     assert isinstance(signer, KmsSigner)
     assert signer.kms_key_name is None
     assert signer.local_secret_key is None
+
+
+def test_kms_signer_resolves_primary_and_verifies_ed25519_signature():
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    from services.kms_signer import KmsSigner
+
+    private_key = Ed25519PrivateKey.generate()
+    pem = private_key.public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("ascii")
+
+    class FakeKmsClient:
+        def get_crypto_key(self, request):
+            assert request["name"].endswith("/cryptoKeys/platform")
+            return SimpleNamespace(primary=SimpleNamespace(name=f"{request['name']}/cryptoKeyVersions/1"))
+
+        def get_public_key(self, request):
+            assert request["name"].endswith("/cryptoKeyVersions/1")
+            return SimpleNamespace(pem=pem)
+
+        def asymmetric_sign(self, request):
+            return SimpleNamespace(signature=private_key.sign(request["data"]))
+
+    signer = KmsSigner(
+        kms_key_name="projects/p/locations/l/keyRings/r/cryptoKeys/platform",
+        kms_client=FakeKmsClient(),
+    )
+
+    assert len(signer.sign(b"solana-message")) == 64
+    assert len(signer.public_key()) >= 32
+
+
+def test_kms_signer_rejects_non_ed25519_public_key():
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ec import (
+        SECP256R1,
+        generate_private_key,
+    )
+
+    from services.kms_signer import KmsSigner, KmsSignerError
+
+    pem = generate_private_key(SECP256R1()).public_key().public_bytes(
+        serialization.Encoding.PEM,
+        serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode("ascii")
+    client = SimpleNamespace(
+        get_public_key=lambda request: SimpleNamespace(pem=pem),
+    )
+    signer = KmsSigner(
+        kms_key_name="projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1",
+        kms_client=client,
+    )
+
+    with pytest.raises(KmsSignerError, match="EC_SIGN_ED25519"):
+        signer.public_key()

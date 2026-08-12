@@ -1,4 +1,4 @@
-"""KmsSigner — Cloud KMS EC signing with local env-keypair fallback.
+"""Cloud KMS Ed25519 signing with a local Devnet keypair fallback.
 
 Architecture 4 contract. ``google-cloud-kms`` is import-guarded. In local/dev
 mode the signer falls back to a base58 keypair from the environment.
@@ -6,6 +6,9 @@ mode the signer falls back to a base58 keypair from the environment.
 from __future__ import annotations
 
 from typing import Any
+
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 
 
 class KmsSignerError(RuntimeError):
@@ -36,6 +39,8 @@ class KmsSigner:
         self.kms_key_name = kms_key_name
         self.local_secret_key = local_secret_key
         self._kms_client = kms_client
+        self._kms_key_version_name: str | None = None
+        self._kms_public_key: Ed25519PublicKey | None = None
 
     # --- Architecture 4 methods (SPEC-004 implements local + KMS guards) ----
     def sign(self, message_bytes: bytes) -> bytes:
@@ -46,8 +51,8 @@ class KmsSigner:
         ``KmsSignerError`` at call time when no key is configured or the local
         SDK (``solders``) is unavailable.
         """
-        if self.kms_key_name is not None and self._kms_client is not None:
-            return self._sign_kms(message_bytes)  # pragma: no cover (cloud)
+        if self.kms_key_name is not None:
+            return self._sign_kms(message_bytes)
         if self.local_secret_key:
             return self._sign_local(message_bytes)
         raise KmsSignerError(
@@ -57,8 +62,8 @@ class KmsSigner:
 
     def public_key(self) -> str:
         """Return the platform escrow public key (base58). SPEC-004."""
-        if self.kms_key_name is not None and self._kms_client is not None:
-            return self._public_key_kms()  # pragma: no cover (cloud)
+        if self.kms_key_name is not None:
+            return self._public_key_kms()
         if self.local_secret_key:
             return self._public_key_local()
         raise KmsSignerError(
@@ -101,13 +106,87 @@ class KmsSigner:
         sig = kp.sign_message(message_bytes)  # pragma: no cover (needs solders)
         return bytes(sig)  # pragma: no cover
 
-    # --- Cloud KMS path (import-guarded; runs only in cloud) ----------------
+    # --- Cloud KMS path -----------------------------------------------------
 
-    def _public_key_kms(self) -> str:  # pragma: no cover
-        raise KmsSignerError("KMS public key retrieval not wired in this env")
+    def _client(self):
+        if self._kms_client is not None:
+            return self._kms_client
+        try:
+            from google.cloud import kms
+        except ImportError as exc:  # pragma: no cover - cloud dependency guard
+            raise KmsSignerError(
+                f"Cloud KMS signing requires google-cloud-kms: {exc}"
+            ) from exc
+        try:
+            self._kms_client = kms.KeyManagementServiceClient()
+        except Exception as exc:  # noqa: BLE001 - normalize ADC failures
+            raise KmsSignerError(f"Cloud KMS client initialization failed: {exc}") from exc
+        return self._kms_client
 
-    def _sign_kms(self, message_bytes: bytes) -> bytes:  # pragma: no cover
-        raise KmsSignerError("KMS signing not wired in this env")
+    def _key_version_name(self) -> str:
+        if self._kms_key_version_name is not None:
+            return self._kms_key_version_name
+        name = (self.kms_key_name or "").strip().rstrip("/")
+        if not name:
+            raise KmsSignerError("KMS_KEY_NAME is empty")
+        if "/cryptoKeyVersions/" in name:
+            self._kms_key_version_name = name
+            return name
+        if "/cryptoKeys/" not in name:
+            raise KmsSignerError(
+                "KMS_KEY_NAME must be a Cloud KMS CryptoKey or CryptoKeyVersion resource name"
+            )
+        try:
+            key = self._client().get_crypto_key(request={"name": name})
+            version_name = getattr(getattr(key, "primary", None), "name", "")
+        except Exception as exc:  # noqa: BLE001 - normalize cloud boundary
+            raise KmsSignerError(f"Cloud KMS primary key lookup failed: {exc}") from exc
+        if not version_name:
+            raise KmsSignerError("Cloud KMS key has no enabled primary version")
+        self._kms_key_version_name = version_name
+        return version_name
+
+    def _load_kms_public_key(self) -> Ed25519PublicKey:
+        if self._kms_public_key is not None:
+            return self._kms_public_key
+        try:
+            response = self._client().get_public_key(
+                request={"name": self._key_version_name()}
+            )
+            public_key = serialization.load_pem_public_key(response.pem.encode("ascii"))
+        except Exception as exc:  # noqa: BLE001 - normalize cloud/PEM failures
+            raise KmsSignerError(f"Cloud KMS public key retrieval failed: {exc}") from exc
+        if not isinstance(public_key, Ed25519PublicKey):
+            raise KmsSignerError("Cloud KMS signing key must use EC_SIGN_ED25519")
+        self._kms_public_key = public_key
+        return public_key
+
+    def _public_key_kms(self) -> str:
+        try:
+            from solders.pubkey import Pubkey
+        except ImportError as exc:
+            raise KmsSignerError(f"KMS Solana public key conversion requires solders: {exc}") from exc
+        raw = self._load_kms_public_key().public_bytes(
+            encoding=serialization.Encoding.Raw,
+            format=serialization.PublicFormat.Raw,
+        )
+        return str(Pubkey.from_bytes(raw))
+
+    def _sign_kms(self, message_bytes: bytes) -> bytes:
+        if not isinstance(message_bytes, bytes) or not message_bytes:
+            raise KmsSignerError("Cloud KMS signing requires non-empty message bytes")
+        public_key = self._load_kms_public_key()
+        try:
+            response = self._client().asymmetric_sign(
+                request={"name": self._key_version_name(), "data": message_bytes}
+            )
+            signature = bytes(response.signature)
+            public_key.verify(signature, message_bytes)
+        except Exception as exc:  # noqa: BLE001 - normalize RPC/integrity failures
+            raise KmsSignerError(f"Cloud KMS Ed25519 signing failed: {exc}") from exc
+        if len(signature) != 64:
+            raise KmsSignerError("Cloud KMS returned a non-Ed25519 signature")
+        return signature
 
 
 def get_kms_signer() -> KmsSigner:
