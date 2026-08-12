@@ -49,11 +49,13 @@ def test_factory_reads_settings(settings):
     """get_kms_signer() wires KMS key name + local key from settings."""
     from services.kms_signer import KmsSigner, get_kms_signer
 
-    settings.KMS_KEY_NAME = "projects/p/locations/l/keyRings/r/cryptoKeys/k"
+    settings.KMS_KEY_NAME = (
+        "projects/p/locations/l/keyRings/r/cryptoKeys/k/cryptoKeyVersions/1"
+    )
     settings.PLATFORM_ESCROW_SECRET_KEY = ""
     signer = get_kms_signer()
     assert isinstance(signer, KmsSigner)
-    assert signer.kms_key_name == "projects/p/locations/l/keyRings/r/cryptoKeys/k"
+    assert signer.kms_key_name.endswith("/cryptoKeys/k/cryptoKeyVersions/1")
 
 
 def test_factory_returns_empty_signer_when_unset(settings):
@@ -68,7 +70,7 @@ def test_factory_returns_empty_signer_when_unset(settings):
     assert signer.local_secret_key is None
 
 
-def test_kms_signer_resolves_primary_and_verifies_ed25519_signature():
+def test_kms_signer_uses_explicit_version_and_verifies_ed25519_signature():
     from cryptography.hazmat.primitives import serialization
     from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
@@ -81,10 +83,6 @@ def test_kms_signer_resolves_primary_and_verifies_ed25519_signature():
     ).decode("ascii")
 
     class FakeKmsClient:
-        def get_crypto_key(self, request):
-            assert request["name"].endswith("/cryptoKeys/platform")
-            return SimpleNamespace(primary=SimpleNamespace(name=f"{request['name']}/cryptoKeyVersions/1"))
-
         def get_public_key(self, request):
             assert request["name"].endswith("/cryptoKeyVersions/1")
             return SimpleNamespace(pem=pem)
@@ -93,12 +91,26 @@ def test_kms_signer_resolves_primary_and_verifies_ed25519_signature():
             return SimpleNamespace(signature=private_key.sign(request["data"]))
 
     signer = KmsSigner(
-        kms_key_name="projects/p/locations/l/keyRings/r/cryptoKeys/platform",
+        kms_key_name=(
+            "projects/p/locations/l/keyRings/r/cryptoKeys/platform/cryptoKeyVersions/1"
+        ),
         kms_client=FakeKmsClient(),
     )
 
     assert len(signer.sign(b"solana-message")) == 64
     assert len(signer.public_key()) >= 32
+
+
+def test_kms_signer_rejects_unversioned_asymmetric_key():
+    from services.kms_signer import KmsSigner, KmsSignerError
+
+    signer = KmsSigner(
+        kms_key_name="projects/p/locations/l/keyRings/r/cryptoKeys/platform",
+        kms_client=SimpleNamespace(),
+    )
+
+    with pytest.raises(KmsSignerError, match="CryptoKeyVersion"):
+        signer.public_key()
 
 
 def test_kms_signer_rejects_non_ed25519_public_key():

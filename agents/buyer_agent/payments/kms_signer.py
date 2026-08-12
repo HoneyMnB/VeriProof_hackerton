@@ -59,31 +59,25 @@ class KmsEd25519Signer:
     def _key_version(self) -> str:
         if self._version_name is not None:
             return self._version_name
-        if "/cryptoKeyVersions/" in self._key_name:
-            self._version_name = self._key_name
-            return self._version_name
-        if "/cryptoKeys/" not in self._key_name:
+        if "/cryptoKeyVersions/" not in self._key_name:
             raise PaymentConfigurationError(
-                "BUYER_KMS_KEY_NAME은 Cloud KMS CryptoKey 리소스 이름이어야 합니다."
+                "BUYER_KMS_KEY_NAME에는 비대칭 CryptoKeyVersion을 명시해야 합니다."
             )
-        try:
-            key = self._client().get_crypto_key(request={"name": self._key_name})
-            version_name = getattr(getattr(key, "primary", None), "name", "")
-        except Exception as exc:
+        key_name, version = self._key_name.rsplit("/cryptoKeyVersions/", 1)
+        if "/cryptoKeys/" not in key_name or not version.isdigit():
             raise PaymentConfigurationError(
-                "Buyer KMS 키의 primary version을 조회할 수 없습니다."
-            ) from exc
-        if not version_name:
-            raise PaymentConfigurationError("Buyer KMS 키에 활성 primary version이 없습니다.")
-        self._version_name = version_name
-        return version_name
+                "BUYER_KMS_KEY_NAME은 숫자 버전을 포함한 올바른 CryptoKeyVersion 리소스 이름이어야 합니다."
+            )
+        self._version_name = self._key_name
+        return self._version_name
 
     def _load_public_key(self) -> Ed25519PublicKey:
         if self._public_key is not None:
             return self._public_key
+        version_name = self._key_version()
         try:
             response = self._client().get_public_key(
-                request={"name": self._key_version()}
+                request={"name": version_name}
             )
             public_key = serialization.load_pem_public_key(response.pem.encode("ascii"))
         except Exception as exc:

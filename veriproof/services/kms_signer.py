@@ -24,7 +24,7 @@ class KmsSignerError(RuntimeError):
 class KmsSigner:
     """Signs messages with the platform escrow key.
 
-    - Cloud: Cloud KMS EC key (``KMS_KEY_NAME``).
+    - Cloud: versioned Cloud KMS EC key (``KMS_KEY_NAME``).
     - Local/dev: base58 keypair from ``PLATFORM_ESCROW_SECRET_KEY`` (Devnet
       only). When neither is configured, the signer is inert and methods
       raise at call time (not at construction/import).
@@ -129,29 +129,25 @@ class KmsSigner:
         name = (self.kms_key_name or "").strip().rstrip("/")
         if not name:
             raise KmsSignerError("KMS_KEY_NAME is empty")
-        if "/cryptoKeyVersions/" in name:
-            self._kms_key_version_name = name
-            return name
-        if "/cryptoKeys/" not in name:
+        if "/cryptoKeyVersions/" not in name:
             raise KmsSignerError(
-                "KMS_KEY_NAME must be a Cloud KMS CryptoKey or CryptoKeyVersion resource name"
+                "KMS_KEY_NAME must include an explicit asymmetric CryptoKeyVersion"
             )
-        try:
-            key = self._client().get_crypto_key(request={"name": name})
-            version_name = getattr(getattr(key, "primary", None), "name", "")
-        except Exception as exc:  # noqa: BLE001 - normalize cloud boundary
-            raise KmsSignerError(f"Cloud KMS primary key lookup failed: {exc}") from exc
-        if not version_name:
-            raise KmsSignerError("Cloud KMS key has no enabled primary version")
-        self._kms_key_version_name = version_name
-        return version_name
+        key_name, version = name.rsplit("/cryptoKeyVersions/", 1)
+        if "/cryptoKeys/" not in key_name or not version.isdigit():
+            raise KmsSignerError(
+                "KMS_KEY_NAME must be a valid numeric CryptoKeyVersion resource name"
+            )
+        self._kms_key_version_name = name
+        return name
 
     def _load_kms_public_key(self) -> Ed25519PublicKey:
         if self._kms_public_key is not None:
             return self._kms_public_key
+        version_name = self._key_version_name()
         try:
             response = self._client().get_public_key(
-                request={"name": self._key_version_name()}
+                request={"name": version_name}
             )
             public_key = serialization.load_pem_public_key(response.pem.encode("ascii"))
         except Exception as exc:  # noqa: BLE001 - normalize cloud/PEM failures
