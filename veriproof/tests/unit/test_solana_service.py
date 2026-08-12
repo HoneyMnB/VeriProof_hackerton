@@ -107,6 +107,43 @@ def test_anchor_hash_submits_memo_transaction(monkeypatch):
     ]
 
 
+def test_submit_memo_uses_remote_ed25519_signer_without_secret_key(monkeypatch):
+    import httpx
+    from solders.hash import Hash
+    from solders.keypair import Keypair
+
+    from services.solana_service import SolanaService
+
+    keypair = Keypair()
+
+    class RemoteSigner:
+        def public_key(self):
+            return str(keypair.pubkey())
+
+        def sign(self, message):
+            return bytes(keypair.sign_message(message))
+
+    requests = []
+
+    def fake_post(url, *, json, timeout):
+        requests.append(json)
+        if json["method"] == "getLatestBlockhash":
+            return _RpcResponse({"result": {"value": {"blockhash": str(Hash.default())}}})
+        return _RpcResponse({"result": "kms_memo_signature"})
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+    service = SolanaService(
+        rpc_url="https://api.devnet.solana.com",
+        signer=RemoteSigner(),
+    )
+
+    assert service.submit_memo("veriproof:kms:test") == "kms_memo_signature"
+    assert [request["method"] for request in requests] == [
+        "getLatestBlockhash",
+        "sendTransaction",
+    ]
+
+
 def test_registration_certificate_submits_sha256_memo_without_original_data(monkeypatch):
     from services.solana_service import SolanaService
 

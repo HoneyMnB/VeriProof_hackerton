@@ -27,9 +27,15 @@ class SolanaService:
     MAX_MEMO_BYTES = 566
     SHA256_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
-    def __init__(self, rpc_url: str, sender_secret_key: list[int] | None = None) -> None:
+    def __init__(
+        self,
+        rpc_url: str,
+        sender_secret_key: list[int] | None = None,
+        signer: Any | None = None,
+    ) -> None:
         self.rpc_url = rpc_url
         self.sender_secret_key = sender_secret_key
+        self.signer = signer
 
     def anchor_hash(
         self,
@@ -115,13 +121,20 @@ class SolanaService:
         sender_secret_key: list[int] | None = None,
     ) -> str:
         """Submit a signed Memo transaction and return its transaction signature."""
-        secret_key = self._resolve_sender_secret_key(sender_secret_key, "submit_memo")
         memo_bytes = self._validate_memo(memo)
         try:
             blockhash = self._request_latest_blockhash()
-            transaction = self._build_signed_memo_transaction(
-                memo_bytes, secret_key, blockhash
-            )
+            if sender_secret_key is None and self.signer is not None:
+                transaction = self._build_remote_signed_memo_transaction(
+                    memo_bytes, blockhash
+                )
+            else:
+                secret_key = self._resolve_sender_secret_key(
+                    sender_secret_key, "submit_memo"
+                )
+                transaction = self._build_signed_memo_transaction(
+                    memo_bytes, secret_key, blockhash
+                )
             return self._submit_transaction(transaction)
         except CertificateIssueError:
             raise
@@ -680,6 +693,45 @@ class SolanaService:
             [],
         )
         return Transaction([keypair], Message([instruction], sender), Hash.from_string(blockhash))
+
+    def _build_remote_signed_memo_transaction(
+        self,
+        memo_bytes: bytes,
+        blockhash: str,
+    ) -> Any:
+        """Build a Memo transaction whose fee-payer signature comes from KMS."""
+        try:
+            from solders.hash import Hash
+            from solders.instruction import Instruction
+            from solders.message import Message
+            from solders.pubkey import Pubkey
+            from solders.signature import Signature
+            from solders.transaction import Transaction
+        except ImportError as exc:
+            raise CertificateIssueError(
+                "solders is required for KMS-signed Memo transactions"
+            ) from exc
+        try:
+            sender = Pubkey.from_string(self.signer.public_key())
+            instruction = Instruction(
+                Pubkey.from_string(self.MEMO_PROGRAM_ID),
+                memo_bytes,
+                [],
+            )
+            message = Message.new_with_blockhash(
+                [instruction], sender, Hash.from_string(blockhash)
+            )
+            unsigned = Transaction.new_unsigned(message)
+            signature = Signature.from_bytes(
+                self.signer.sign(unsigned.message_data())
+            )
+            return Transaction.populate(message, [signature])
+        except CertificateIssueError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - normalize signer/transaction errors
+            raise CertificateIssueError(
+                f"KMS-signed Memo transaction creation failed: {exc}"
+            ) from exc
 
     def _submit_transaction(self, transaction: Any) -> str:
         """서명된 트랜잭션을 RPC에 제출하고 트랜잭션 서명을 반환한다."""

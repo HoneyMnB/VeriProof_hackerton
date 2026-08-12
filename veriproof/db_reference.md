@@ -343,3 +343,22 @@ Income is not copied into this table: it is calculated from verified
 - Impact: deploy must apply Django migration
   `apps/negotiation/migrations/0002_sol_negotiation_prices.py`. Alembic is not
   used by this Django project.
+## 2026-08-11 — Secret Manager 지갑 암호화 키 교체
+
+- `WALLET_PRIVATE_KEY_ENCRYPTION_KEY`를 소스 코드의 고정 값으로 관리하지
+  않도록 변경했다. 운영 환경은 Cloud Run을 통해 숫자형 버전이 고정된 Secret
+  Manager 값을 전달받으며, 설정이 누락되면 애플리케이션 시작을 차단한다.
+- 저장소에 포함됐던 기존 고정 암호화 키는 유출된 것으로 간주해야 한다. 해당 키로
+  암호화한 `accounts.WalletConfiguration.private_address` ciphertext는 새 Fernet
+  키로 복호화할 수 없다.
+- 새 보안 비밀 버전을 배포한 후 운영자는 모든 활성 창작자 지갑 개인키를 다시
+  입력하고 공개 주소와의 일치 여부를 검증해야 한다. 기존 ciphertext를 키 교체가
+  완료된 값인 것처럼 그대로 유지하면 안 된다.
+- 영향 범위: 활성 지갑이 새 키로 재암호화되기 전까지 해당 계정의 창작물 등록
+  서명은 사용할 수 없다. 공개 지갑 주소와 기존 온체인 트랜잭션 서명은 변경되지
+  않는다.
+- 검증 결과: 운영 설정에서 Django secret 또는 wallet encryption key가 누락되면
+  시작이 거부되는 것을 확인했다. KMS, Solana 트랜잭션 및 Buyer Agent 관련 집중
+  테스트를 통과했다. 실제 Secret Manager/KMS/Devnet 검증은 보안 비밀, IAM 및
+  잔액이 있는 KMS 공개 주소가 필요한 배포 단계의 검증 항목이다.
+- Alembic/Django migration 필요 여부: 필요하지 않다. DB 스키마 변경은 없다.

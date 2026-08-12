@@ -10,11 +10,18 @@ import httpx
 from solders.hash import Hash
 from solders.instruction import Instruction
 from solders.keypair import Keypair
+from solders.message import Message
 from solders.pubkey import Pubkey
+from solders.signature import Signature
 from solders.system_program import TransferParams, transfer
 from solders.transaction import Transaction
 
-from .policy import PaymentConfigurationError, PaymentExecutionError, PaymentPolicyRejected
+from .kms_signer import KmsEd25519Signer
+from .policy import (
+    PaymentConfigurationError,
+    PaymentExecutionError,
+    PaymentPolicyRejected,
+)
 
 DEVNET_NETWORK = "solana:EtWTRABZaYq6iMfeYKouRu166VU2xqa1"
 # CAIP-2 네트워크 참조값과 RPC ``getGenesisHash`` 응답은 다른 식별자다.
@@ -29,7 +36,9 @@ class AutonomousSolBuyer:
 
     def __init__(self, *, private_key: str | None = None, rpc_url: str | None = None) -> None:
         self._private_key = (private_key if private_key is not None else os.environ.get("BUYER_WALLET_SECRET_KEY", "")).strip()
+        self._kms_key_name = os.environ.get("BUYER_KMS_KEY_NAME", "").strip()
         self._rpc_url = (rpc_url if rpc_url is not None else os.environ.get("SOLANA_RPC_URL", "https://api.devnet.solana.com")).strip()
+        self._kms_signer = KmsEd25519Signer(self._kms_key_name) if self._kms_key_name else None
 
     async def purchase(
         self,
@@ -47,10 +56,12 @@ class AutonomousSolBuyer:
                 raise PaymentExecutionError(self._detail(terms_response, "SOL payment terms are unavailable."))
             terms = self._json_object(terms_response)
             amount = self._validate_terms(terms)
-            payer = self._keypair()
+            payer = None if self._kms_signer is not None else self._keypair()
+            payer_pubkey = await self._payer_pubkey(payer)
             await self._ensure_devnet_rpc()
             signature = await self._send_transfer(
                 payer,
+                payer_pubkey=payer_pubkey,
                 recipient=str(terms["recipient"]),
                 lamports=amount,
                 memo=str(terms["memo"]),
@@ -58,7 +69,7 @@ class AutonomousSolBuyer:
             settle_response = await client.post(
                 f"{terms_url}/settle",
                 params=params,
-                json={"tx_signature": signature, "buyer_wallet": str(payer.pubkey())},
+                json={"tx_signature": signature, "buyer_wallet": str(payer_pubkey)},
             )
             if settle_response.status_code != 200:
                 raise PaymentExecutionError(self._detail(settle_response, "SOL payment was sent but license settlement failed."))
@@ -86,19 +97,39 @@ class AutonomousSolBuyer:
             raise PaymentPolicyRejected("판매자의 SOL 결제 메모가 올바르지 않습니다.")
         return int(lamports)
 
-    async def _send_transfer(self, payer: Keypair, *, recipient: str, lamports: int, memo: str) -> str:
+    async def _send_transfer(
+        self,
+        payer: Keypair | None,
+        *,
+        payer_pubkey: Pubkey,
+        recipient: str,
+        lamports: int,
+        memo: str,
+    ) -> str:
         blockhash = await self._rpc("getLatestBlockhash", [{"commitment": "confirmed"}])
         try:
             recent_blockhash = Hash.from_string(blockhash["value"]["blockhash"])
-            transaction = Transaction.new_signed_with_payer(
-                [
-                    transfer(TransferParams(from_pubkey=payer.pubkey(), to_pubkey=Pubkey.from_string(recipient), lamports=lamports)),
-                    Instruction(Pubkey.from_string(MEMO_PROGRAM_ID), memo.encode(), []),
-                ],
-                payer.pubkey(),
-                [payer],
-                recent_blockhash,
-            )
+            instructions = [
+                transfer(TransferParams(from_pubkey=payer_pubkey, to_pubkey=Pubkey.from_string(recipient), lamports=lamports)),
+                Instruction(Pubkey.from_string(MEMO_PROGRAM_ID), memo.encode(), []),
+            ]
+            if self._kms_signer is not None:
+                message = Message.new_with_blockhash(
+                    instructions, payer_pubkey, recent_blockhash
+                )
+                unsigned = Transaction.new_unsigned(message)
+                raw_signature = await asyncio.to_thread(
+                    self._kms_signer.sign, unsigned.message_data()
+                )
+                transaction = Transaction.populate(
+                    message, [Signature.from_bytes(raw_signature)]
+                )
+            elif payer is not None:
+                transaction = Transaction.new_signed_with_payer(
+                    instructions, payer_pubkey, [payer], recent_blockhash
+                )
+            else:
+                raise PaymentConfigurationError("Buyer 결제 서명자가 없습니다.")
         except (KeyError, ValueError) as exc:
             raise PaymentExecutionError("Devnet blockhash 또는 SOL 결제 조건이 올바르지 않습니다.") from exc
         encoded = base64.b64encode(bytes(transaction)).decode("ascii")
@@ -107,6 +138,13 @@ class AutonomousSolBuyer:
             raise PaymentExecutionError("Devnet이 SOL 거래 서명을 반환하지 않았습니다.")
         await self._confirm(signature)
         return signature
+
+    async def _payer_pubkey(self, payer: Keypair | None) -> Pubkey:
+        if self._kms_signer is not None:
+            return await asyncio.to_thread(self._kms_signer.public_key)
+        if payer is None:
+            raise PaymentConfigurationError("Buyer 결제 서명자가 없습니다.")
+        return payer.pubkey()
 
     async def _ensure_devnet_rpc(self) -> None:
         """Refuse to sign if the configured endpoint is not Solana Devnet."""

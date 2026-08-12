@@ -15,13 +15,16 @@ def get_solana_service() -> Any:
     """
     from django.conf import settings
 
+    from .kms_signer import get_kms_signer
     from .solana_service import SolanaService
 
+    kms_key_name = getattr(settings, "KMS_KEY_NAME", "").strip()
     return SolanaService(
         rpc_url=getattr(settings, "SOLANA_RPC_URL", ""),
         sender_secret_key=_parse_secret_key(
             getattr(settings, "PLATFORM_ESCROW_SECRET_KEY", "")
         ),
+        signer=get_kms_signer() if kms_key_name else None,
     )
 
 
