@@ -72,8 +72,14 @@ class AgentEvent(models.Model):
         indexes = [
             models.Index(fields=["type"]),
             models.Index(fields=["asset", "created_at"]),
-            models.Index(fields=["account_owner", "created_at"]),
-            models.Index(fields=["correlation_id", "created_at"]),
+            models.Index(
+                fields=["account_owner", "created_at"],
+                name="common_age_account_672e11_idx",
+            ),
+            models.Index(
+                fields=["correlation_id", "created_at"],
+                name="common_age_correla_14dbbc_idx",
+            ),
         ]
 
     def __str__(self) -> str:  # pragma: no cover - trivial

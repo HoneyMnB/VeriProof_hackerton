@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 
@@ -15,6 +17,26 @@ class _Mirror:
     def recent(self, collection, *, limit):
         assert collection == "events"
         return self.documents
+
+
+class _Watch:
+    def __init__(self):
+        self.unsubscribed = False
+
+    def unsubscribe(self):
+        self.unsubscribed = True
+
+
+class _StreamingMirror(_Mirror):
+    def __init__(self, documents, update):
+        super().__init__(documents)
+        self.update = update
+        self.watch = _Watch()
+
+    def watch_recent(self, collection, callback, *, limit):
+        assert collection == "events"
+        callback([self.update])
+        return self.watch
 
 
 def test_live_demo_requires_login(client):
@@ -64,3 +86,39 @@ def test_live_feed_reports_disabled_without_fake_data(client, settings, django_u
     response = client.get("/api/v1/live-demo/events")
     assert response.status_code == 200
     assert response.json() == {"connected": False, "reason": "disabled", "items": [], "metrics": {}}
+
+
+def test_async_event_stream_yields_snapshot_flow_and_unsubscribes():
+    from apps.common.views_live_demo import _event_stream
+
+    asset_id = "5df593fd-a419-42e6-8471-06fa84b7e516"
+    initial = {
+        "event_id": "initial",
+        "type": "ANCHORED",
+        "asset_id": asset_id,
+        "created_at": "2026-08-14T01:00:00+00:00",
+        "payload": {},
+    }
+    update = {
+        "event_id": "update",
+        "type": "OFFER",
+        "asset_id": asset_id,
+        "created_at": "2026-08-14T01:00:01+00:00",
+        "payload": {"offer_sol": "0.1"},
+    }
+    mirror = _StreamingMirror([initial], update)
+
+    async def exercise():
+        stream = _event_stream(mirror, {asset_id: "Owned work"}, "7", 0.01)
+        snapshot = await anext(stream)
+        flow = await anext(stream)
+        await stream.aclose()
+        return snapshot, flow
+
+    snapshot, flow = asyncio.run(exercise())
+
+    assert "event: snapshot" in snapshot
+    assert '"event_id": "initial"' in snapshot
+    assert "event: flow" in flow
+    assert '"event_id": "update"' in flow
+    assert mirror.watch.unsubscribed is True

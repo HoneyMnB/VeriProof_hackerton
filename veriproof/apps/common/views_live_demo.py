@@ -1,8 +1,8 @@
 """Authenticated live visualization of creator-owned Firestore event flows."""
 from __future__ import annotations
 
+import asyncio
 import json
-import queue
 from collections import Counter
 
 from django.conf import settings
@@ -64,48 +64,66 @@ def stream(request):
     owned_assets = _owned_assets(request.user)
     owner_user_id = str(request.user.pk)
 
-    def event_stream():
-        updates: queue.Queue[list[dict]] = queue.Queue(maxsize=32)
-
-        def enqueue(items):
-            try:
-                updates.put_nowait(items)
-            except queue.Full:
-                try:
-                    updates.get_nowait()
-                except queue.Empty:
-                    pass
-                updates.put_nowait(items)
-
-        yield _sse(
-            "snapshot",
-            _snapshot_from_owned(
-                owned_assets,
-                mirror.recent("events", limit=200),
-                owner_user_id,
-            ),
-        )
-        watch = mirror.watch_recent("events", enqueue, limit=200)
-        if watch is None:
-            yield _sse("offline", {"reason": "unavailable"})
-            return
-        try:
-            while True:
-                try:
-                    documents = updates.get(timeout=20)
-                except queue.Empty:
-                    yield ": keep-alive\n\n"
-                    continue
-                items = _serialize(documents, owned_assets, owner_user_id)
-                for item in items:
-                    yield _sse("flow", item, event_id=item["event_id"])
-        finally:
-            watch.unsubscribe()
-
-    response = StreamingHttpResponse(event_stream(), content_type="text/event-stream")
+    response = StreamingHttpResponse(
+        _event_stream(mirror, owned_assets, owner_user_id),
+        content_type="text/event-stream",
+    )
     response["Cache-Control"] = "no-cache, no-transform"
     response["X-Accel-Buffering"] = "no"
     return response
+
+
+async def _event_stream(mirror, owned_assets, owner_user_id, keepalive_seconds=20):
+    """Yield SSE chunks without blocking Django's ASGI event loop."""
+    loop = asyncio.get_running_loop()
+    updates: asyncio.Queue[list[dict]] = asyncio.Queue(maxsize=32)
+    watch = None
+
+    def put_latest(items):
+        if updates.full():
+            try:
+                updates.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+        updates.put_nowait(items)
+
+    def enqueue(items):
+        try:
+            loop.call_soon_threadsafe(put_latest, items)
+        except RuntimeError:
+            # The request event loop has already closed; unsubscribe in finally.
+            return
+
+    documents = await asyncio.to_thread(mirror.recent, "events", limit=200)
+    yield _sse(
+        "snapshot",
+        _snapshot_from_owned(owned_assets, documents, owner_user_id),
+    )
+    watch = await asyncio.to_thread(
+        mirror.watch_recent,
+        "events",
+        enqueue,
+        limit=200,
+    )
+    if watch is None:
+        yield _sse("offline", {"reason": "unavailable"})
+        return
+
+    try:
+        while True:
+            try:
+                documents = await asyncio.wait_for(
+                    updates.get(),
+                    timeout=keepalive_seconds,
+                )
+            except TimeoutError:
+                yield ": keep-alive\n\n"
+                continue
+            items = _serialize(documents, owned_assets, owner_user_id)
+            for item in items:
+                yield _sse("flow", item, event_id=item["event_id"])
+    finally:
+        await asyncio.to_thread(watch.unsubscribe)
 
 
 def _availability_response(mirror):
