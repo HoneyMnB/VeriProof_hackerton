@@ -8,7 +8,7 @@
         <div>
             <p class="live-demo__eyebrow"><span class="live-demo__pulse" aria-hidden="true"></span> Firestore live signal</p>
             <h1>Agent commerce,<br><span>as it happens.</span></h1>
-            <p>Follow every verified step from discovery and negotiation to Solana settlement and license issuance.</p>
+            <p>Watch creator registration and buyer-agent commerce unfold as two verified, correlated flows.</p>
         </div>
         <div class="live-demo__connection" id="live-demo-connection" role="status">
             <span class="live-demo__connection-dot"></span>
@@ -18,30 +18,43 @@
 
     <section class="live-demo__metrics" aria-label="Live activity summary">
         <article><span>Events observed</span><strong id="live-metric-events">—</strong><small>verified transitions</small></article>
-        <article><span>Active works</span><strong id="live-metric-assets">—</strong><small>your registered IP</small></article>
+        <article><span>Registration flows</span><strong id="live-metric-registrations">—</strong><small>creator journeys</small></article>
         <article><span>Negotiation moves</span><strong id="live-metric-negotiations">—</strong><small>offer · counter · accept</small></article>
         <article class="is-accent"><span>Settlements</span><strong id="live-metric-settlements">—</strong><small>on-chain payments</small></article>
     </section>
 
-    <section class="live-demo__stage" aria-labelledby="live-flow-title">
+    <section class="live-demo__stage" aria-labelledby="registration-flow-title">
         <div class="live-demo__stage-head">
-            <div><p>Realtime pipeline</p><h2 id="live-flow-title">A2A execution flow</h2></div>
+            <div><p>Seller journey</p><h2 id="registration-flow-title">Asset registration flow</h2></div>
             <div class="live-demo__legend"><span><i class="is-ai"></i>Agent</span><span><i class="is-chain"></i>On-chain</span><span><i class="is-proof"></i>Proof</span></div>
         </div>
         <div class="live-demo__rail" aria-hidden="true">
-            <div><span>01</span><strong>Discover</strong></div><i></i>
-            <div><span>02</span><strong>Negotiate</strong></div><i></i>
-            <div><span>03</span><strong>Settle</strong></div><i></i>
-            <div><span>04</span><strong>License</strong></div>
+            <div><span>01</span><strong>Upload</strong></div><i></i>
+            <div><span>02</span><strong>Analyze</strong></div><i></i>
+            <div><span>03</span><strong>Anchor</strong></div><i></i>
+            <div><span>04</span><strong>Register</strong></div>
         </div>
         <div id="live-demo-skeleton" class="live-demo__skeleton" aria-label="Loading live events">
             <span></span><span></span><span></span>
         </div>
-        <ol id="live-demo-feed" class="live-demo__feed" aria-live="polite"></ol>
-        <div id="live-demo-empty" class="live-demo__empty" hidden>
-            <span>⌁</span><h3>No live activity yet</h3><p>Start an A2A negotiation or settlement. Verified Firestore events will appear here automatically.</p>
-        </div>
+        <div id="live-registration-groups" class="live-demo__groups" aria-live="polite"></div>
     </section>
+
+    <section class="live-demo__stage" aria-labelledby="commerce-flow-title">
+        <div class="live-demo__stage-head">
+            <div><p>Buyer-agent journey</p><h2 id="commerce-flow-title">A2A negotiation &amp; purchase</h2></div>
+        </div>
+        <div class="live-demo__rail" aria-hidden="true">
+            <div><span>01</span><strong>Discover</strong></div><i></i>
+            <div><span>02</span><strong>Negotiate</strong></div><i></i>
+            <div><span>03</span><strong>Pay</strong></div><i></i>
+            <div><span>04</span><strong>License</strong></div>
+        </div>
+        <div id="live-commerce-groups" class="live-demo__groups" aria-live="polite"></div>
+    </section>
+    <div id="live-demo-empty" class="live-demo__empty" hidden>
+        <span>⌁</span><h3>No live activity yet</h3><p>Register an asset or start an A2A purchase. Verified events will stream here automatically.</p>
+    </div>
 </div>
 {% endblock %}
 {% block page_scripts %}<script src="{% static 'js/live_demo.js' %}"></script>{% endblock %}

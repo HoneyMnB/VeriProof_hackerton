@@ -65,6 +65,34 @@ class FirestoreMirror:
             logger.warning("firestore recent(%s) failed: %s", collection, exc)
             return []
 
+    def watch_recent(self, collection: str, callback: Any, *, limit: int = 200) -> Any:
+        """Subscribe to recent Firestore documents and return the watch handle."""
+        if not self.enabled:
+            return None
+        client = self._get_client()
+        if client is None:
+            return None
+        try:
+            query = client.collection(collection).order_by(
+                "created_at", direction="DESCENDING"
+            ).limit(max(1, min(limit, 200)))
+
+            def on_snapshot(snapshots, changes, read_time):
+                items = []
+                for change in changes:
+                    snapshot = change.document
+                    item = snapshot.to_dict() or {}
+                    item["event_id"] = snapshot.id
+                    item["change_type"] = str(getattr(change.type, "name", change.type)).lower()
+                    items.append(item)
+                if items:
+                    callback(items)
+
+            return query.on_snapshot(on_snapshot)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("firestore watch_recent(%s) failed: %s", collection, exc)
+            return None
+
     def is_available(self) -> bool:
         """Return whether an enabled mirror has a usable server client."""
         return bool(self.enabled and self._get_client() is not None)

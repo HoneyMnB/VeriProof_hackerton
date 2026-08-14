@@ -5,6 +5,7 @@ PostgreSQL (AgentEvent row) + Firestore (real-time) + BigQuery (audit ledger).
 """
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from django.utils import timezone
@@ -29,6 +30,10 @@ class EventRecorder:
         payload: dict,
         asset: Any = None,
         session: Any = None,
+        *,
+        account_owner: Any = None,
+        asset_id: Any = None,
+        correlation_id: Any = None,
     ) -> Any:
         """Create an AgentEvent and fan out to Firestore + BigQuery.
 
@@ -40,11 +45,16 @@ class EventRecorder:
         """
         from apps.common.models import AgentEvent
 
+        resolved_asset_id = asset_id or getattr(asset, "id", None)
+        resolved_owner = account_owner or getattr(asset, "account_owner", None)
+        resolved_correlation = correlation_id or correlation_id_for(asset, session)
         event = AgentEvent.objects.create(
             type=type,
             payload=payload or {},
             asset=asset,
             session=session,
+            account_owner=resolved_owner,
+            correlation_id=resolved_correlation,
         )
         # Fan-out (architecture 8). Sinks no-op when disabled, so this is safe.
         if self.firestore is not None:
@@ -55,8 +65,10 @@ class EventRecorder:
                     {
                         "type": type,
                         "payload": payload or {},
-                        "asset_id": str(asset.id) if asset is not None else None,
+                        "asset_id": str(resolved_asset_id) if resolved_asset_id else None,
                         "session_id": str(session.id) if session is not None else None,
+                        "correlation_id": str(resolved_correlation) if resolved_correlation else None,
+                        "owner_user_id": str(getattr(resolved_owner, "pk", "")) or None,
                         "created_at": timezone.now().isoformat(),
                     },
                 )
@@ -69,12 +81,29 @@ class EventRecorder:
                     {
                         "type": type,
                         "payload": payload or {},
-                        "asset_id": str(asset.id) if asset is not None else None,
+                        "asset_id": str(resolved_asset_id) if resolved_asset_id else None,
+                        "session_id": str(session.id) if session is not None else None,
+                        "correlation_id": str(resolved_correlation) if resolved_correlation else None,
+                        "owner_user_id": str(getattr(resolved_owner, "pk", "")) or None,
                     },
                 )
             except Exception:  # noqa: BLE001
                 pass
         return event
+
+
+def correlation_id_for(asset: Any = None, session: Any = None, buyer_agent_id: str = "") -> uuid.UUID | None:
+    """Return one stable flow identifier for registration or A2A commerce."""
+    asset_id = getattr(asset, "id", asset)
+    buyer_id = buyer_agent_id or str(getattr(session, "buyer_agent_id", "") or "")
+    if asset_id is None:
+        return None
+    if buyer_id:
+        return uuid.uuid5(uuid.NAMESPACE_URL, f"veriproof:a2a:{asset_id}:{buyer_id}")
+    try:
+        return uuid.UUID(str(asset_id))
+    except (TypeError, ValueError, AttributeError):
+        return uuid.uuid5(uuid.NAMESPACE_URL, f"veriproof:flow:{asset_id}")
 
 
 def get_event_recorder() -> EventRecorder:

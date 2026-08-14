@@ -374,3 +374,16 @@ Income is not copied into this table: it is calculated from verified
   Solana 지갑 및 온체인 서명 키와는 독립된 인증 자격증명이다.
 - 검증: `accounts.0006_passkeycredential` Django migration과 인증 통합 테스트로 검증한다.
   앱 DB 스키마 변경이므로 Django migration이 필요하며 Alembic 대상은 아니다.
+
+## 2026-08-14 — Live flow event correlation (migration `common.0002`)
+
+- 변경: `common.AgentEvent`에 nullable `account_owner`와 indexed nullable
+  `correlation_id`를 추가하고 소유자·상관 ID별 시간순 조회 인덱스를 추가했다.
+- 이유: 자산 DB 행이 만들어지기 전의 등록 단계도 실제 이벤트로 보존하고, 작품 등록과
+  Buyer Agent 협상·구매의 여러 이벤트를 하나의 실행 흐름으로 안전하게 그룹화하기 위함이다.
+- 영향 범위: 신규 이벤트는 Firestore에도 `owner_user_id`와 `correlation_id`가 미러링된다.
+  기존 이벤트는 nullable 필드이므로 그대로 보존되며, 기존 자산 FK 기반 권한 필터도 유지된다.
+- 검증: migration drift, 이벤트 fan-out, 소유권 필터, SSE 직렬화 및 등록·협상 흐름 테스트로
+  검증한다.
+- Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration
+  `apps/common/migrations/0002_agentevent_live_flow.py`가 필요하다. Alembic 대상은 아니다.

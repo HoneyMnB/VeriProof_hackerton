@@ -51,5 +51,6 @@ urlpatterns = [
     path("assistant/expenses", views_assistant.record_expense, name="api-assistant-expense"),
     path("events", views_api.events, name="api-events"),
     path("live-demo/events", views_live_demo.feed, name="api-live-demo-events"),
+    path("live-demo/stream", views_live_demo.stream, name="api-live-demo-stream"),
     path("openapi.json", views_api.openapi, name="api-openapi"),
 ]

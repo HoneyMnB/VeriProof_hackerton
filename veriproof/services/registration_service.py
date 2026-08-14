@@ -97,9 +97,30 @@ class RegistrationService:
         content = upload.read()
         if self.subscription is not None:
             self.subscription.authorize_registration(metadata.creator_wallet)
+        asset_id = uuid.uuid4()
+        event_context = {
+            "account_owner": account_owner,
+            "asset_id": asset_id,
+            "correlation_id": asset_id,
+        }
+        self.event_recorder.record(
+            "REGISTRATION_STARTED",
+            {"title": metadata.title, "status": "processing"},
+            **event_context,
+        )
         gallery_contents = [(item, item.read()) for item in gallery_uploads]
         content_hash = self._work_manifest_hash(content, gallery_contents)
+        self.event_recorder.record(
+            "CONTENT_HASHED",
+            {"title": metadata.title, "content_sha256": content_hash},
+            **event_context,
+        )
         if IpAsset.objects.filter(image_sha256=content_hash).exists():
+            self.event_recorder.record(
+                "REGISTRATION_FAILED",
+                {"title": metadata.title, "reason": "duplicate content"},
+                **event_context,
+            )
             raise RegistrationError("duplicate", "identical content is already registered", 409)
 
         parent_asset = self._resolve_parent(metadata)
@@ -107,9 +128,23 @@ class RegistrationService:
             content, metadata, upload.content_type
         )
         perceptual_hash = self._perceptual_hash(content, metadata)
-        asset_id = uuid.uuid4()
+        self.event_recorder.record(
+            "AI_ANALYZED",
+            {
+                "title": metadata.title,
+                "category": metadata.category or analysis.category,
+                "tag_count": len(analysis.tags),
+                "originality_score": analysis.originality_score,
+            },
+            **event_context,
+        )
 
         # 앵커와 등록 인증서는 공개 라이선스 게시의 필수 증명이다.
+        self.event_recorder.record(
+            "ANCHORING_STARTED",
+            {"title": metadata.title, "network": settings.X402_NETWORK},
+            **event_context,
+        )
         try:
             anchor_tx_sig = self.solana.anchor_hash(content_hash, metadata.creator_wallet, signer_secret_key)
         except Exception as exc:  # noqa: BLE001 - adapter exceptions are external
@@ -118,9 +153,19 @@ class RegistrationService:
                 metadata.creator_wallet,
                 exc,
             )
+            self.event_recorder.record(
+                "REGISTRATION_FAILED",
+                {"title": metadata.title, "reason": "on-chain anchoring failed"},
+                **event_context,
+            )
             raise RegistrationError(
                 "anchor_unavailable", "on-chain anchoring could not be completed", 503
             ) from exc
+        self.event_recorder.record(
+            "ANCHORED",
+            {"title": metadata.title, "content_sha256": content_hash, "anchor_tx_sig": anchor_tx_sig},
+            **event_context,
+        )
         try:
             registration_certificate_tx_sig = self.solana.issue_registration_certificate(
                 asset_id,
@@ -135,11 +180,24 @@ class RegistrationService:
                 asset_id,
                 exc,
             )
+            self.event_recorder.record(
+                "REGISTRATION_FAILED",
+                {"title": metadata.title, "reason": "registration certificate failed"},
+                **event_context,
+            )
             raise RegistrationError(
                 "registration_certificate_unavailable",
                 "registration certificate could not be issued",
                 503,
             ) from exc
+        self.event_recorder.record(
+            "REGISTRATION_CERTIFICATE_ISSUED",
+            {
+                "title": metadata.title,
+                "registration_certificate_tx_sig": registration_certificate_tx_sig,
+            },
+            **event_context,
+        )
 
         try:
             thumbnail_url = self._save_preview("thumbnail", asset_id, thumbnail)
@@ -158,6 +216,11 @@ class RegistrationService:
                 metadata.creator_wallet,
                 asset_id,
                 exc,
+            )
+            self.event_recorder.record(
+                "REGISTRATION_FAILED",
+                {"title": metadata.title, "reason": "content storage failed"},
+                **event_context,
             )
             raise RegistrationError(
                 "storage_unavailable", "content storage could not be completed", 503
@@ -214,16 +277,21 @@ class RegistrationService:
                 AssetImage.objects.create(asset=asset, position=position, **artifact)
             if self.subscription is not None:
                 self.subscription.consume_registration(creator, asset)
-            self.event_recorder.record(
-                "ANCHORED",
-                {"content_sha256": content_hash, "anchor_tx_sig": anchor_tx_sig},
-                asset=asset,
-            )
-            self.event_recorder.record(
-                "REGISTRATION_CERTIFICATE_ISSUED",
-                {"registration_certificate_tx_sig": registration_certificate_tx_sig},
-                asset=asset,
-            )
+
+        # Early registration events precede the IpAsset row; attach their durable
+        # PostgreSQL audit records once the asset commits successfully.
+        from apps.common.models import AgentEvent
+
+        AgentEvent.objects.filter(
+            correlation_id=asset_id,
+            asset__isnull=True,
+        ).update(asset=asset)
+        self.event_recorder.record(
+            "ASSET_REGISTERED",
+            {"title": asset.title, "status": asset.status},
+            asset=asset,
+            correlation_id=asset_id,
+        )
 
         logger.info(
             "registration completed creator_wallet=%s asset_id=%s type=%s visibility=%s",

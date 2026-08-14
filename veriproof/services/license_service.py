@@ -81,8 +81,9 @@ class LicenseService:
             download_expires_at=download_expires_at,
         )
 
-        # R15: fan out PAYMENT_VERIFIED on FIRST grant only.
+        # Payment verification and the resulting license are distinct demo/audit transitions.
         self._record_payment_verified(asset, license, session)
+        self._record_license_issued(asset, license, session)
         return license
 
     def _effective_ttl_seconds(self) -> int:
@@ -113,6 +114,25 @@ class LicenseService:
             )
         except Exception as exc:  # noqa: BLE001 (fan-out must not abort grant)
             logger.warning("PAYMENT_VERIFIED fan-out failed: %s", exc)
+
+    def _record_license_issued(self, asset: Any, license: Any, session: Any) -> None:
+        """Fan out the persisted license transition without changing grant semantics."""
+        if self.event_recorder is None:
+            return
+        try:
+            self.event_recorder.record(
+                "LICENSE_ISSUED",
+                {
+                    "asset_id": str(getattr(asset, "id", "")),
+                    "license_id": str(getattr(license, "id", "")),
+                    "payment_currency": getattr(license, "payment_currency", "USDC"),
+                    "usage_type": getattr(license, "usage_type", "commercial"),
+                },
+                asset=asset,
+                session=session,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("LICENSE_ISSUED fan-out failed: %s", exc)
 
     def is_licensed(self, asset: Any, tx_sig: str) -> bool:
         """Return True if ``asset`` was licensed via ``tx_sig``. SPEC-002/004.

@@ -27,7 +27,7 @@ from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
 from apps.settlement.services import get_settlement_service
 from services.catalog_service import get_catalog_service
-from services.event_recorder import get_event_recorder
+from services.event_recorder import correlation_id_for, get_event_recorder
 from services.license_service import get_license_service
 from services._payment import resolve_pay_to
 from services.preview_service import watermark_preview_url
@@ -491,6 +491,7 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             asset,
             x402,
             amount_usdc=amount,
+            session=session,
         )
 
     # R7 / AC-4: browser fallback (200 Solana Pay).
@@ -623,6 +624,19 @@ def get_agent_sol_payment_terms(
             "native SOL payment is unavailable until SOL royalty settlement is configured",
             status=409,
         )
+    recorder = get_event_recorder()
+    recorder.record(
+        "ASSET_DISCOVERED",
+        {"asset_id": str(asset.id), "title": asset.title},
+        asset=asset,
+        session=session,
+    )
+    recorder.record(
+        "HTTP_402",
+        {"asset_id": str(asset.id), "payment_currency": "SOL", "price_sol": str(amount)},
+        asset=asset,
+        session=session,
+    )
     return JsonResponse(
         {
             "status": "payment_required",
@@ -677,6 +691,13 @@ def settle_agent_sol_payment(
             status=409,
     )
 
+    recorder = get_event_recorder()
+    recorder.record(
+        "PAYMENT_SUBMITTED",
+        {"asset_id": str(asset.id), "payment_currency": "SOL", "price_sol": str(amount)},
+        asset=asset,
+        session=session,
+    )
     try:
         solana = SolanaService(rpc_url=settings.SOLANA_RPC_URL)
         verification = solana.verify_sol_payment_transaction(
@@ -687,8 +708,20 @@ def settle_agent_sol_payment(
         )
     except CertificateIssueError as exc:
         logger.warning("agent SOL verification unavailable asset_id=%s: %s", asset.id, exc)
+        recorder.record(
+            "PAYMENT_FAILED",
+            {"asset_id": str(asset.id), "payment_currency": "SOL", "reason": "verification unavailable"},
+            asset=asset,
+            session=session,
+        )
         return _error("sol_payment_verification_unavailable", "payment verification is temporarily unavailable", status=503)
     if not verification.is_valid or verification.sender != buyer_wallet:
+        recorder.record(
+            "PAYMENT_FAILED",
+            {"asset_id": str(asset.id), "payment_currency": "SOL", "reason": "verification failed"},
+            asset=asset,
+            session=session,
+        )
         return _error("invalid_sol_payment", "payment does not match the SOL terms", status=400)
 
     result = get_settlement_service().settle_pipeline(
@@ -746,6 +779,7 @@ def _payment_required_response(
     x402_service,
     *,
     amount_usdc: decimal.Decimal | None = None,
+    session: NegotiationSession | None = None,
 ) -> JsonResponse:
     """공식 x402 V2 402 응답을 만들고 관측 이벤트를 기록한다."""
     try:
@@ -768,10 +802,18 @@ def _payment_required_response(
     # R9 / AC-6: record an HTTP_402 AgentEvent for observability / fan-out.
     buyer_hint = request.headers.get("X-Buyer-Agent-Id", "")
     recorder = get_event_recorder()
+    correlation_id = correlation_id_for(asset, session, buyer_agent_id=buyer_hint)
+    recorder.record(
+        "ASSET_DISCOVERED",
+        {"asset_id": str(asset.id), "title": asset.title},
+        asset=asset,
+        correlation_id=correlation_id,
+    )
     recorder.record(
         "HTTP_402",
         {"asset_id": str(asset.id), "buyer_hint": buyer_hint},
         asset=asset,
+        correlation_id=correlation_id,
     )
     return response
 
@@ -785,6 +827,13 @@ def _settle_x402_request(
     x402_service,
 ) -> JsonResponse:
     """동일 GET에 제출된 공식 x402 결제를 정산하고 라이선스를 발급한다."""
+    recorder = get_event_recorder()
+    recorder.record(
+        "PAYMENT_SUBMITTED",
+        {"asset_id": str(asset.id), "payment_currency": "USDC"},
+        asset=asset,
+        session=session,
+    )
     try:
         challenge = x402_service.build_challenge(
             asset,
@@ -797,14 +846,27 @@ def _settle_x402_request(
         )
     except X402PaymentInvalid as exc:
         logger.info("x402 payment rejected asset=%s error=%s", asset.id, exc)
+        recorder.record(
+            "PAYMENT_FAILED",
+            {"asset_id": str(asset.id), "payment_currency": "USDC", "reason": "verification failed"},
+            asset=asset,
+            session=session,
+        )
         return _payment_required_response(
             request,
             asset,
             x402_service,
             amount_usdc=amount_usdc,
+            session=session,
         )
     except X402ProtocolError as exc:
         logger.error("x402 settlement unavailable asset=%s error=%s", asset.id, exc)
+        recorder.record(
+            "PAYMENT_FAILED",
+            {"asset_id": str(asset.id), "payment_currency": "USDC", "reason": "settlement unavailable"},
+            asset=asset,
+            session=session,
+        )
         return _error(
             "x402_unavailable",
             "payment facilitator is temporarily unavailable",

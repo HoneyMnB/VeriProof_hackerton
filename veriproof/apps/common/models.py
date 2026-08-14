@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import uuid
 
+from django.conf import settings
 from django.db import models
 
 
@@ -52,6 +53,14 @@ class AgentEvent(models.Model):
         blank=True,
         related_name="events",
     )
+    account_owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="agent_events",
+    )
+    correlation_id = models.UUIDField(null=True, blank=True, db_index=True)
     # e.g. HTTP_402 / OFFER / COUNTER / ACCEPT / PAYMENT_VERIFIED /
     # CERT_ISSUED / ANCHORED / ROYALTY_SPLIT (architecture 5.1).
     type = models.CharField(max_length=40)
@@ -63,6 +72,8 @@ class AgentEvent(models.Model):
         indexes = [
             models.Index(fields=["type"]),
             models.Index(fields=["asset", "created_at"]),
+            models.Index(fields=["account_owner", "created_at"]),
+            models.Index(fields=["correlation_id", "created_at"]),
         ]
 
     def __str__(self) -> str:  # pragma: no cover - trivial

@@ -38,13 +38,11 @@ logger = logging.getLogger(__name__)
 # R12: allowed usage_type values (architecture 5.1 NegotiationSession).
 ALLOWED_USAGE_TYPES = frozenset({"commercial", "non-commercial", "editorial"})
 
-# R6: map a round's NegotiationResult.status to the AgentEvent type. REJECT has
-# no dedicated event in {OFFER, COUNTER, ACCEPT}; record it as OFFER (the buyer
-# offer that was logged and rejected).
+# R6: map the seller agent's result separately from the buyer's OFFER event.
 _ROUND_EVENT_TYPE = {
     "ACCEPT": "ACCEPT",
     "COUNTER_OFFER": "COUNTER",
-    "REJECT": "OFFER",
+    "REJECT": "REJECT",
 }
 
 
@@ -154,18 +152,26 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
 
     # R6 / AC-9: record the round event for observability / fan-out.
     recorder = get_event_recorder()
+    event_payload = {
+        "asset_id": str(asset.id),
+        "session_id": str(session.id),
+        "offer_sol": str(offer_sol),
+        "status": result.status,
+        "price_sol": (
+            str(result.price_sol) if result.price_sol is not None else None
+        ),
+        "reason": result.reason,
+        "round": len(rounds),
+    }
     recorder.record(
-        _ROUND_EVENT_TYPE.get(result.status, "OFFER"),
-        {
-            "asset_id": str(asset.id),
-            "session_id": str(session.id),
-            "offer_sol": str(offer_sol),
-            "status": result.status,
-            "price_sol": (
-                str(result.price_sol) if result.price_sol is not None else None
-            ),
-            "reason": result.reason,
-        },
+        "OFFER",
+        event_payload,
+        asset=asset,
+        session=session,
+    )
+    recorder.record(
+        _ROUND_EVENT_TYPE.get(result.status, "REJECT"),
+        event_payload,
         asset=asset,
         session=session,
     )
