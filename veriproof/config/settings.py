@@ -172,6 +172,9 @@ USE_I18N = True
 USE_TZ = True
 LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
+PASSKEY_RP_ID = os.environ.get("PASSKEY_RP_ID", "").strip()
+PASSKEY_RP_NAME = os.environ.get("PASSKEY_RP_NAME", "VeriProof").strip() or "VeriProof"
+PASSKEY_ORIGINS = [value.strip() for value in os.environ.get("PASSKEY_ORIGINS", "").split(",") if value.strip()]
 
 # --- Static / Media ----------------------------------------------------------
 

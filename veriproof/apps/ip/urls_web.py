@@ -7,6 +7,7 @@ architecture §6.5 root path (no ``/api/v1/`` prefix).
 from django.urls import path
 
 from apps.settlement.views_api import download as settlement_download
+from apps.common import views_live_demo
 
 from . import views_web
 
@@ -20,6 +21,7 @@ urlpatterns = [
     path("previews/<uuid:asset_id>/gallery/<uuid:image_id>", views_web.gallery_preview, name="gallery-preview"),
     path("workspace", views_web.workspace, name="workspace"),
     path("library", views_web.library, name="library"),
+    path("live-demo", views_live_demo.page, name="live-demo"),
     path("library/<uuid:asset_id>/certificate.pdf", views_web.download_registration_certificate, name="registration-certificate-download"),
     path("files/<str:token>", settlement_download, name="download"),
 ]

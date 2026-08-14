@@ -43,6 +43,13 @@
             <button type="submit" data-i18n="account.save">Save account</button>
             <p id="account-settings-status" class="vp-status" role="status"></p>
         </form>
+        <section class="vp-passkey-settings" aria-labelledby="passkey-settings-title">
+            <h3 id="passkey-settings-title">Passkeys</h3>
+            <p>Use your device biometrics, screen lock, or security key to sign in without a password.</p>
+            <label><span>Passkey name</span><input id="passkey-device-name" maxlength="80" autocomplete="off" placeholder="e.g. My laptop"></label>
+            <button id="passkey-register-button" type="button">Register a passkey</button>
+            <p id="passkey-register-status" class="vp-status" role="status"></p>
+        </section>
         <form id="account-password-form" class="vp-settings-form vp-password-form">
             {% csrf_token %}
             <h3 data-i18n="account.password_title">Password</h3>
@@ -88,5 +95,6 @@
 <script src="{% static 'js/dashboard.js' %}"></script>
 <script src="{% static 'js/sales_dashboard.js' %}"></script>
 <script src="{% static 'js/shell.js' %}"></script>
+<script src="{% static 'js/passkeys.js' %}"></script>
 {% block page_scripts %}{% endblock %}
 {% endblock %}

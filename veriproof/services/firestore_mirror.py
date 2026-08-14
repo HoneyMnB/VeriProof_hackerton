@@ -46,6 +46,29 @@ class FirestoreMirror:
             logger.warning("firestore set(%s/%s) failed: %s", collection, doc_id, exc)
         return None
 
+    def recent(self, collection: str, *, limit: int = 80) -> list[dict]:
+        """Read recent mirror documents without inventing an offline fallback."""
+        if not self.enabled:
+            return []
+        client = self._get_client()
+        if client is None:
+            return []
+        try:
+            documents = []
+            for snapshot in client.collection(collection).stream():
+                item = snapshot.to_dict() or {}
+                item["event_id"] = snapshot.id
+                documents.append(item)
+            documents.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
+            return documents[: max(1, min(limit, 200))]
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("firestore recent(%s) failed: %s", collection, exc)
+            return []
+
+    def is_available(self) -> bool:
+        """Return whether an enabled mirror has a usable server client."""
+        return bool(self.enabled and self._get_client() is not None)
+
     def _get_client(self) -> Any:
         """주입된 클라이언트 또는 지연 생성한 firestore.Client를 반환한다. SDK가 없으면 None."""
         if self._client is not None:

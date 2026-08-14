@@ -4,6 +4,7 @@ Path ordering note: ``ip/<uuid:asset_id>`` uses the UUID converter, so the
 literal ``ip/batch/...`` paths (where ``batch`` is not a UUID) do not collide.
 """
 from django.urls import path
+from apps.common import views_live_demo
 
 from . import views_api, views_assistant
 
@@ -49,5 +50,6 @@ urlpatterns = [
     path("assistant/registration-drafts/<uuid:draft_id>/confirm", views_assistant.registration_drafts, name="api-registration-draft-confirm"),
     path("assistant/expenses", views_assistant.record_expense, name="api-assistant-expense"),
     path("events", views_api.events, name="api-events"),
+    path("live-demo/events", views_live_demo.feed, name="api-live-demo-events"),
     path("openapi.json", views_api.openapi, name="api-openapi"),
 ]

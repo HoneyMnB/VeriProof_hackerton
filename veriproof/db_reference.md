@@ -362,3 +362,15 @@ Income is not copied into this table: it is calculated from verified
   테스트를 통과했다. 실제 Secret Manager/KMS/Devnet 검증은 보안 비밀, IAM 및
   잔액이 있는 KMS 공개 주소가 필요한 배포 단계의 검증 항목이다.
 - Alembic/Django migration 필요 여부: 필요하지 않다. DB 스키마 변경은 없다.
+## 2026-08-13 — Django-native Passkey credentials (migration `accounts.0006`)
+
+- 변경: `accounts.PasskeyCredential`를 추가하여 한 로그인 계정에 여러 WebAuthn
+  공개 자격증명을 연결한다. `credential_id`, 공개키, 불투명 user handle, 서명 카운터,
+  전송 방식, 백업·기기 정보 및 사용 시각만 저장한다.
+- 이유: 기존 이메일/비밀번호 복구 경로를 유지하면서 표준 WebAuthn 기반의 비밀번호 없는
+  로그인을 제공하기 위함이다. 생체정보와 Passkey 개인키는 브라우저·OS 인증장치 밖으로
+  나오지 않으며 DB에 저장하지 않는다.
+- 영향 범위: `/accounts/passkeys/*` 등록·로그인 경로와 Django 세션 인증에 영향을 준다.
+  Solana 지갑 및 온체인 서명 키와는 독립된 인증 자격증명이다.
+- 검증: `accounts.0006_passkeycredential` Django migration과 인증 통합 테스트로 검증한다.
+  앱 DB 스키마 변경이므로 Django migration이 필요하며 Alembic 대상은 아니다.

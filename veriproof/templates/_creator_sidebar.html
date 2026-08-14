@@ -15,6 +15,7 @@
     <nav class="vp-nav" aria-label="Main menu" data-i18n-aria-label="sidebar.nav.label">
         <button id="open-history" class="vp-nav__item" type="button" aria-haspopup="dialog" aria-controls="history-modal"><span class="vp-nav__icon">▤</span><span class="vp-sidebar-label" data-i18n="sidebar.history.all">Conversation history</span></button>
         <a class="vp-nav__item {% if active_nav == 'library' %}is-active{% endif %}" {% if active_nav == 'library' %}aria-current="page"{% endif %} href="/library"><span class="vp-nav__icon">▣</span><span class="vp-sidebar-label" data-i18n="sidebar.nav.library">My library</span></a>
+        <a class="vp-nav__item {% if active_nav == 'live-demo' %}is-active{% endif %}" {% if active_nav == 'live-demo' %}aria-current="page"{% endif %} href="/live-demo"><span class="vp-nav__icon" aria-hidden="true">◉</span><span class="vp-sidebar-label">Live A2A flow</span></a>
         <section id="recent-history" class="vp-recent-history" hidden aria-label="Recent conversations" data-i18n-aria-label="sidebar.history.recent_aria">
             <p class="vp-sidebar__label" data-i18n="sidebar.history.recent">Recent</p>
             <ul id="recent-history-list"></ul>

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.utils import timezone
+
 
 class EventRecorder:
     """Persists an event to PostgreSQL and mirrors it to Firestore/BigQuery."""
@@ -55,6 +57,7 @@ class EventRecorder:
                         "payload": payload or {},
                         "asset_id": str(asset.id) if asset is not None else None,
                         "session_id": str(session.id) if session is not None else None,
+                        "created_at": timezone.now().isoformat(),
                     },
                 )
             except Exception:  # noqa: BLE001 (mirror failure must not abort)

@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_passkey
 
 app_name = "accounts"
 
@@ -15,4 +15,9 @@ urlpatterns = [
     path("wallets/<int:wallet_id>/activate/", views.activate_wallet, name="wallet-activate"),
     path("wallets/<int:wallet_id>/", views.delete_wallet, name="wallet-delete"),
     path("password/", views.password, name="password"),
+    path("passkeys/", views_passkey.credential_list, name="passkey-list"),
+    path("passkeys/register/options/", views_passkey.registration_begin, name="passkey-register-options"),
+    path("passkeys/register/verify/", views_passkey.registration_complete, name="passkey-register-verify"),
+    path("passkeys/login/options/", views_passkey.authentication_begin, name="passkey-login-options"),
+    path("passkeys/login/verify/", views_passkey.authentication_complete, name="passkey-login-verify"),
 ]

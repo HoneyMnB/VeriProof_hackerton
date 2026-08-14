@@ -28,6 +28,28 @@ class UserPreference(models.Model):
         return f"Preferences for {self.user.get_username()}"
 
 
+class PasskeyCredential(models.Model):
+    """Public WebAuthn credential bound to one Django account."""
+
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="passkey_credentials")
+    user_handle = models.BinaryField(max_length=64, db_index=True)
+    credential_id = models.BinaryField(unique=True)
+    public_key = models.BinaryField()
+    sign_count = models.PositiveBigIntegerField(default=0)
+    transports = models.JSONField(default=list, blank=True)
+    device_name = models.CharField(max_length=80, default="Passkey")
+    device_type = models.CharField(max_length=32, blank=True)
+    backed_up = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-last_used_at", "-created_at"]
+
+    def __str__(self) -> str:
+        return f"{self.device_name} for {self.user.get_username()}"
+
+
 class WalletConfiguration(models.Model):
     """A creator's public wallet settings and encrypted signing secret."""
 
