@@ -53,6 +53,10 @@ def test_live_demo_renders_for_authenticated_account(client, django_user_model):
     assert response.status_code == 200
     assert b"Agent commerce" in response.content
     assert b"js/live_demo" in response.content
+    assert response.content.count(b'role="tab"') == 2
+    assert response.content.count(b'role="tabpanel"') == 2
+    assert b'aria-controls="live-panel-registration"' in response.content
+    assert b'aria-controls="live-panel-commerce"' in response.content
 
 
 @pytest.mark.django_db
