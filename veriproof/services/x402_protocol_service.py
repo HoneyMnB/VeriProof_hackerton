@@ -172,15 +172,13 @@ class X402ProtocolService:
     @staticmethod
     def _to_atomic_usdc(amount_usdc: decimal.Decimal) -> str:
         """USDC 금액을 6자리 최소 단위 문자열로 변환한다."""
-        print("[_to_atomic_usdc] amount_usdc:--------------------------------- ", amount_usdc)
-        return str(float(amount_usdc))
-        # amount = decimal.Decimal(amount_usdc)
-        # if not amount.is_finite() or amount <= 0:
-        #     raise ValueError("x402 결제 금액은 0보다 큰 유한한 값이어야 합니다.")
-        # atomic = amount * (decimal.Decimal(10) ** USDC_DECIMALS)
-        # if atomic != atomic.to_integral_value():
-        #     raise ValueError("USDC 결제 금액은 소수점 6자리까지만 허용됩니다.")
-        # return str(int(atomic))
+        amount = decimal.Decimal(amount_usdc)
+        if not amount.is_finite() or amount <= 0:
+            raise ValueError("x402 결제 금액은 0보다 큰 유한한 값이어야 합니다.")
+        atomic = amount * (decimal.Decimal(10) ** USDC_DECIMALS)
+        if atomic != atomic.to_integral_value():
+            raise ValueError("USDC 결제 금액은 소수점 6자리까지만 허용됩니다.")
+        return str(int(atomic))
 
 
 @lru_cache(maxsize=8)

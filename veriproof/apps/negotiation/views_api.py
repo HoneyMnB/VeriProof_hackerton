@@ -74,14 +74,14 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
             "invalid_offer", "offer_sol must be a positive number", status=422
         )
     if (
-        asset.min_price_sol is None
-        or asset.target_price_sol is None
-        or asset.min_price_sol <= 0
-        or asset.target_price_sol < asset.min_price_sol
+        asset.min_amount is None
+        or asset.target_amount is None
+        or asset.min_amount <= 0
+        or asset.target_amount < asset.min_amount
     ):
         return _error(
-            "sol_price_not_configured",
-            "valid min_price_sol and target_price_sol are required for negotiation",
+            "amount_not_configured",
+            "valid min_amount and target_amount are required for negotiation",
             status=409,
         )
 

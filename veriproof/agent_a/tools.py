@@ -20,13 +20,6 @@ def _json_safe_asset(asset: Any) -> dict[str, Any]:
     created_at = payload.get("created_at")
     if created_at is not None:
         payload["created_at"] = created_at.isoformat()
-    min_price = payload.pop("min_price_usdc", None)
-    target_price = payload.pop("target_price_usdc", None)
-    if min_price is not None:
-        payload["min_price_sol"] = min_price
-    if target_price is not None:
-        payload["target_price_sol"] = target_price
-    payload["license_currency"] = "SOL"
     return payload
 
 

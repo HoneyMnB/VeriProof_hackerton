@@ -243,6 +243,24 @@ X402_NETWORK = os.environ.get(
 # Empty by default in local; cloud deployment sets the escrow pubkey.
 PLATFORM_ESCROW_PUBKEY = os.environ.get("PLATFORM_ESCROW_PUBKEY", "")
 PLATFORM_ESCROW_SECRET_KEY = os.environ.get("PLATFORM_ESCROW_SECRET_KEY", "")
+# Browser USDC payments use a dedicated fee payer. This key only covers SOL
+# network and associated-token-account costs; it never authorizes USDC moves.
+PAYMENT_SPONSOR_PUBKEY = os.environ.get("PAYMENT_SPONSOR_PUBKEY", "")
+PAYMENT_SPONSOR_SECRET_KEY = os.environ.get("PAYMENT_SPONSOR_SECRET_KEY", "")
+PAYMENT_SPONSOR_KMS_KEY_NAME = os.environ.get("PAYMENT_SPONSOR_KMS_KEY_NAME", "")
+SPONSORED_PAYMENT_TTL_SECONDS = int(
+    os.environ.get("SPONSORED_PAYMENT_TTL_SECONDS", "300")
+)
+# The autonomous Buyer Agent authenticates with this dedicated bearer token.
+# Its wallet and license owner are server-side configuration, never request
+# parameters, so an agent cannot redirect sponsored transactions or licenses.
+AGENT_SPONSORED_PAYMENT_TOKEN = os.environ.get("AGENT_SPONSORED_PAYMENT_TOKEN", "")
+AGENT_SPONSORED_PAYMENT_BUYER_USERNAME = os.environ.get(
+    "AGENT_SPONSORED_PAYMENT_BUYER_USERNAME", ""
+)
+AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY = os.environ.get(
+    "AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY", ""
+)
 # Runtime Solana paths are real-only. Tests use ``tests.fakes`` through
 # constructor/factory injection; application settings do not select mock
 # adapters or accept fabricated transaction identifiers.

@@ -3,7 +3,7 @@
 {% block title %}{{ asset.title }} | VeriProof{% endblock %}
 {% block main %}
 {# 라이선스 가능 작품 상세 페이지: 보호된 미리보기 갤러리, 작품 메타데이터, 즉시 구매/결제 패널 #}
-<article class="asset-detail" data-asset-detail data-asset-id="{{ asset.asset_id }}" data-solpay-verify-url="/api/v1/ip/{{ asset.asset_id }}/solpay/verify" data-solpay-reference="{{ payment.solana_pay.reference }}" data-solpay-recipient="{{ payment.solana_pay.address }}" data-solpay-amount="{{ payment.solana_pay.amount_sol }}" data-solpay-memo="VERIPROOF:{{ asset.asset_id }}" data-solpay-rpc="{{ payment.solana_pay.rpc_url }}">
+<article class="asset-detail" data-asset-detail data-sponsored-usdc-url="/api/v1/ip/{{ asset.asset_id }}/sponsored-usdc" data-solana-rpc="{{ solana_rpc_url }}" data-csrf-token="{{ csrf_token }}">
     <a class="asset-detail__back" href="/discover" data-i18n="detail.back">← Back to Discover</a>
     <div class="asset-detail__grid">
         {# 보호된 미리보기 영역: 워터마크 대표 이미지 + 다중 이미지일 때 썸네일 갤러리 #}
@@ -32,45 +32,44 @@
                 <div><dt data-i18n="detail.proof">Proof</dt><dd data-i18n="detail.proof_value">On-chain certificate after payment</dd></div>
             </dl>
         </section>
-        {# 구매/라이선스 결제 패널: 즉시 구매가, Solana Pay 네이티브 SOL 결제 링크 #}
+        {# 구매/라이선스 결제 패널: 플랫폼 수수료 부담 USDC 결제 #}
         <aside class="asset-detail__purchase" aria-labelledby="purchase-title">
             <p data-i18n="detail.buy_eyebrow">BUY-IT-NOW LICENSE</p>
             <h2 id="purchase-title" data-i18n="detail.buy_title">License this work</h2>
-            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ payment.solana_pay.amount_sol }} SOL</strong></p>
+            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ asset.target_price_usdc }} USDC</strong></p>
             <dl class="asset-detail__payment-summary">
                 <div><dt data-i18n="detail.delivery">After verification</dt><dd data-i18n="detail.delivery_value">License certificate and time-bound original download</dd></div>
-                <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · SOL</dd></div>
+                <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · USDC · Network fee sponsored</dd></div>
             </dl>
             {% if active_license %}
             <a class="asset-detail__pay" href="{{ active_license.download_url }}" download data-solana-pay-download data-download-expires-at="{{ active_license.download_expires_at }}">다운로드</a>
             {% elif request.user.is_authenticated %}
-            <button class="asset-detail__pay" type="button" data-solana-pay-open data-solana-pay-uri="{{ payment.solana_pay.uri }}" data-i18n="detail.pay_now">Pay now with Solpay</button>
+            <button class="asset-detail__pay" type="button" data-sponsored-usdc-open>Pay {{ asset.target_price_usdc }} USDC</button>
             {% else %}
             <a class="asset-detail__pay" href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in to purchase</a>
             {% endif %}
             <p class="asset-detail__note" data-i18n="detail.no_cart">No cart. Payment grants one license and an expiry-bound original download.</p>
         </aside>
     </div>
-    <div id="solana-pay-modal" class="asset-detail__pay-modal" hidden role="dialog" aria-modal="true" aria-labelledby="solana-pay-title">
-        <div class="asset-detail__pay-backdrop" data-solana-pay-close></div>
+    <div id="sponsored-usdc-modal" class="asset-detail__pay-modal" hidden role="dialog" aria-modal="true" aria-labelledby="sponsored-usdc-title">
+        <div class="asset-detail__pay-backdrop" data-sponsored-usdc-close></div>
         <section class="asset-detail__pay-panel">
             <header>
                 <div>
-                    <p>Solpay · Devnet</p>
-                    <h2 id="solana-pay-title">SOL payment</h2>
+                    <p>Solana · USDC</p>
+                    <h2 id="sponsored-usdc-title">Gasless payment</h2>
                 </div>
-                <button class="asset-detail__pay-close" type="button" data-solana-pay-close aria-label="Close payment window">×</button>
+                <button class="asset-detail__pay-close" type="button" data-sponsored-usdc-close aria-label="Close payment window">×</button>
             </header>
             <dl class="asset-detail__pay-fields">
-                <div><dt>Network</dt><dd>Devnet</dd></div>
-                <div><dt>Amount</dt><dd>{{ payment.solana_pay.amount_sol }} SOL</dd></div>
-                <div><dt>Recipient</dt><dd>{{ payment.solana_pay.address }}</dd></div>
+                <div><dt>Network</dt><dd>Solana</dd></div>
+                <div><dt>Amount</dt><dd>{{ asset.target_price_usdc }} USDC</dd></div>
+                <div><dt>Network fee</dt><dd>Sponsored by VeriProof</dd></div>
             </dl>
             <div class="asset-detail__pay-actions">
-                <button class="asset-detail__send-pay" type="button" data-solana-pay-send>Pay with Phantom</button>
-                <button class="asset-detail__copy-pay" type="button" data-solana-pay-copy>Copy address</button>
+                <button class="asset-detail__send-pay" type="button" data-sponsored-usdc-send>Pay USDC with Phantom</button>
             </div>
-            <p id="solana-pay-status" class="asset-detail__pay-status" role="status"></p>
+            <p id="sponsored-usdc-status" class="asset-detail__pay-status" role="status"></p>
         </section>
     </div>
 </article>

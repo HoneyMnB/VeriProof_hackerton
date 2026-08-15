@@ -169,6 +169,16 @@ run()
     $PORT_ARG \
     "$IMAGE_NAME" "${IMAGE_COMMAND_ARGS[@]}"
 
+    if [[ -n ${STARTUP_INIT_SCRIPT:-} ]]; then
+        echo "Running startup data initialization: $STARTUP_INIT_SCRIPT"
+        if ! docker exec "$SERVICE_NAME" python "$STARTUP_INIT_SCRIPT"; then
+            echo "Startup data initialization failed; stopping $SERVICE_NAME." >&2
+            docker stop "$SERVICE_NAME" >/dev/null
+            docker rm "$SERVICE_NAME" >/dev/null
+            return 1
+        fi
+    fi
+
     log
 }
 
@@ -229,6 +239,7 @@ case $1 in
         IMAGE_COMMAND_ARGS=()
         MOUNT_SOURCE=true
         MOUNT_MEDIA=true
+        STARTUP_INIT_SCRIPT="init/backfill_ipasset_amounts.py"
         run_command "$@"
         ;;
 

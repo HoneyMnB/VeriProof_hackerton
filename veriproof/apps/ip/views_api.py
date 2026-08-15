@@ -11,9 +11,11 @@ import datetime
 import decimal
 import json
 import logging
+import secrets
 import uuid
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.utils import timezone
@@ -21,7 +23,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 from apps.common.models import AgentEvent
 from apps.accounts.services import WalletSigningError, active_wallet_signer
-from apps.ip.models import IpAsset
+from apps.ip.models import IpAsset, SponsoredPaymentIntent
 from apps.ip.browser_license_session import has_browser_payment_request
 from apps.negotiation.models import NegotiationSession
 from apps.settlement.models import License
@@ -42,6 +44,10 @@ from services.registration_service import (
 )
 from services.x402_service import get_x402_service
 from services.solana_service import CertificateIssueError, SolanaService
+from services.sponsored_payment_service import (
+    SponsoredPaymentConfigurationError,
+    get_sponsored_payment_service,
+)
 from services.x402_protocol_service import X402PaymentInvalid, X402ProtocolError
 from services.tools_logger import ToolsLogger
 
@@ -145,9 +151,9 @@ def register(request: HttpRequest) -> JsonResponse:
             },
             "hash_prefix": asset.image_sha256[:16],
             "pricing": {
-                "currency": "SOL",
-                "min_price_sol": str(asset.min_price_sol),
-                "target_price_sol": str(asset.target_price_sol),
+                "currency": asset.currency,
+                "min_amount": str(asset.min_amount),
+                "target_amount": str(asset.target_amount),
             },
             "x402_endpoint": f"/api/v1/ip/{asset.id}",
             "watermark_url": watermark_preview_url(asset.id),
@@ -218,8 +224,8 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
     if asset is None:
         logger.warning("asset terms rejected user=%s asset_id=%s", request.user.get_username(), asset_id)
         return _error("asset_not_found", "asset not found", status=404)
-    minimum = _parse_money(data.get("min_price_sol"))
-    target = _parse_money(data.get("target_price_sol"))
+    minimum = _parse_money(data.get("min_amount"))
+    target = _parse_money(data.get("target_amount"))
     visibility = str(data.get("visibility") or "").strip().lower()
     if (
         not _valid_sol_registration_prices(minimum, target)
@@ -249,14 +255,15 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
     tags = [tag.strip() for tag in tags if tag.strip()]
     if len(title) > 120:
         return _error("invalid_asset_metadata", "title must be 120 characters or fewer", status=422)
-    asset.min_price_sol = minimum
-    asset.target_price_sol = target
+    asset.min_amount = minimum
+    asset.target_amount = target
+    asset.currency = "USDC"
     asset.visibility = visibility
     asset.title = title or None
     asset.description = description or None
     asset.tags = tags
     asset.save(update_fields=[
-        "min_price_sol", "target_price_sol", "visibility", "title", "description", "tags"
+        "min_amount", "target_amount", "currency", "visibility", "title", "description", "tags"
     ])
     logger.info("asset terms updated user=%s asset_id=%s", request.user.get_username(), asset_id)
     return JsonResponse({
@@ -264,8 +271,9 @@ def update_asset_terms(request: HttpRequest, asset_id: uuid.UUID) -> JsonRespons
         "title": asset.title or "",
         "description": asset.description or "",
         "tags": asset.tags,
-        "min_price_sol": str(asset.min_price_sol),
-        "target_price_sol": str(asset.target_price_sol),
+        "min_amount": str(asset.min_amount),
+        "target_amount": str(asset.target_amount),
+        "currency": asset.currency,
         "visibility": asset.visibility,
     })
 
@@ -530,7 +538,7 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
         verification = solana.verify_sol_payment_by_reference(
             reference=reference,
             expected_recipient=resolve_pay_to(asset),
-            expected_amount=asset.target_price_sol,
+            expected_amount=asset.target_amount,
             expected_memo=expected_memo,
         )
     except CertificateIssueError as exc:
@@ -557,7 +565,7 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
             usage_type="commercial",
             tx_signature=verification.tx_signature,
             session=None,
-            expected_amount=asset.target_price_sol,
+            expected_amount=asset.target_amount,
             payment_already_verified=True,
             buyer_user=request.user,
             payment_currency="SOL",
@@ -586,6 +594,282 @@ def verify_solpay(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
     )
 
 
+def create_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Create a browser-authorized, sponsor-paid USDC transaction."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to purchase", status=401)
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_json", "JSON body required", status=422)
+    if not isinstance(data, dict):
+        return _error("invalid_json", "JSON object required", status=422)
+    buyer_wallet = str(data.get("buyer_wallet") or "").strip()
+    if not _is_valid_pubkey(buyer_wallet):
+        return _error("invalid_wallet", "buyer_wallet must be a valid Solana public key", status=422)
+    return _create_sponsored_usdc_intent(
+        request,
+        asset_id,
+        buyer_user=request.user,
+        buyer_wallet=buyer_wallet,
+        channel=SponsoredPaymentIntent.BROWSER,
+    )
+
+
+@csrf_exempt
+def create_agent_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Create a KMS-Buyer-Agent transaction with the platform as fee payer."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    principal = _agent_sponsored_payment_principal(request)
+    if isinstance(principal, JsonResponse):
+        return principal
+    buyer_user, buyer_wallet = principal
+    return _create_sponsored_usdc_intent(
+        request,
+        asset_id,
+        buyer_user=buyer_user,
+        buyer_wallet=buyer_wallet,
+        channel=SponsoredPaymentIntent.AGENT,
+    )
+
+
+def _create_sponsored_usdc_intent(
+    request: HttpRequest,
+    asset_id: uuid.UUID,
+    *,
+    buyer_user,
+    buyer_wallet: str,
+    channel: str,
+) -> JsonResponse:
+    asset = IpAsset.objects.select_related("creator").filter(id=asset_id).first()
+    if (
+        asset is None
+        or asset.visibility != IpAsset.PUBLIC
+        or asset.status not in {IpAsset.ANCHORED, IpAsset.LISTED}
+        or not asset.registration_certificate_tx_sig
+    ):
+        return _error("not_found", "asset not found", status=404)
+    if asset.currency != "USDC" or asset.target_amount is None or asset.target_amount <= 0:
+        return _error("usdc_price_not_configured", "the seller has not configured a USDC price", status=409)
+    amount = asset.target_amount
+    recipient = resolve_pay_to(asset)
+    if not _is_valid_pubkey(recipient):
+        logger.error("sponsored payment recipient is invalid asset=%s", asset.id)
+        return _error("payment_unavailable", "payment is temporarily unavailable", status=503)
+
+    now = timezone.now()
+    SponsoredPaymentIntent.objects.filter(
+        buyer_user=buyer_user,
+        asset=asset,
+        buyer_wallet=buyer_wallet,
+        status=SponsoredPaymentIntent.CREATED,
+        expires_at__lte=now,
+    ).update(status=SponsoredPaymentIntent.EXPIRED)
+    intent_id = uuid.uuid4()
+    memo = f"VERIPROOF:USDC:{intent_id}"
+    expires_at = now + datetime.timedelta(seconds=settings.SPONSORED_PAYMENT_TTL_SECONDS)
+    try:
+        sponsored = get_sponsored_payment_service().build_transaction(
+            buyer_wallet=buyer_wallet,
+            recipient_wallet=recipient,
+            amount_usdc=amount,
+            memo=memo,
+        )
+    except SponsoredPaymentConfigurationError as exc:
+        logger.error("sponsored payment unavailable asset=%s: %s", asset.id, exc)
+        return _error("payment_unavailable", "USDC gasless payment is temporarily unavailable", status=503)
+    intent = SponsoredPaymentIntent.objects.create(
+        id=intent_id,
+        asset=asset,
+        buyer_user=buyer_user,
+        buyer_wallet=buyer_wallet,
+        recipient_wallet=recipient,
+        amount_usdc=amount,
+        memo=memo,
+        channel=channel,
+        expires_at=expires_at,
+    )
+    return JsonResponse(
+        {
+            "intent_id": str(intent.id),
+            "transaction": sponsored.serialized_transaction,
+            "amount_usdc": str(amount),
+            "currency": "USDC",
+            "sponsor": sponsored.sponsor,
+            "buyer_wallet": buyer_wallet,
+            "recipient_wallet": recipient,
+            "usdc_mint": settings.USDC_MINT_ADDRESS,
+            "memo": memo,
+            "expires_at": expires_at.isoformat(),
+        },
+        status=201,
+    )
+
+
+def settle_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Verify a finalized intent transaction before issuing its browser license."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    if not request.user.is_authenticated:
+        return _error("authentication_required", "sign in to purchase", status=401)
+    return _settle_sponsored_usdc_intent(
+        request,
+        asset_id,
+        buyer_user=request.user,
+        channel=SponsoredPaymentIntent.BROWSER,
+    )
+
+
+@csrf_exempt
+def settle_agent_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
+    """Verify and settle a finalized transaction signed by the Buyer Agent KMS."""
+    if request.method != "POST":
+        return _error("method_not_allowed", "POST required", status=405)
+    principal = _agent_sponsored_payment_principal(request)
+    if isinstance(principal, JsonResponse):
+        return principal
+    buyer_user, _buyer_wallet = principal
+    return _settle_sponsored_usdc_intent(
+        request,
+        asset_id,
+        buyer_user=buyer_user,
+        channel=SponsoredPaymentIntent.AGENT,
+    )
+
+
+def _settle_sponsored_usdc_intent(
+    request: HttpRequest,
+    asset_id: uuid.UUID,
+    *,
+    buyer_user,
+    channel: str,
+) -> JsonResponse:
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_payment_submission", "valid intent_id required", status=422)
+    if not isinstance(data, dict):
+        return _error("invalid_payment_submission", "JSON object required", status=422)
+    try:
+        intent_id = uuid.UUID(str(data.get("intent_id") or ""))
+    except ValueError:
+        return _error("invalid_payment_submission", "valid intent_id required", status=422)
+    signature = str(data.get("transaction_signature") or "").strip()
+    if not signature or len(signature) > 140:
+        return _error("invalid_payment_submission", "valid transaction signature required", status=422)
+    try:
+        intent = SponsoredPaymentIntent.objects.select_related("asset").get(
+            id=intent_id,
+            asset_id=asset_id,
+            buyer_user=buyer_user,
+            channel=channel,
+        )
+    except SponsoredPaymentIntent.DoesNotExist:
+        return _error("payment_not_found", "payment intent not found", status=404)
+    if intent.status == SponsoredPaymentIntent.SETTLED:
+        return _sponsored_payment_response(request, intent)
+    if intent.expires_at <= timezone.now():
+        intent.status = SponsoredPaymentIntent.EXPIRED
+        intent.save(update_fields=["status"])
+        return _error("payment_expired", "payment intent expired; create a new payment", status=409)
+    if intent.transaction_signature and intent.transaction_signature != signature:
+        return _error("payment_signature_conflict", "payment intent is already bound to another transaction", status=409)
+    if SponsoredPaymentIntent.objects.filter(transaction_signature=signature).exclude(id=intent.id).exists():
+        return _error("payment_signature_conflict", "transaction is already used by another payment", status=409)
+
+    solana = SolanaService(rpc_url=settings.SOLANA_RPC_URL)
+    try:
+        if not solana.is_transaction_finalized(signature):
+            return JsonResponse({"status": "PENDING", "intent_id": str(intent.id)}, status=202)
+        verification = solana.verify_usdc_payment(
+            signature,
+            expected_recipient=intent.recipient_wallet,
+            expected_amount=intent.amount_usdc,
+            mint=settings.USDC_MINT_ADDRESS,
+            expected_memo=intent.memo,
+        )
+    except CertificateIssueError as exc:
+        logger.warning("sponsored payment verification unavailable intent=%s: %s", intent.id, exc)
+        return _error("payment_verification_unavailable", "payment verification is temporarily unavailable", status=503)
+    if not verification.is_valid or verification.sender != intent.buyer_wallet:
+        return _error("invalid_payment", "transaction does not match this payment intent", status=422)
+
+    with transaction.atomic():
+        intent = SponsoredPaymentIntent.objects.select_for_update().select_related("asset").get(id=intent.id)
+        if intent.status == SponsoredPaymentIntent.SETTLED:
+            return _sponsored_payment_response(request, intent)
+        if intent.transaction_signature and intent.transaction_signature != signature:
+            return _error("payment_signature_conflict", "payment intent is already bound to another transaction", status=409)
+        intent.transaction_signature = signature
+        intent.status = SponsoredPaymentIntent.SUBMITTED
+        intent.save(update_fields=["transaction_signature", "status"])
+        result = get_settlement_service().settle_pipeline(
+            asset=intent.asset,
+            buyer_wallet=intent.buyer_wallet,
+            usage_type="commercial",
+            tx_signature=signature,
+            session=None,
+            expected_amount=intent.amount_usdc,
+            payment_already_verified=True,
+            buyer_user=buyer_user,
+            payment_currency="USDC",
+        )
+        if not result.ok or result.license is None:
+            return _error("license_grant_failed", "license could not be granted", status=503)
+        intent.status = SponsoredPaymentIntent.SETTLED
+        intent.settled_at = timezone.now()
+        intent.save(update_fields=["status", "settled_at"])
+    return _sponsored_payment_response(request, intent, result)
+
+
+def _agent_sponsored_payment_principal(request: HttpRequest):
+    """Return the single configured agent license owner and Buyer KMS wallet.
+
+    The wallet and user are deployment configuration rather than agent input,
+    preventing a bearer-token holder from charging the sponsor for arbitrary
+    wallets or assigning licenses to arbitrary accounts.
+    """
+    configured_token = settings.AGENT_SPONSORED_PAYMENT_TOKEN.strip()
+    authorization = request.headers.get("Authorization", "")
+    scheme, _, received_token = authorization.partition(" ")
+    if not configured_token or scheme.lower() != "bearer" or not secrets.compare_digest(
+        received_token, configured_token
+    ):
+        return _error("agent_authentication_required", "valid agent authorization required", status=401)
+
+    username = settings.AGENT_SPONSORED_PAYMENT_BUYER_USERNAME.strip()
+    buyer_wallet = settings.AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY.strip()
+    if not username or not _is_valid_pubkey(buyer_wallet):
+        logger.error("agent sponsored payment is not configured")
+        return _error("payment_unavailable", "agent payment is temporarily unavailable", status=503)
+    buyer_user = get_user_model().objects.filter(username=username, is_active=True).first()
+    if buyer_user is None:
+        logger.error("agent sponsored payment buyer user is unavailable username=%s", username)
+        return _error("payment_unavailable", "agent payment is temporarily unavailable", status=503)
+    return buyer_user, buyer_wallet
+
+
+def _sponsored_payment_response(request: HttpRequest, intent: SponsoredPaymentIntent, result=None) -> JsonResponse:
+    license = getattr(result, "license", None)
+    if license is None:
+        license = License.objects.filter(payment_tx_sig=intent.transaction_signature).first()
+    if license is None:
+        return _error("license_grant_failed", "license could not be recovered", status=503)
+    return JsonResponse(
+        {
+            "status": "PAID",
+            "intent_id": str(intent.id),
+            "transaction_signature": intent.transaction_signature,
+            "amount_usdc": str(intent.amount_usdc),
+            "download_url": _absolute_download_url(request, f"/files/{license.download_token}"),
+            "download_expires_at": license.download_expires_at.isoformat() if license.download_expires_at else None,
+        }
+    )
+
+
 def get_agent_sol_payment_terms(
     request: HttpRequest, asset_id: uuid.UUID
 ) -> JsonResponse:
@@ -611,7 +895,7 @@ def get_agent_sol_payment_terms(
             "accepted SOL negotiation session not found for this asset",
             status=409,
         )
-    amount = session.final_price_sol if session is not None else asset.target_price_sol
+    amount = session.final_price_sol if session is not None else asset.target_amount
     if amount is None or amount <= 0:
         return _error(
             "sol_price_not_configured",
@@ -681,7 +965,7 @@ def settle_agent_sol_payment(
             "accepted SOL negotiation session not found for this asset",
             status=409,
         )
-    amount = session.final_price_sol if session is not None else asset.target_price_sol
+    amount = session.final_price_sol if session is not None else asset.target_amount
     if amount is None or amount <= 0:
         return _error("sol_price_not_configured", "the seller has not configured a native SOL price", status=409)
     if asset.parent_asset_id is not None:

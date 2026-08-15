@@ -11,8 +11,8 @@ exercises the Gemini-wired branch + the shared invariant finaliser so the
 Gemini-success path is covered too.
 
 The engine is pure over (asset, session, offer_sol); no DB, no network. Asset
-and session are SimpleNamespace stand-ins exposing exactly the attributes the
-engine reads (min_price_sol, target_price_sol, parent_asset_id, creator,
+    and session are SimpleNamespace stand-ins exposing exactly the attributes the
+    engine reads (min_amount, target_amount, parent_asset_id, creator,
 rounds).
 """
 from __future__ import annotations
@@ -34,8 +34,8 @@ def _asset(*, min_price, target_price, parent=False):
     return SimpleNamespace(
         parent_asset_id=_ESCROW if parent else None,
         parent_asset=_ESCROW if parent else None,
-        min_price_sol=decimal.Decimal(str(min_price)),
-        target_price_sol=decimal.Decimal(str(target_price)),
+        min_amount=decimal.Decimal(str(min_price)),
+        target_amount=decimal.Decimal(str(target_price)),
         creator=SimpleNamespace(wallet_address=_CREATOR_WALLET),
     )
 
@@ -107,7 +107,7 @@ def test_counter_between_min_and_target_when_offer_below_min():
     assert result.status == "COUNTER_OFFER"
     assert result.pay_address is None
     # R3: counter must lie inside [min_price, target_price].
-    assert asset.min_price_sol <= result.price_sol <= asset.target_price_sol
+    assert asset.min_amount <= result.price_sol <= asset.target_amount
 
 
 # === R10 invariant: counter never below min =================================
@@ -123,7 +123,7 @@ def test_counter_price_never_below_min():
     )
 
     assert result.status == "COUNTER_OFFER"
-    assert result.price_sol >= asset.min_price_sol
+    assert result.price_sol >= asset.min_amount
 
 
 # === R9 / AC-6: REJECT after max rounds =====================================
@@ -182,7 +182,7 @@ def test_run_round_applies_invariants_to_gemini_result(monkeypatch):
 
     assert result.status == "ACCEPT"
     # R10 clamp: never below min on ACCEPT.
-    assert result.price_sol >= asset.min_price_sol
+    assert result.price_sol >= asset.min_amount
     assert result.pay_address == _CREATOR_WALLET
     # Gemini was actually consulted.
     assert any(c[0] == "negotiate" for c in fake.calls)
@@ -237,7 +237,7 @@ def test_run_round_clamps_gemini_counter_below_min():
     )
 
     assert result.status == "COUNTER_OFFER"
-    assert result.price_sol >= asset.min_price_sol
+    assert result.price_sol >= asset.min_amount
     assert result.pay_address is None
 
 

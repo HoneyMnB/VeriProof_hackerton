@@ -2,6 +2,7 @@
 
 from .client import AutonomousX402Buyer
 from .sol_client import AutonomousSolBuyer
+from .sponsored_usdc_client import AutonomousSponsoredUsdcBuyer
 from .policy import (
     AutonomousPaymentError,
     AutonomousPaymentPolicy,
@@ -15,6 +16,7 @@ __all__ = [
     "AutonomousPaymentPolicy",
     "AutonomousX402Buyer",
     "AutonomousSolBuyer",
+    "AutonomousSponsoredUsdcBuyer",
     "PaymentConfigurationError",
     "PaymentExecutionError",
     "PaymentPolicyRejected",

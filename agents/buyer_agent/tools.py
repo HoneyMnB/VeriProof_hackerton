@@ -13,7 +13,12 @@ from x402.http.utils import (
     decode_payment_response_header,
 )
 
-from .payments import AutonomousPaymentError, AutonomousSolBuyer, AutonomousX402Buyer
+from .payments import (
+    AutonomousPaymentError,
+    AutonomousSolBuyer,
+    AutonomousSponsoredUsdcBuyer,
+    AutonomousX402Buyer,
+)
 
 _ACCEPTED_SESSION_STATE_KEY = "buyer:accepted_x402_sessions"
 
@@ -299,6 +304,27 @@ async def purchase_sol_asset(
         return await AutonomousSolBuyer().purchase(
             _asset_url(asset_id),
             params=_session_query(resolved_session_id),
+        )
+    except AutonomousPaymentError as exc:
+        return {
+            "status": "payment_rejected",
+            "error": exc.code,
+            "detail": str(exc),
+        }
+
+
+async def purchase_sponsored_usdc_asset(asset_id: str) -> dict:
+    """Buyer KMS 지갑으로 sponsor-paid USDC 즉시 구매를 완료한다.
+
+    Phantom 또는 대화 속 개인키를 사용하지 않는다. 서버가 고정한 canonical
+    transaction이 Buyer KMS 지갑·USDC mint·거래당 한도와 일치할 때만 서명한다.
+
+    Args:
+        asset_id: 구매할 공개 자산 UUID.
+    """
+    try:
+        return await AutonomousSponsoredUsdcBuyer().purchase(
+            _asset_url(asset_id, "/agent-sponsored-usdc")
         )
     except AutonomousPaymentError as exc:
         return {

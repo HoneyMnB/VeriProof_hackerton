@@ -24,7 +24,6 @@ from django.template.response import TemplateResponse
 
 from apps.ip.browser_license_session import (
     get_active_browser_license,
-    remember_browser_payment_request,
 )
 from apps.ip.models import AssetImage, IpAsset
 from apps.settlement.models import License
@@ -32,7 +31,6 @@ from services.catalog_service import get_catalog_service
 from services.certificate_document_service import get_registration_certificate_document_service
 from services.preview_service import thumbnail_preview_url, watermark_preview_url
 from services.storage_service import get_storage_service
-from services.x402_service import get_x402_service
 
 from . import dashboard
 
@@ -114,17 +112,14 @@ def asset_detail(request: HttpRequest, asset_id) -> HttpResponse:
     )
     if asset is None:
         raise Http404("public asset not found")
-    payment = get_x402_service().build_solana_pay_fallback(asset)
     active_license = get_active_browser_license(request, asset)
-    if request.user.is_authenticated:
-        remember_browser_payment_request(request, asset, payment["solana_pay"]["reference"])
     return TemplateResponse(
         request,
         "asset_detail.html",
         {
             "asset": get_catalog_service().serialize(asset),
             "gallery_images": _gallery_previews(asset),
-            "payment": payment,
+            "solana_rpc_url": settings.SOLANA_RPC_URL,
             "active_license": _active_license_context(active_license),
             "active_nav": "discover",
         },
@@ -365,8 +360,9 @@ def _asset_card(asset: IpAsset) -> dict:
         "tags": list(asset.tags or []),
         "category": asset.category,
         "originality_score": asset.originality_score,
-        "min_price_sol": str(asset.min_price_sol) if asset.min_price_sol is not None else "",
-        "target_price_sol": str(asset.target_price_sol) if asset.target_price_sol is not None else "",
+        "min_amount": str(asset.min_amount) if asset.min_amount is not None else "",
+        "target_amount": str(asset.target_amount) if asset.target_amount is not None else "",
+        "currency": asset.currency,
         # 판매 조건 편집 폼은 서버가 가진 현재 공개 상태를 그대로 렌더링한다.
         # 누락하면 폼이 항상 private처럼 보이는 UI/데이터 불일치가 생긴다.
         "visibility": asset.visibility,

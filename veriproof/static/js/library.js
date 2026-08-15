@@ -55,20 +55,21 @@
             form.addEventListener("submit", function (event) {
                 event.preventDefault();
                 var status = form.querySelector(".asset-card__terms-status");
-                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.elements.title.value, description: form.elements.description.value, tags: parseTags(form.elements.tags.value), min_price_sol: form.elements.min_price_sol.value, target_price_sol: form.elements.target_price_sol.value, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
+                fetch("/api/v1/ip/" + encodeURIComponent(form.dataset.assetId) + "/terms", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: form.elements.title.value, description: form.elements.description.value, tags: parseTags(form.elements.tags.value), min_amount: form.elements.min_amount.value, target_amount: form.elements.target_amount.value, visibility: form.elements.visibility.value }) }).then(function (response) { return response.json().then(function (body) { return { ok: response.ok, body: body }; }); }).then(function (result) {
                     status.textContent = result.ok ? t("library.terms.saved") : (result.body.detail || t("library.terms.failed"));
                     if (!result.ok) { return; }
                     // 저장 직후 그리드의 핵심 정보도 갱신하여 새로고침 전의 불일치를 막는다.
                     var card = document.getElementById("asset-" + form.dataset.assetId);
                     if (!card) { return; }
-                    card.dataset.minPriceSol = result.body.min_price_sol || "";
-                    card.dataset.targetPriceSol = result.body.target_price_sol || "";
+                    card.dataset.minAmount = result.body.min_amount || "";
+                    card.dataset.targetAmount = result.body.target_amount || "";
+                    card.dataset.currency = result.body.currency || "USDC";
                     card.dataset.visibility = form.elements.visibility.value;
                     updateManageData(card, result.body);
                     var title = card.querySelector("h3");
                     if (title) { title.textContent = result.body.title || ""; }
                     var price = card.querySelector(".asset-card__price strong");
-                    if (price) { price.textContent = result.body.min_price_sol + " SOL"; }
+                    if (price) { price.textContent = result.body.min_amount + " " + card.dataset.currency; }
                 }).catch(function () { status.textContent = t("library.terms.network"); });
             });
         });
@@ -98,8 +99,8 @@
                 if (!card) { return; }
                 lastTrigger = button;
                 form.dataset.assetId = card.dataset.assetId;
-                form.elements.min_price_sol.value = card.dataset.minPriceSol;
-                form.elements.target_price_sol.value = card.dataset.targetPriceSol || "";
+                form.elements.min_amount.value = card.dataset.minAmount;
+                form.elements.target_amount.value = card.dataset.targetAmount || "";
                 form.elements.visibility.value = card.dataset.visibility;
                 var data = manageData(card);
                 form.elements.title.value = data.title || "";
@@ -115,7 +116,7 @@
                 explorer.href = card.dataset.explorerUrl || "#";
                 modal.hidden = false;
                 document.body.style.overflow = "hidden";
-                form.elements.min_price_sol.focus();
+                form.elements.min_amount.focus();
             });
         });
     }

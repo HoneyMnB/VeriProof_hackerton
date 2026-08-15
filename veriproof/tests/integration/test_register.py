@@ -516,7 +516,8 @@ def test_register_persists_creator_selected_target_price(client, png_bytes, monk
     ).json()
     asset = IpAsset.objects.get(id=body["asset_id"])
     assert asset.target_price_usdc is None
-    assert asset.target_price_sol == _decimal.Decimal("4.250000000")
+    assert asset.target_amount == _decimal.Decimal("4.250000000")
+    assert asset.target_price_sol is None
 
 
 # --- Event recording ---------------------------------------------------------

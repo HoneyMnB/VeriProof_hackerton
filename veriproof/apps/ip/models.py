@@ -136,6 +136,23 @@ class IpAsset(UUIDPrimaryKey):
         blank=True,
         validators=[MinValueValidator(0)],
     )
+    # Canonical amount fields. Existing SOL-price values are copied without
+    # conversion by migration 0020; currency is recorded as requested.
+    target_amount = models.DecimalField(
+        max_digits=16,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    min_amount = models.DecimalField(
+        max_digits=16,
+        decimal_places=9,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(0)],
+    )
+    currency = models.CharField(max_length=8, default="USDC")
     # Permanent original-content hash (64 hex chars).
     image_sha256 = models.CharField(max_length=64, unique=True, db_index=True)
     # 이미지 검색 후보를 빠르게 좁히는 64-bit 지각 해시. 원본 SHA-256과 달리
@@ -476,4 +493,43 @@ class CreatorExpense(models.Model):
                 fields=["creator", "occurred_at"],
                 name="ip_expense_creator_9e34bc_idx",
             )
+        ]
+
+
+class SponsoredPaymentIntent(UUIDPrimaryKey):
+    """One browser-authorized USDC transfer whose fee is paid by VeriProof."""
+
+    CREATED = "created"
+    SUBMITTED = "submitted"
+    SETTLED = "settled"
+    EXPIRED = "expired"
+    BROWSER = "browser"
+    AGENT = "agent"
+    STATUS_CHOICES = [
+        (CREATED, "created"),
+        (SUBMITTED, "submitted"),
+        (SETTLED, "settled"),
+        (EXPIRED, "expired"),
+    ]
+    CHANNEL_CHOICES = [
+        (BROWSER, "browser"),
+        (AGENT, "agent"),
+    ]
+
+    asset = models.ForeignKey(IpAsset, on_delete=models.PROTECT, related_name="sponsored_payment_intents")
+    buyer_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sponsored_payment_intents")
+    buyer_wallet = models.CharField(max_length=64)
+    recipient_wallet = models.CharField(max_length=64)
+    amount_usdc = models.DecimalField(max_digits=12, decimal_places=6)
+    memo = models.CharField(max_length=120, unique=True)
+    channel = models.CharField(max_length=12, choices=CHANNEL_CHOICES, default=BROWSER)
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default=CREATED, db_index=True)
+    transaction_signature = models.CharField(max_length=140, unique=True, null=True, blank=True)
+    expires_at = models.DateTimeField(db_index=True)
+    settled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["buyer_user", "asset", "status"], name="ip_sponsor_buyer_asset_idx"),
         ]

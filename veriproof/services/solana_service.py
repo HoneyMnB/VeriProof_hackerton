@@ -193,6 +193,7 @@ class SolanaService:
         expected_recipient: str,
         expected_amount: decimal.Decimal,
         mint: str,
+        expected_memo: str | None = None,
     ) -> PaymentVerification:
         """Verify a confirmed SPL USDC transfer by parsed transaction data."""
         if not tx_sig or not expected_recipient or not mint:
@@ -204,6 +205,8 @@ class SolanaService:
         slot = int(result.get("slot") or 0)
         meta = result.get("meta")
         if not isinstance(meta, dict) or meta.get("err"):
+            return self._invalid_payment(slot=slot, commitment="confirmed")
+        if expected_memo is not None and not self._has_memo(result, expected_memo):
             return self._invalid_payment(slot=slot, commitment="confirmed")
 
         expected_units = self._usdc_to_min_units(expected_amount)
@@ -257,6 +260,23 @@ class SolanaService:
             if isinstance(signature, str) and not item.get("err"):
                 signatures.append(signature)
         return signatures
+
+    def is_transaction_finalized(self, signature: str) -> bool:
+        """Return whether a signature reached finality; never infer it from send."""
+        if not signature:
+            return False
+        payload = self._post_rpc(
+            "getSignatureStatuses",
+            [[signature], {"searchTransactionHistory": True}],
+        )
+        result = payload.get("result")
+        values = result.get("value") if isinstance(result, dict) else None
+        status = values[0] if isinstance(values, list) and values else None
+        return bool(
+            isinstance(status, dict)
+            and status.get("err") is None
+            and status.get("confirmationStatus") == "finalized"
+        )
 
     def verify_sol_payment_transaction(
         self,
@@ -508,6 +528,12 @@ class SolanaService:
             if transfer["destination"] == expected_recipient and transfer["amount"] == expected_units:
                 return transfer.get("authority") or transfer.get("source") or ""
         return None
+
+    def _has_memo(self, result: dict[str, Any], expected_memo: str) -> bool:
+        return any(
+            self._instruction_memo(instruction) == expected_memo
+            for instruction in self._transaction_instructions(result)
+        )
 
     @staticmethod
     def _transaction_instructions(result: dict[str, Any]) -> list[dict[str, Any]]:

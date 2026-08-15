@@ -192,12 +192,12 @@ class X402Service:
     def build_solana_pay_fallback(self, asset: Any) -> dict:
         """Build the 200 Solana Pay Buy-It-Now body for non-agent clients.
 
-        The fixed SOL amount equals ``asset.target_price_sol``. The address is
+        The fixed SOL amount equals ``asset.target_amount``. The address is
         routed through the same shared recipient-resolution rule as the 402
         path so browser and agent clients cannot disagree on the recipient.
         """
         pay_to = resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey)
-        amount_str = str(asset.target_price_sol)
+        amount_str = str(asset.target_amount)
         # x402 uses CAIP-2 identifiers, while the Solana Pay URL specification
         # expects the wallet-network name for its ``cluster`` query parameter.
         cluster = "devnet" if self.network == SOLANA_DEVNET_CAIP2 else self.network

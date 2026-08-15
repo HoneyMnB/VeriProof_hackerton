@@ -62,7 +62,7 @@
             <a class="marketplace-card__link" href="/discover/{{ asset.asset_id }}" aria-label="View {{ asset.title }}" data-i18n-aria-label="discover.card.open_aria" data-i18n-vars='{"title": "{{ asset.title|escapejs }}"}'>
                 <img src="{{ asset.watermark_url }}" alt="Protected preview of {{ asset.title }}" data-i18n-alt="discover.card.preview_alt" data-i18n-vars='{"title": "{{ asset.title|escapejs }}"}' loading="lazy" decoding="async" width="600" height="400">
                 <span class="marketplace-card__type" data-i18n="common.asset_type.{{ asset.asset_type }}">{{ asset.asset_type }}</span>
-                {% if asset.min_price_sol %}<span class="marketplace-card__price"><strong>{{ asset.min_price_sol }}</strong> SOL</span>{% endif %}
+                {% if asset.min_amount %}<span class="marketplace-card__price"><strong>{{ asset.min_amount }}</strong> {{ asset.currency }}</span>{% endif %}
                 <div class="marketplace-card__overlay">
                     <span class="marketplace-card__protected" data-i18n="discover.card.protected">Watermarked preview</span>
                     <h3>{{ asset.title }}</h3>

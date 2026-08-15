@@ -298,7 +298,7 @@
          * 현재 등록 폼의 모든 입력값을 객체로 수집해 반환한다(자산 유형/제목/설명/태그/가격/공개여부).
          */
         function fields() {
-            // Registration-canvas prices are native Devnet SOL amounts.
+            // Registration-canvas prices are submitted as USDC amounts.
             return { asset_type: byId("asset-type").value, title: byId("asset-title").value.trim(), description: byId("asset-description").value.trim(), tags: byId("asset-tags").value.trim(), min_price: byId("min-price").value, target_price: byId("target-price").value, visibility: byId("asset-share").checked ? "public" : "private" };
         }
         function registrationFiles() {

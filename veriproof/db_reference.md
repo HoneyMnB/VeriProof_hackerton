@@ -387,3 +387,35 @@ Income is not copied into this table: it is calculated from verified
   검증한다.
 - Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration
   `apps/common/migrations/0002_agentevent_live_flow.py`가 필요하다. Alembic 대상은 아니다.
+
+## 2026-08-15 — Sponsored USDC browser payment (migration `ip.0019`)
+
+- 변경: `ip.SponsoredPaymentIntent`를 추가했다. 인증된 구매자·지갑·자산·수취 지갑·고정 USDC 금액·고유 memo·만료·거래 서명·정산 상태를 보존한다.
+- 이유: 플랫폼이 Solana 수수료를 부담하는 브라우저 USDC 결제에서, 클라이언트가 보낸 가격/수취인/성공 정보를 신뢰하지 않고 intent와 finalized 온체인 거래를 정확히 대조하기 위함이다.
+- 영향 범위: 공개 작품 상세의 구매 경로가 native SOL Solana Pay에서 sponsor-paid USDC로 전환된다. 기존 License 장부와 다운로드 만료 정책은 유지한다.
+- 검증: intent는 사용자·지갑·자산·금액·memo·만료에 묶이고 거래 서명은 unique다. 실제 Devnet은 sponsor KMS 키, SOL 잔액, USDC 보유 지갑이 필요한 배포 검증 항목이다.
+- Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration `ip.0019_sponsoredpaymentintent`가 필요하다. Alembic 대상은 아니다.
+
+## 2026-08-15 — IP asset amount and currency (migration `ip.0020`)
+
+- 변경: `ip_ipasset`에 nullable `target_amount`, `min_amount`(각각 `Decimal(16, 9)`)와 기본값 `USDC`의 `currency`를 추가한다.
+- 데이터 이관: 기존 모든 행에서 `target_price_sol` 값을 `target_amount`에, `min_price_sol` 값을 `min_amount`에 그대로 복사하고 `currency`를 `USDC`로 설정한다. 환산은 수행하지 않는다.
+- 영향 범위: 기존 가격 컬럼은 유지하므로 현재 가격·협상·결제 런타임 경로는 변경되지 않는다. 새 컬럼은 마이그레이션 적용 후부터 조회할 수 있다.
+- 검증: 마이그레이션의 `RunPython` 및 `init/backfill_ipasset_amounts.py`는 동일한 무환산 갱신을 idempotent하게 수행한다.
+- Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration `ip.0020_ipasset_amount_currency`가 필요하다. Alembic 대상은 아니다.
+
+## 2026-08-15 — IP asset price source migration
+
+- 변경: 신규 작품 등록과 판매 조건 수정은 `min_price_sol`·`target_price_sol`을 기록하지 않고 `min_amount`·`target_amount`와 `currency=USDC`만 기록한다. 카탈로그, 협상, Solana Pay 가격 검증 및 라이브러리 UI도 새 금액 컬럼을 조회한다.
+- 이유: 가격의 단일 저장·조회 기준을 통화가 명시된 금액 컬럼으로 통합하기 위함이다.
+- 영향 범위: 새 작품의 legacy SOL 가격 컬럼은 `NULL`이다. 기존 행은 `ip.0020` 데이터 이관 및 시작 백필로 새 컬럼에 보존된 값으로 동작한다.
+- 검증: `tests/unit/test_negotiation_engine.py`, `tests/unit/test_x402_service.py`의 DB 비의존 테스트 26개를 통과했다.
+
+## 2026-08-15 — Agent sponsored USDC payment channel (migration `ip.0021`)
+
+- 변경: `ip.SponsoredPaymentIntent.channel`에 `browser`와 `agent`를 기록한다. Agent intent는 서버 설정의 Buyer service user 및 Buyer KMS 공개키에만 연결한다.
+- 이유: Phantom 브라우저 결제와 KMS 위임형 Buyer Agent 결제를 구분해, 한 경로의 intent를 다른 경로로 정산하거나 라이선스 귀속을 바꾸지 못하게 하기 위함이다.
+- 영향 범위: Agent sponsor-paid USDC 결제는 `currency=USDC`인 자산의 `target_amount`만 가격 기준으로 사용한다. legacy `target_price_sol` 및 `min_price_sol`은 이 결제 경로에서 조회하지 않는다.
+- 검증: Agent가 canonical ATA 생성·`transferChecked`·memo transaction만 서명하고 응답 금액 변조를 거절하는 단위 테스트를 통과했다. DB 통합 테스트는 PostgreSQL 실행 환경에서 수행한다.
+- Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration `ip.0021_sponsoredpaymentintent_channel`이 필요하다. Alembic 대상은 아니다.
+- Alembic 필요 여부: 추가 스키마 변경은 없으며 기존 Django migration `ip.0020_ipasset_amount_currency`를 적용한다. Alembic 대상은 아니다.

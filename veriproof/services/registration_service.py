@@ -40,8 +40,7 @@ class RegistrationMetadata:
     creator_wallet: str
     asset_type: str
     visibility: str
-    # Registration-canvas price inputs are native Devnet SOL values. USDC
-    # terms remain independent and are never inferred from these values.
+    # Registration-canvas prices are stored verbatim as USDC amounts.
     min_price: decimal.Decimal
     target_price: decimal.Decimal
     title: str | None = None
@@ -244,8 +243,9 @@ class RegistrationService:
                 originality_score=analysis.originality_score,
                 min_price_usdc=None,
                 target_price_usdc=None,
-                min_price_sol=metadata.min_price,
-                target_price_sol=metadata.target_price,
+                min_amount=metadata.min_price,
+                target_amount=metadata.target_price,
+                currency="USDC",
                 image_sha256=content_hash,
                 perceptual_hash=perceptual_hash,
                 thumbnail_url=thumbnail_url,

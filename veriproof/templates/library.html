@@ -32,8 +32,9 @@
             {% for asset in assets %}
             <li class="asset-card" id="asset-{{ asset.asset_id }}"
                 data-asset-id="{{ asset.asset_id }}"
-                data-min-price-sol="{{ asset.min_price_sol }}"
-                data-target-price-sol="{{ asset.target_price_sol }}"
+                data-min-amount="{{ asset.min_amount }}"
+                data-target-amount="{{ asset.target_amount }}"
+                data-currency="{{ asset.currency }}"
                 data-visibility="{{ asset.visibility }}"
                 data-explorer-url="{{ asset.explorer_url|default:'' }}"
                 data-manage="{{ asset.manage_json|escape }}">
@@ -66,7 +67,7 @@
                         {% endif %}
                     </div>
 
-                    <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_price_sol }} SOL</strong></p>
+                    <p class="asset-card__price"><span data-i18n="library.asset.min">Minimum price</span> <strong>{{ asset.min_amount }} {{ asset.currency }}</strong></p>
                     <p class="asset-card__wallet"><span data-i18n="library.field.creator_wallet">Creator wallet</span> <code translate="no">{{ asset.certificate.creator_wallet }}</code></p>
 
                     <div class="asset-card__actions">
@@ -109,7 +110,7 @@
             </section>
             <section class="asset-settings-modal__section asset-settings-modal__pricing">
                 <p class="asset-settings-modal__section-title" data-i18n="library.terms.listing">Listing settings</p>
-                <div class="asset-settings-modal__price-fields"><label><span data-i18n="library.terms.minimum">Minimum SOL</span><input name="min_price_sol" type="number" min="0" step="0.000000001" required></label><label><span data-i18n="library.terms.target">Target SOL</span><input name="target_price_sol" type="number" min="0.000000001" step="0.000000001" required></label></div>
+                <div class="asset-settings-modal__price-fields"><label><span data-i18n="library.terms.minimum">Minimum amount (USDC)</span><input name="min_amount" type="number" min="0" step="0.000000001" required></label><label><span data-i18n="library.terms.target">Target amount (USDC)</span><input name="target_amount" type="number" min="0.000000001" step="0.000000001" required></label></div>
                 <label><span data-i18n="library.terms.visibility">Visibility</span><select name="visibility"><option value="private" data-i18n="library.terms.private">Private</option><option value="public" data-i18n="library.terms.public">Public</option></select></label>
             </section>
             <section class="asset-settings-modal__section asset-settings-modal__sales" aria-labelledby="asset-sales-title">

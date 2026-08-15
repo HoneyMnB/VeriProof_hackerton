@@ -49,6 +49,9 @@ class IpAssetFactory(factory.django.DjangoModelFactory):
     target_price_usdc = FuzzyDecimal(2.00, 10.00)
     min_price_sol = FuzzyDecimal(0.05, 0.20)
     target_price_sol = FuzzyDecimal(0.20, 1.00)
+    min_amount = factory.SelfAttribute("min_price_sol")
+    target_amount = factory.SelfAttribute("target_price_sol")
+    currency = "USDC"
     image_sha256 = factory.LazyFunction(_unique_sha256)
     thumbnail_url = factory.Sequence(lambda n: f"https://cdn.test/thumb-{n}.png")
     watermark_url = factory.Sequence(lambda n: f"https://cdn.test/wm-{n}.png")

@@ -183,8 +183,8 @@ def test_owner_can_update_work_metadata_and_listing_terms(client):
             "title": "Edited work",
             "description": "Updated creator description",
             "tags": ["editorial", "portrait"],
-            "min_price_sol": "4.50",
-            "target_price_sol": "8.00",
+            "min_amount": "4.50",
+            "target_amount": "8.00",
             "visibility": "private",
         },
         content_type="application/json",
@@ -194,7 +194,7 @@ def test_owner_can_update_work_metadata_and_listing_terms(client):
     assert asset.title == "Edited work"
     assert asset.description == "Updated creator description"
     assert asset.tags == ["editorial", "portrait"]
-    assert str(asset.min_price_sol) == "4.500000000"
+    assert str(asset.min_amount) == "4.500000000"
 
 
 @pytest.mark.django_db
@@ -207,7 +207,7 @@ def test_owner_metadata_update_keeps_existing_tags_when_terms_client_omits_them(
     asset = IpAssetFactory(creator=owner, account_owner=user, tags=["keep-me"])
     response = client.post(
         f"/api/v1/ip/{asset.id}/terms",
-        data={"min_price_sol": "2", "target_price_sol": "3", "visibility": "private"},
+        data={"min_amount": "2", "target_amount": "3", "visibility": "private"},
         content_type="application/json",
     )
     assert response.status_code == 200

@@ -54,8 +54,8 @@ class NegotiationEngine:
         """
         max_rounds = self._resolve_max_rounds()
         rounds = list(getattr(session, "rounds", None) or [])
-        min_price = asset.min_price_sol
-        target_price = asset.target_price_sol
+        min_price = asset.min_amount
+        target_price = asset.target_amount
         if min_price is None or target_price is None:
             raise ValueError("native SOL negotiation prices are not configured")
         offer_meets_min = offer_sol >= min_price
@@ -115,7 +115,7 @@ class NegotiationEngine:
         status = raw.status
         price = raw.price_sol
         reason = raw.reason
-        min_price = asset.min_price_sol
+        min_price = asset.min_amount
 
         if status == "ACCEPT":
             if price is None or price < min_price:
