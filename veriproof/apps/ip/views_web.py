@@ -16,11 +16,24 @@ from __future__ import annotations
 
 import decimal
 import json
+from datetime import timedelta
 from django.conf import settings
 from django.db.models import Prefetch
 from django.contrib.auth.decorators import login_required
-from django.http import Http404, HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.template.response import TemplateResponse
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from webauthn.helpers.exceptions import WebAuthnException
+
+from apps.accounts.models import PasskeyCredential
+from apps.accounts.passkeys import (
+    PasskeyCeremonyError,
+    authentication_options,
+    consume_ceremony,
+    decode_base64url,
+    verify_authentication,
+)
 
 from apps.ip.browser_license_session import (
     get_active_browser_license,
@@ -50,6 +63,10 @@ _PRICE_BUCKETS = [
     ("5to25", "5 - 25 SOL", "5", "25"),
     ("over25", "25+ SOL", "25", None),
 ]
+
+_CERTIFICATE_CEREMONY_KIND = "certificate_access"
+_CERTIFICATE_ACCESS_SESSION_KEY = "certificate_access_grant"
+_CERTIFICATE_ACCESS_TTL = timedelta(minutes=5)
 
 
 def _model_label(model_id: str | None) -> str:
@@ -290,10 +307,81 @@ def library(request: HttpRequest) -> HttpResponse:
             "events_url": "/api/v1/events",
             "transactions_url_template": "/api/v1/ip/{asset_id}/transactions",
             "assets_api_url": "/api/v1/assets",
+            "certificate_auth_method": (
+                "passkey" if request.user.passkey_credentials.exists() else "password"
+            ),
             "active_nav": "library",
             "debug": settings.DEBUG,
         },
     )
+
+
+@login_required
+@require_POST
+def certificate_authentication_options(request: HttpRequest, asset_id) -> JsonResponse:
+    """Start a user-verifying WebAuthn ceremony scoped to one owned certificate."""
+    _owned_certificate_asset(request, asset_id)
+    credentials = list(request.user.passkey_credentials.all())
+    if not credentials:
+        return _certificate_error("No passkey is registered for this account.", 409, "password_required")
+    try:
+        options = authentication_options(
+            request,
+            credentials,
+            ceremony_kind=_CERTIFICATE_CEREMONY_KIND,
+            ceremony_data={"user_id": request.user.pk, "asset_id": str(asset_id)},
+        )
+    except PasskeyCeremonyError as exc:
+        return _certificate_error(str(exc), 400)
+    return JsonResponse(json.loads(options))
+
+
+@login_required
+@require_POST
+def certificate_passkey_verify(request: HttpRequest, asset_id) -> JsonResponse:
+    """Verify the current account's passkey without replacing its login session."""
+    asset = _owned_certificate_asset(request, asset_id)
+    try:
+        payload = _request_json(request)
+        challenge, ceremony = consume_ceremony(request, _CERTIFICATE_CEREMONY_KIND)
+        if ceremony.get("user_id") != request.user.pk or ceremony.get("asset_id") != str(asset_id):
+            raise PasskeyCeremonyError("Passkey ceremony does not match this certificate.")
+        credential = payload["credential"]
+        raw_id = credential.get("rawId") or credential.get("id")
+        stored = PasskeyCredential.objects.get(
+            user=request.user,
+            credential_id=decode_base64url(raw_id),
+        )
+        asserted_handle = credential.get("response", {}).get("userHandle")
+        if asserted_handle and decode_base64url(asserted_handle) != bytes(stored.user_handle):
+            raise PasskeyCeremonyError("Passkey user handle does not match the credential.")
+        verified = verify_authentication(request, credential, stored, challenge)
+        stored.sign_count = verified.new_sign_count
+        stored.last_used_at = timezone.now()
+        stored.save(update_fields=["sign_count", "last_used_at"])
+    except PasskeyCredential.DoesNotExist:
+        return _certificate_error("Passkey is not registered for this account.", 400)
+    except (KeyError, TypeError, ValueError, PasskeyCeremonyError, WebAuthnException) as exc:
+        return _certificate_error(str(exc), 400)
+    _grant_certificate_access(request, asset)
+    return JsonResponse({"status": "authenticated", "certificate": _certificate_payload(asset)})
+
+
+@login_required
+@require_POST
+def certificate_password_verify(request: HttpRequest, asset_id) -> JsonResponse:
+    """Use password step-up only for accounts that do not own a passkey."""
+    asset = _owned_certificate_asset(request, asset_id)
+    if request.user.passkey_credentials.exists():
+        return _certificate_error("Use a registered passkey for this account.", 409, "passkey_required")
+    try:
+        password = str(_request_json(request).get("password") or "")
+    except (TypeError, ValueError) as exc:
+        return _certificate_error(str(exc), 400)
+    if not password or not request.user.check_password(password):
+        return _certificate_error("Password verification failed.", 401, "invalid_password")
+    _grant_certificate_access(request, asset)
+    return JsonResponse({"status": "authenticated", "certificate": _certificate_payload(asset)})
 
 
 @login_required
@@ -305,6 +393,8 @@ def download_registration_certificate(request: HttpRequest, asset_id) -> HttpRes
     ).first()
     if asset is None:
         raise Http404("certificate not found")
+    if not _has_certificate_access(request, asset):
+        return HttpResponse("certificate authentication required", status=403, content_type="text/plain")
     if not asset.registration_certificate_tx_sig or not asset.anchor_tx_sig:
         return HttpResponse("registration certificate is pending", status=409, content_type="text/plain")
     explorer_url = dashboard.explorer_url(asset.anchor_tx_sig)
@@ -315,6 +405,70 @@ def download_registration_certificate(request: HttpRequest, asset_id) -> HttpRes
     response["Content-Disposition"] = f'attachment; filename="veriproof-registration-{asset.id}.pdf"'
     response["Cache-Control"] = "private, no-store"
     return response
+
+
+def _owned_certificate_asset(request: HttpRequest, asset_id) -> IpAsset:
+    asset = (
+        IpAsset.objects.select_related("creator")
+        .prefetch_related(Prefetch("licenses", queryset=License.objects.order_by("-granted_at")))
+        .filter(id=asset_id, account_owner=request.user)
+        .first()
+    )
+    if asset is None:
+        raise Http404("certificate not found")
+    return asset
+
+
+def _certificate_payload(asset: IpAsset) -> dict:
+    licenses = list(asset.licenses.all())
+    latest_license = licenses[0] if licenses else None
+    payload = dashboard.build_certificate_payload(
+        asset,
+        certificate_tx_sig=(
+            latest_license.certificate_tx_sig if latest_license else None
+        ) or asset.registration_certificate_tx_sig,
+    )
+    payload.update({
+        "work_title": asset.title or "",
+        "registered_at": asset.created_at.isoformat() if asset.created_at else None,
+        "download_url": (
+            f"/library/{asset.id}/certificate.pdf"
+            if asset.registration_certificate_tx_sig else None
+        ),
+    })
+    return payload
+
+
+def _request_json(request: HttpRequest) -> dict:
+    try:
+        payload = json.loads(request.body or b"{}")
+    except json.JSONDecodeError as exc:
+        raise ValueError("Request body is not valid JSON.") from exc
+    if not isinstance(payload, dict):
+        raise TypeError("Request body must be a JSON object.")
+    return payload
+
+
+def _certificate_error(detail: str, status: int, code: str = "certificate_auth_failed") -> JsonResponse:
+    return JsonResponse({"error": code, "detail": detail}, status=status)
+
+
+def _grant_certificate_access(request: HttpRequest, asset: IpAsset) -> None:
+    request.session[_CERTIFICATE_ACCESS_SESSION_KEY] = {
+        "asset_id": str(asset.id),
+        "verified_at": timezone.now().isoformat(),
+    }
+
+
+def _has_certificate_access(request: HttpRequest, asset: IpAsset) -> bool:
+    grant = request.session.get(_CERTIFICATE_ACCESS_SESSION_KEY) or {}
+    if grant.get("asset_id") != str(asset.id):
+        return False
+    try:
+        verified_at = timezone.datetime.fromisoformat(grant["verified_at"])
+    except (KeyError, TypeError, ValueError):
+        return False
+    return timezone.now() - verified_at <= _CERTIFICATE_ACCESS_TTL
 
 
 def _asset_card(asset: IpAsset) -> dict:

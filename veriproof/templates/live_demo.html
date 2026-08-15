@@ -23,37 +23,54 @@
         <article class="is-accent"><span>Settlements</span><strong id="live-metric-settlements">—</strong><small>on-chain payments</small></article>
     </section>
 
-    <section class="live-demo__stage" aria-labelledby="registration-flow-title">
-        <div class="live-demo__stage-head">
-            <div><p>Seller journey</p><h2 id="registration-flow-title">Asset registration flow</h2></div>
-            <div class="live-demo__legend"><span><i class="is-ai"></i>Agent</span><span><i class="is-chain"></i>On-chain</span><span><i class="is-proof"></i>Proof</span></div>
+    <div class="live-demo__workspace">
+        <div class="live-demo__tabs" role="tablist" aria-label="Live demo journeys">
+            <button class="live-demo__tab is-active" id="live-tab-registration" type="button" role="tab" aria-selected="true" aria-controls="live-panel-registration" data-flow="registration">
+                <span><small>Seller journey</small><strong>Asset registration</strong></span>
+                <span class="live-demo__tab-count" id="live-tab-registration-count">0</span>
+                <i class="live-demo__tab-activity" aria-hidden="true" hidden></i>
+            </button>
+            <button class="live-demo__tab" id="live-tab-commerce" type="button" role="tab" aria-selected="false" aria-controls="live-panel-commerce" data-flow="commerce" tabindex="-1">
+                <span><small>Buyer-agent journey</small><strong>A2A commerce</strong></span>
+                <span class="live-demo__tab-count" id="live-tab-commerce-count">0</span>
+                <i class="live-demo__tab-activity" aria-hidden="true" hidden></i>
+            </button>
         </div>
-        <div class="live-demo__rail" aria-hidden="true">
-            <div><span>01</span><strong>Upload</strong></div><i></i>
-            <div><span>02</span><strong>Analyze</strong></div><i></i>
-            <div><span>03</span><strong>Anchor</strong></div><i></i>
-            <div><span>04</span><strong>Register</strong></div>
-        </div>
-        <div id="live-demo-skeleton" class="live-demo__skeleton" aria-label="Loading live events">
-            <span></span><span></span><span></span>
-        </div>
-        <div id="live-registration-groups" class="live-demo__groups" aria-live="polite"></div>
-    </section>
 
-    <section class="live-demo__stage" aria-labelledby="commerce-flow-title">
-        <div class="live-demo__stage-head">
-            <div><p>Buyer-agent journey</p><h2 id="commerce-flow-title">A2A negotiation &amp; purchase</h2></div>
-        </div>
-        <div class="live-demo__rail" aria-hidden="true">
-            <div><span>01</span><strong>Discover</strong></div><i></i>
-            <div><span>02</span><strong>Negotiate</strong></div><i></i>
-            <div><span>03</span><strong>Pay</strong></div><i></i>
-            <div><span>04</span><strong>License</strong></div>
-        </div>
-        <div id="live-commerce-groups" class="live-demo__groups" aria-live="polite"></div>
-    </section>
-    <div id="live-demo-empty" class="live-demo__empty" hidden>
-        <span>⌁</span><h3>No live activity yet</h3><p>Register an asset or start an A2A purchase. Verified events will stream here automatically.</p>
+        <section class="live-demo__stage" id="live-panel-registration" role="tabpanel" aria-labelledby="live-tab-registration" tabindex="0">
+            <div class="live-demo__stage-head">
+                <div><p>Seller journey</p><h2>Asset registration flow</h2></div>
+                <div class="live-demo__legend"><span><i class="is-ai"></i>Agent</span><span><i class="is-chain"></i>On-chain</span><span><i class="is-proof"></i>Proof</span></div>
+            </div>
+            <div class="live-demo__rail" aria-hidden="true">
+                <div><span>01</span><strong>Upload</strong></div><i></i>
+                <div><span>02</span><strong>Analyze</strong></div><i></i>
+                <div><span>03</span><strong>Anchor</strong></div><i></i>
+                <div><span>04</span><strong>Register</strong></div>
+            </div>
+            <div class="live-demo__skeleton" aria-label="Loading registration events"><span></span><span></span><span></span></div>
+            <div id="live-registration-groups" class="live-demo__groups" aria-live="polite"></div>
+            <div id="live-registration-empty" class="live-demo__empty" hidden>
+                <span>⌁</span><h3>No registration activity yet</h3><p>Register an asset to watch analysis, anchoring, and proof issuance in real time.</p>
+            </div>
+        </section>
+
+        <section class="live-demo__stage" id="live-panel-commerce" role="tabpanel" aria-labelledby="live-tab-commerce" tabindex="0" hidden>
+            <div class="live-demo__stage-head">
+                <div><p>Buyer-agent journey</p><h2>A2A negotiation &amp; purchase</h2></div>
+            </div>
+            <div class="live-demo__rail" aria-hidden="true">
+                <div><span>01</span><strong>Discover</strong></div><i></i>
+                <div><span>02</span><strong>Negotiate</strong></div><i></i>
+                <div><span>03</span><strong>Pay</strong></div><i></i>
+                <div><span>04</span><strong>License</strong></div>
+            </div>
+            <div class="live-demo__skeleton" aria-label="Loading commerce events"><span></span><span></span><span></span></div>
+            <div id="live-commerce-groups" class="live-demo__groups" aria-live="polite"></div>
+            <div id="live-commerce-empty" class="live-demo__empty" hidden>
+                <span>⌁</span><h3>No commerce activity yet</h3><p>Start an A2A negotiation or purchase to stream verified buyer-agent events.</p>
+            </div>
+        </section>
     </div>
 </div>
 {% endblock %}

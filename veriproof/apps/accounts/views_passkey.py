@@ -1,7 +1,6 @@
 """Django HTTP boundaries for passkey registration and authentication."""
 from __future__ import annotations
 
-import base64
 import json
 
 from django.contrib.auth import login
@@ -11,11 +10,11 @@ from django.http import HttpRequest, JsonResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.http import url_has_allowed_host_and_scheme
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from webauthn.helpers.exceptions import WebAuthnException
 
 from .models import PasskeyCredential
-from .passkeys import PasskeyCeremonyError, authentication_options, consume_ceremony
+from .passkeys import PasskeyCeremonyError, authentication_options, consume_ceremony, decode_base64url
 from .passkeys import registration_options, verify_authentication, verify_registration
 
 
@@ -41,10 +40,27 @@ def credential_list(request: HttpRequest) -> JsonResponse:
             "id": item.pk, "device_name": item.device_name,
             "created_at": item.created_at.isoformat(),
             "last_used_at": item.last_used_at.isoformat() if item.last_used_at else None,
+            "transports": item.transports,
+            "device_type": item.device_type,
             "backed_up": item.backed_up,
         }
         for item in request.user.passkey_credentials.all()
     ]})
+
+
+@login_required
+@require_http_methods(["DELETE"])
+def credential_delete(request: HttpRequest, credential_id: int) -> JsonResponse:
+    credential = request.user.passkey_credentials.filter(pk=credential_id).first()
+    if credential is None:
+        return JsonResponse({"error": "passkey_not_found", "detail": "Passkey was not found."}, status=404)
+    if not request.user.has_usable_password() and request.user.passkey_credentials.count() == 1:
+        return JsonResponse({
+            "error": "last_authenticator",
+            "detail": "Set an account password before removing your last passkey.",
+        }, status=409)
+    credential.delete()
+    return JsonResponse({"status": "deleted", "id": credential_id})
 
 
 @login_required
@@ -62,7 +78,7 @@ def registration_complete(request: HttpRequest) -> JsonResponse:
         payload = _payload(request)
         challenge, ceremony = consume_ceremony(request, "register")
         verified = verify_registration(request, payload["credential"], challenge)
-        handle = _decode(ceremony["user_handle"])
+        handle = decode_base64url(ceremony["user_handle"])
         response = payload["credential"].get("response", {})
         device_name = str(payload.get("device_name") or "Passkey").strip()[:80] or "Passkey"
         with transaction.atomic():
@@ -99,9 +115,9 @@ def authentication_complete(request: HttpRequest) -> JsonResponse:
     try:
         payload = _payload(request)
         raw_id = payload["credential"].get("rawId") or payload["credential"].get("id")
-        stored = PasskeyCredential.objects.select_related("user").get(credential_id=_decode(raw_id))
+        stored = PasskeyCredential.objects.select_related("user").get(credential_id=decode_base64url(raw_id))
         asserted_handle = payload["credential"].get("response", {}).get("userHandle")
-        if asserted_handle and _decode(asserted_handle) != bytes(stored.user_handle):
+        if asserted_handle and decode_base64url(asserted_handle) != bytes(stored.user_handle):
             raise PasskeyCeremonyError("Passkey user handle does not match the credential.")
         challenge, _ = consume_ceremony(request, "authenticate")
         verified = verify_authentication(request, payload["credential"], stored, challenge)
@@ -115,9 +131,3 @@ def authentication_complete(request: HttpRequest) -> JsonResponse:
     except (KeyError, TypeError, ValueError, PasskeyCeremonyError, WebAuthnException) as exc:
         return _error(exc)
     return JsonResponse({"status": "authenticated", "redirect": redirect_to})
-
-
-def _decode(value: str) -> bytes:
-    if not isinstance(value, str) or not value:
-        raise PasskeyCeremonyError("Credential identifier is missing.")
-    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))

@@ -106,6 +106,8 @@
 - KMS/Secret Manager signer가 인증서와 fee sponsorship에 접근 가능하다.
 - 운영 도메인의 Passkey RP ID와 origin이 고정되어 있다.
 - `/live-demo` 페이지 전체와 이벤트 feed가 마우스 휠·트랙패드·키보드로 스크롤된다.
+- Seller registration과 Buyer A2A commerce 탭을 마우스와 좌우 방향키로 전환할 수 있다.
+- 비활성 탭의 신규 이벤트는 activity badge로 표시되며 발표 중 자동 전환되지 않는다.
 
 ### 5.2 계정·자산
 
@@ -162,6 +164,7 @@
 2. AI가 생성한 설명·태그·카테고리·가격 제안을 확인한다.
 3. USDC 최저가와 목표가를 확인한 뒤 등록한다.
 4. `/live-demo`로 돌아온다.
+5. `Seller registration` 탭을 선택하고 최신 flow가 펼쳐졌는지 확인한다.
 
 **발표 대본**
 
@@ -181,6 +184,7 @@
 1. Buyer Agent가 신규 자산을 discovery한다.
 2. 보호 자산의 라이선스 조건을 요청한다.
 3. x402 Payment Required 응답을 받는다.
+4. `Buyer A2A commerce` 탭으로 전환한다.
 
 **발표 대본**
 

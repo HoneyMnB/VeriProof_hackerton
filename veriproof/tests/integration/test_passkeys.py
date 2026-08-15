@@ -96,6 +96,84 @@ def test_passkey_challenge_is_single_use(client, monkeypatch):
     assert replay.status_code == 400
 
 
+@pytest.mark.django_db
+def test_passkey_management_lists_and_deletes_only_current_users_credentials(client):
+    from django.contrib.auth.models import User
+    from apps.accounts.models import PasskeyCredential
+
+    user = User.objects.create_user("manage-passkey@test.com", password="safe-password-123")
+    other = User.objects.create_user("other-passkey@test.com", password="safe-password-123")
+    own = PasskeyCredential.objects.create(
+        user=user,
+        user_handle=b"u" * 64,
+        credential_id=b"own-management-credential",
+        public_key=b"own-public-key",
+        transports=["hybrid", "internal"],
+        device_name="My laptop",
+        device_type="multi_device",
+        backed_up=True,
+    )
+    foreign = PasskeyCredential.objects.create(
+        user=other,
+        user_handle=b"o" * 64,
+        credential_id=b"foreign-management-credential",
+        public_key=b"foreign-public-key",
+        device_name="Other laptop",
+    )
+    client.force_login(user)
+
+    response = client.get("/accounts/passkeys/")
+    assert response.status_code == 200
+    assert response.json()["items"] == [{
+        "id": own.pk,
+        "device_name": "My laptop",
+        "created_at": own.created_at.isoformat(),
+        "last_used_at": None,
+        "transports": ["hybrid", "internal"],
+        "device_type": "multi_device",
+        "backed_up": True,
+    }]
+    assert client.delete(f"/accounts/passkeys/{foreign.pk}/").status_code == 404
+    deleted = client.delete(f"/accounts/passkeys/{own.pk}/")
+    assert deleted.status_code == 200
+    assert not PasskeyCredential.objects.filter(pk=own.pk).exists()
+    assert PasskeyCredential.objects.filter(pk=foreign.pk).exists()
+
+
+@pytest.mark.django_db
+def test_last_passkey_cannot_be_deleted_without_password_fallback(client):
+    from django.contrib.auth.models import User
+    from apps.accounts.models import PasskeyCredential
+
+    user = User.objects.create_user("passkey-only@test.com")
+    user.set_unusable_password()
+    user.save(update_fields=["password"])
+    credential = PasskeyCredential.objects.create(
+        user=user,
+        user_handle=b"u" * 64,
+        credential_id=b"only-credential",
+        public_key=b"public-key",
+    )
+    client.force_login(user)
+
+    response = client.delete(f"/accounts/passkeys/{credential.pk}/")
+    assert response.status_code == 409
+    assert response.json()["error"] == "last_authenticator"
+    assert PasskeyCredential.objects.filter(pk=credential.pk).exists()
+
+
+@pytest.mark.django_db
+def test_account_settings_exposes_passkey_management_container(client):
+    from django.contrib.auth.models import User
+
+    user = User.objects.create_user("passkey-ui@test.com", password="safe-password-123")
+    client.force_login(user)
+    response = client.get("/library")
+    assert response.status_code == 200
+    assert b'id="passkey-credential-list"' in response.content
+    assert b'id="passkey-list-skeleton"' in response.content
+
+
 def test_login_page_exposes_passkey_action(client):
     response = client.get("/accounts/login/")
     assert response.status_code == 200
