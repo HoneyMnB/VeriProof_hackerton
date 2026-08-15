@@ -53,23 +53,38 @@
         return result;
     }
 
-    function post(url, body) {
+    function request(url, method, body) {
         return fetch(url, {
-            method: "POST", credentials: "same-origin",
+            method: method, credentials: "same-origin",
             headers: { "Content-Type": "application/json", "X-CSRFToken": csrfToken() },
-            body: JSON.stringify(body || {})
+            body: body === undefined ? undefined : JSON.stringify(body || {})
         }).then(function (response) {
             return response.json().then(function (data) {
-                if (!response.ok) { throw new Error(data.detail || "Passkey request failed."); }
+                if (!response.ok) {
+                    var error = new Error(data.detail || "Passkey request failed.");
+                    error.code = data.error || "passkey_failed";
+                    throw error;
+                }
                 return data;
             });
         });
     }
 
+    function post(url, body) { return request(url, "POST", body); }
+
     function friendlyError(error) {
         if (error && error.name === "NotAllowedError") { return "Passkey authentication was cancelled or timed out."; }
         if (error && error.name === "InvalidStateError") { return "This passkey is already registered."; }
         return error && error.message ? error.message : "Passkey request failed.";
+    }
+
+    function authenticate(optionsUrl, verifyUrl, optionsBody) {
+        if (!window.PublicKeyCredential || !navigator.credentials) {
+            return Promise.reject(new Error("This browser does not support passkeys."));
+        }
+        return post(optionsUrl, optionsBody || {})
+            .then(function (options) { return navigator.credentials.get({ publicKey: requestOptions(options) }); })
+            .then(function (credential) { return post(verifyUrl, { credential: credentialJson(credential) }); });
     }
 
     function bindLogin() {
@@ -83,9 +98,11 @@
         }
         button.addEventListener("click", function () {
             button.disabled = true; status.textContent = "Waiting for your device...";
-            post("/accounts/passkeys/login/options/", { next: button.dataset.next || "/" })
-                .then(function (options) { return navigator.credentials.get({ publicKey: requestOptions(options) }); })
-                .then(function (credential) { return post("/accounts/passkeys/login/verify/", { credential: credentialJson(credential) }); })
+            authenticate(
+                "/accounts/passkeys/login/options/",
+                "/accounts/passkeys/login/verify/",
+                { next: button.dataset.next || "/" }
+            )
                 .then(function (result) { window.location.assign(result.redirect || "/"); })
                 .catch(function (error) { status.textContent = friendlyError(error); button.disabled = false; });
         });
@@ -109,11 +126,118 @@
                         credential: credentialJson(credential), device_name: name.value.trim()
                     });
                 })
-                .then(function () { status.textContent = "Passkey registered successfully."; name.value = ""; })
+                .then(function () {
+                    status.textContent = "Passkey registered successfully.";
+                    name.value = "";
+                    document.dispatchEvent(new CustomEvent("veriproof:passkey-registered"));
+                })
                 .catch(function (error) { status.textContent = friendlyError(error); status.classList.add("is-error"); })
                 .finally(function () { button.disabled = false; });
         });
     }
 
-    document.addEventListener("DOMContentLoaded", function () { bindLogin(); bindRegistration(); });
+    function bindManagement() {
+        var list = document.getElementById("passkey-credential-list");
+        var skeleton = document.getElementById("passkey-list-skeleton");
+        var empty = document.getElementById("passkey-list-empty");
+        var count = document.getElementById("passkey-list-count");
+        var status = document.getElementById("passkey-management-status");
+        if (!list) { return; }
+
+        function formatDate(value) {
+            if (!value) { return "Never used"; }
+            var date = new Date(value);
+            if (Number.isNaN(date.getTime())) { return "Unknown"; }
+            return "Last used " + new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(date);
+        }
+
+        function render(items) {
+            list.replaceChildren();
+            items.forEach(function (credential) {
+                var item = document.createElement("li");
+                item.className = "vp-passkey-list__item";
+                var icon = item.appendChild(document.createElement("span"));
+                icon.className = "vp-passkey-list__icon";
+                icon.setAttribute("aria-hidden", "true");
+                icon.textContent = "◇";
+                var body = item.appendChild(document.createElement("span"));
+                body.className = "vp-passkey-list__body";
+                body.appendChild(document.createElement("strong")).textContent = credential.device_name || "Passkey";
+                var meta = body.appendChild(document.createElement("small"));
+                var transport = (credential.transports || []).join(" · ");
+                meta.textContent = formatDate(credential.last_used_at) + (transport ? " · " + transport : "");
+                var remove = item.appendChild(document.createElement("button"));
+                remove.type = "button";
+                remove.className = "vp-passkey-list__remove";
+                remove.textContent = "Remove";
+                remove.setAttribute("aria-label", "Remove " + (credential.device_name || "passkey"));
+                var confirmTimer = null;
+                remove.addEventListener("click", function () {
+                    if (!remove.classList.contains("is-confirming")) {
+                        remove.classList.add("is-confirming");
+                        remove.textContent = "Confirm";
+                        remove.setAttribute("aria-label", "Confirm removal of " + (credential.device_name || "passkey"));
+                        status.textContent = "Click Confirm to remove this passkey.";
+                        window.clearTimeout(confirmTimer);
+                        confirmTimer = window.setTimeout(function () {
+                            remove.classList.remove("is-confirming");
+                            remove.textContent = "Remove";
+                            remove.setAttribute("aria-label", "Remove " + (credential.device_name || "passkey"));
+                            if (status.textContent === "Click Confirm to remove this passkey.") { status.textContent = ""; }
+                        }, 5000);
+                        return;
+                    }
+                    window.clearTimeout(confirmTimer);
+                    remove.disabled = true;
+                    status.textContent = "Removing passkey...";
+                    status.classList.remove("is-error");
+                    request("/accounts/passkeys/" + encodeURIComponent(credential.id) + "/", "DELETE")
+                        .then(function () {
+                            status.textContent = "Passkey removed.";
+                            return load();
+                        })
+                        .then(function (items) {
+                            document.dispatchEvent(new CustomEvent("veriproof:passkey-deleted", { detail: { count: items.length } }));
+                        })
+                        .catch(function (error) {
+                            status.textContent = error.message;
+                            status.classList.add("is-error");
+                            remove.disabled = false;
+                        });
+                });
+                list.appendChild(item);
+            });
+            skeleton.hidden = true;
+            list.hidden = items.length === 0;
+            empty.hidden = items.length !== 0;
+            count.textContent = String(items.length);
+        }
+
+        function load() {
+            skeleton.hidden = false;
+            empty.hidden = true;
+            return fetch("/accounts/passkeys/", { credentials: "same-origin" })
+                .then(function (response) {
+                    return response.json().then(function (data) {
+                        if (!response.ok) { throw new Error(data.detail || "Could not load passkeys."); }
+                        return data.items || [];
+                    });
+                })
+                .then(function (items) { render(items); return items; })
+                .catch(function (error) {
+                    skeleton.hidden = true;
+                    list.hidden = true;
+                    empty.hidden = false;
+                    empty.textContent = error.message;
+                    status.classList.add("is-error");
+                });
+        }
+
+        document.addEventListener("veriproof:passkey-registered", load);
+        load();
+    }
+
+    window.VPPasskeys = { authenticate: authenticate, friendlyError: friendlyError };
+
+    document.addEventListener("DOMContentLoaded", function () { bindLogin(); bindRegistration(); bindManagement(); });
 }());

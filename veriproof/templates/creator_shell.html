@@ -49,6 +49,13 @@
             <label><span>Passkey name</span><input id="passkey-device-name" maxlength="80" autocomplete="off" placeholder="e.g. My laptop"></label>
             <button id="passkey-register-button" type="button">Register a passkey</button>
             <p id="passkey-register-status" class="vp-status" role="status"></p>
+            <div class="vp-passkey-management" aria-labelledby="passkey-list-title">
+                <div class="vp-passkey-management__head"><h4 id="passkey-list-title">Registered passkeys</h4><span id="passkey-list-count"></span></div>
+                <div id="passkey-list-skeleton" class="vp-passkey-list__skeleton" aria-label="Loading registered passkeys"><span></span><span></span></div>
+                <ul id="passkey-credential-list" class="vp-passkey-list" aria-live="polite" hidden></ul>
+                <p id="passkey-list-empty" class="vp-passkey-list__empty" hidden>No passkeys registered yet.</p>
+                <p id="passkey-management-status" class="vp-status" role="status" aria-live="polite"></p>
+            </div>
         </section>
         <form id="account-password-form" class="vp-settings-form vp-password-form">
             {% csrf_token %}
