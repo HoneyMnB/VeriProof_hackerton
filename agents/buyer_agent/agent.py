@@ -44,7 +44,10 @@ root_agent = Agent(
         "that SOL payment, settlement, or original-file delivery completed "
         "unless purchase_sol_asset returns status=purchased. For an explicit "
         "USDC x402 purchase, require status=purchased and a successful "
-        "PAYMENT-RESPONSE."
+        "PAYMENT-RESPONSE. If a purchase tool returns approval_required, stop "
+        "and tell the user that approval is required; do not retry or switch "
+        "payment methods. If it returns payment_declined, stop the purchase. "
+        "Only retry the same pending purchase after an explicit user approval."
     ),
     tools=[
         seller_agent_tool,

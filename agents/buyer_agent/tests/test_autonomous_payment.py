@@ -21,6 +21,11 @@ from agents.buyer_agent.payments.policy import (
     PaymentConfigurationError,
     PaymentPolicyRejected,
 )
+from agents.buyer_agent.payment_approval import (
+    PAYMENT_APPROVAL_STATE_KEY,
+    PAYMENT_MODE_APPROVAL,
+    PAYMENT_MODE_STATE_KEY,
+)
 
 
 def _requirement(
@@ -190,6 +195,69 @@ def test_agent_tool_does_not_accept_or_return_a_private_key(monkeypatch):
 
     assert result["status"] == "purchased"
     assert "private_key" not in result
+
+
+def test_x402_purchase_pauses_until_matching_user_approval(monkeypatch):
+    asset_id = "4882f2fc-b963-4f36-8c70-69a0e88d11d8"
+
+    class FakeContext:
+        state = {PAYMENT_MODE_STATE_KEY: PAYMENT_MODE_APPROVAL}
+
+    class FakeBuyer:
+        async def purchase(self, resource_url, params=None):
+            return {"status": "purchased"}
+
+    context = FakeContext()
+    monkeypatch.setattr(tools, "AutonomousX402Buyer", FakeBuyer)
+
+    paused = asyncio.run(
+        tools.purchase_x402_asset(asset_id, tool_context=context)
+    )
+
+    assert paused == {
+        "status": "approval_required",
+        "asset_id": asset_id,
+        "payment_method": "USDC_X402",
+        "decision": "pending",
+    }
+    context.state[PAYMENT_APPROVAL_STATE_KEY] = {
+        "asset_id": asset_id,
+        "payment_method": "USDC_X402",
+        "decision": "approved",
+    }
+
+    purchased = asyncio.run(
+        tools.purchase_x402_asset(asset_id, tool_context=context)
+    )
+
+    assert purchased == {"status": "purchased"}
+    assert context.state[PAYMENT_APPROVAL_STATE_KEY]["decision"] == "consumed"
+
+
+def test_declined_sol_purchase_never_constructs_the_buyer(monkeypatch):
+    asset_id = "4882f2fc-b963-4f36-8c70-69a0e88d11d8"
+
+    class FakeContext:
+        state = {
+            PAYMENT_MODE_STATE_KEY: PAYMENT_MODE_APPROVAL,
+            PAYMENT_APPROVAL_STATE_KEY: {
+                "asset_id": asset_id,
+                "payment_method": "SOL_NATIVE",
+                "decision": "declined",
+            },
+        }
+
+    class UnexpectedBuyer:
+        def __init__(self):
+            raise AssertionError("payment buyer must not be constructed")
+
+    monkeypatch.setattr(tools, "AutonomousSolBuyer", UnexpectedBuyer)
+
+    result = asyncio.run(
+        tools.purchase_sol_asset(asset_id, tool_context=FakeContext())
+    )
+
+    assert result["status"] == "payment_declined"
 
 
 def test_purchase_reuses_the_asset_accepted_in_the_current_agent_session(

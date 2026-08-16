@@ -1,11 +1,15 @@
 """구매자 에이전트 B의 Cloud Run ASGI 진입점."""
 
 import os
+from pathlib import Path
 from urllib.parse import urlparse
 
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from starlette.responses import FileResponse, RedirectResponse
+from starlette.staticfiles import StaticFiles
 
 from .agent import root_agent
+from .demo import stream_demo_chat
 
 
 def _public_endpoint() -> tuple[str, str, int]:
@@ -21,9 +25,32 @@ def _public_endpoint() -> tuple[str, str, int]:
 
 
 protocol, host, port = _public_endpoint()
-application = to_a2a(
+a2a_application = to_a2a(
     root_agent,
     protocol=protocol,
     host=host,
     port=port,
 )
+
+_ui_directory = Path(__file__).with_name("ui")
+
+
+async def _demo_page(request):
+    return FileResponse(_ui_directory / "index.html")
+
+
+async def _demo_redirect(request):
+    return RedirectResponse("/demo/", status_code=307)
+
+
+a2a_application.add_route("/demo", _demo_redirect, methods=["GET"])
+a2a_application.add_route("/demo/", _demo_page, methods=["GET"])
+a2a_application.add_route(
+    "/demo/api/chat", stream_demo_chat, methods=["POST"]
+)
+a2a_application.mount(
+    "/demo/assets",
+    app=StaticFiles(directory=_ui_directory / "assets"),
+    name="buyer-demo-assets",
+)
+application = a2a_application
