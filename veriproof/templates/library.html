@@ -73,13 +73,7 @@
                     {# 인증서와 설정만 카드에서 바로 연다. 부가 관리 UI는 카드에서 분리한다. #}
                     <button type="button" class="btn btn--certificate"
                             data-asset-id="{{ asset.certificate.asset_id }}"
-                            data-image-sha256="{{ asset.certificate.image_sha256 }}"
-                            data-anchor-tx-sig="{{ asset.certificate.anchor_tx_sig|default:'' }}"
-                            data-certificate-tx-sig="{{ asset.certificate.certificate_tx_sig|default:'' }}"
-                            data-creator-wallet="{{ asset.certificate.creator_wallet }}"
-                            data-work-title="{{ asset.title|default:''|escape }}"
-                            data-registered-at="{{ asset.created_at|default:'' }}"
-                            data-explorer-url="{{ asset.certificate.explorer_url|default:'' }}" data-i18n="library.asset.certificate">View certificate</button>
+                            data-i18n="library.asset.certificate">View certificate</button>
                     <button type="button" class="btn btn--asset-settings" data-i18n="library.asset.manage">Manage</button>
                     </div>
                 </div>
@@ -123,6 +117,31 @@
             </div>
             <span class="asset-card__terms-status" role="status"></span>
         </form>
+    </section>
+</div>
+
+<div id="certificate-auth-modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="certificate-auth-title" data-auth-method="{{ certificate_auth_method }}">
+    <div class="modal__backdrop" data-certificate-auth-close></div>
+    <section class="modal__panel certificate-auth-modal__panel">
+        <header>
+            <div><p class="vp-page__eyebrow">Protected record</p><h2 id="certificate-auth-title">Verify to view certificate</h2></div>
+            <button type="button" class="vp-modal-close" data-certificate-auth-close aria-label="Close verification"><svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        </header>
+        <div class="certificate-auth-modal__body">
+            <span class="certificate-auth-modal__icon" aria-hidden="true">✓</span>
+            <div class="certificate-auth-modal__method" data-certificate-auth-panel="passkey" {% if certificate_auth_method != "passkey" %}hidden{% endif %}>
+                <p>Use your registered passkey to confirm that you are viewing this protected registration record.</p>
+                <button id="certificate-passkey-button" type="button">Continue with Passkey</button>
+            </div>
+            <form id="certificate-password-form" class="certificate-auth-modal__method" data-certificate-auth-panel="password" {% if certificate_auth_method != "password" %}hidden{% endif %}>
+                <p>This account has no registered passkey. Enter your account password to view this protected registration record.</p>
+                {% csrf_token %}
+                <label for="certificate-password">Password</label>
+                <input id="certificate-password" name="password" type="password" autocomplete="current-password" required>
+                <button type="submit">Verify password</button>
+            </form>
+            <p id="certificate-auth-status" class="vp-status" role="status" aria-live="polite"></p>
+        </div>
     </section>
 </div>
 

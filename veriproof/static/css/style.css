@@ -689,6 +689,15 @@ main.vp-main { margin: 0; max-width: none; padding: 0; width: auto; }
 .vp-passkey-settings input:focus, .vp-passkey-login button:focus { border-color:#686a72; box-shadow:0 0 0 3px rgba(65,66,72,.14); outline:0; }
 .vp-passkey-login { display:grid; gap:8px; margin:20px 0 16px; }
 .vp-passkey-login button { background:#292a2f; border:1px solid #292a2f; border-radius:9px; color:#fff; min-height:44px; }
+.vp-passkey-management { border-top:1px solid #e7e7eb; margin-top:18px; padding-top:17px; }
+.vp-passkey-management__head { align-items:center; display:flex; justify-content:space-between; margin-bottom:10px; }.vp-passkey-management__head h4 { color:#35363b; font-size:13px; margin:0; }.vp-passkey-management__head span { align-items:center; background:#f0f0f2; border-radius:999px; color:#62646c; display:flex; font-size:10px; font-weight:750; height:22px; justify-content:center; min-width:22px; padding:0 7px; }
+.vp-passkey-list { display:grid; gap:7px; list-style:none; margin:0; padding:0; }.vp-passkey-list[hidden] { display:none; }
+.vp-passkey-list__item { align-items:center; background:#f8f8f9; border:1px solid #e7e7ea; border-radius:9px; display:grid; gap:10px; grid-template-columns:28px minmax(0,1fr) auto; padding:10px; }
+.vp-passkey-list__icon { align-items:center; background:#e9eeea; border-radius:7px; color:#4d6f56; display:flex; font-size:15px; height:28px; justify-content:center; }.vp-passkey-list__body { display:grid; gap:3px; min-width:0; }.vp-passkey-list__body strong { color:#33343a; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.vp-passkey-list__body small { color:#777982; font-size:10px; overflow:hidden; text-overflow:ellipsis; text-transform:capitalize; white-space:nowrap; }
+.vp-passkey-list__remove { background:#fff; border:1px solid #d8d9dd; border-radius:7px; color:#76514a; cursor:pointer; font-size:10px; font-weight:700; min-height:30px; padding:5px 9px; }.vp-passkey-list__remove:hover, .vp-passkey-list__remove.is-confirming { background:#f8f1ef; border-color:#c9958b; color:#8b3529; }.vp-passkey-list__remove:focus-visible { border-color:#81746f; box-shadow:0 0 0 3px rgba(93,78,73,.13); outline:0; }.vp-passkey-list__remove:disabled { cursor:wait; opacity:.55; }
+.vp-passkey-list__empty { background:#f8f8f9; border:1px dashed #dfe0e3; border-radius:9px; color:#777982; font-size:11px; margin:0; padding:14px; text-align:center; }.vp-passkey-list__empty[hidden] { display:none; }
+.vp-passkey-list__skeleton { display:grid; gap:7px; }.vp-passkey-list__skeleton[hidden] { display:none; }.vp-passkey-list__skeleton span { animation:passkeyShimmer 1.35s infinite; background:linear-gradient(90deg,#eeeeef 25%,#f8f8f9 50%,#eeeeef 75%); background-size:200% 100%; border-radius:9px; height:50px; }
+@keyframes passkeyShimmer { to { background-position:-200% 0; } }
 .vp-auth__divider { align-items:center; color:#85868d; display:flex; font-size:12px; gap:10px; margin:14px 0; }
 .vp-auth__divider::before, .vp-auth__divider::after { background:#e5e5e8; content:""; flex:1; height:1px; }
 .vp-password-form h3, .vp-settings-wallet h3 { color: #25262a; font-size: 19px; letter-spacing: -.02em; line-height: 1.3; margin: 0 0 14px; }
@@ -902,6 +911,22 @@ main.vp-main { margin: 0; max-width: none; padding: 0; width: auto; }
 .asset-settings-modal__sales-list li div { display: grid; gap: 2px; }.asset-settings-modal__sales-list strong { color: #36373c; font-size: 12px; }.asset-settings-modal__sales-list time { flex: 0 0 auto; text-align: right; }
 .asset-settings-modal__actions { display: grid; gap: 8px; grid-template-columns: minmax(0, 1fr); }
 .asset-settings-modal__panel .asset-card__terms .asset-settings-modal__actions button { grid-column: auto; min-height: 40px; }
+
+.certificate-auth-modal__panel { max-width: 460px; overflow: hidden; padding: 0; }
+.certificate-auth-modal__panel > header { align-items: flex-start; border-bottom: 1px solid #e7e7e9; display: flex; justify-content: space-between; padding: 22px 24px 17px; }
+.certificate-auth-modal__panel h2 { color: #27282d; font-size: 20px; letter-spacing: -.025em; margin: 3px 0 0; }
+.certificate-auth-modal__body { display: grid; gap: 14px; padding: 24px; }
+.certificate-auth-modal__method { display: grid; gap: 12px; }.certificate-auth-modal__method[hidden] { display: none; }
+.certificate-auth-modal__method > p { color: #666871; font-size: 13px; line-height: 1.55; margin: 0; }
+.certificate-auth-modal__icon { align-items: center; background: #edf3ee; border: 1px solid #d7e6da; border-radius: 50%; color: #467452; display: flex; font-size: 18px; height: 46px; justify-content: center; width: 46px; }
+.certificate-auth-modal__method > button, #certificate-password-form button { background: #292a2f; border: 1px solid #292a2f; border-radius: 8px; color: #fff; cursor: pointer; font-weight: 700; min-height: 42px; padding: 9px 14px; }
+.certificate-auth-modal__method > button:disabled, #certificate-password-form button:disabled { cursor: wait; opacity: .65; }
+#certificate-password-form { display: grid; gap: 8px; }
+#certificate-password-form label { color: #555760; font-size: 12px; font-weight: 700; }
+#certificate-password-form input { background: #fff; border: 1px solid #d9dade; border-radius: 8px; color: #2f3035; min-height: 42px; padding: 9px 11px; width: 100%; }
+#certificate-password-form input:focus, .certificate-auth-modal__method > button:focus-visible, #certificate-password-form button:focus-visible { border-color: #777a82; box-shadow: 0 0 0 3px rgba(83,85,92,.14); outline: 0; }
+#certificate-auth-status { min-height: 18px; }
+#certificate-auth-status.is-error { color: #9b4035; }
 
 .certificate-modal__panel { background: #fcfbf7 url("/static/images/certificate-security-paper-v1.png") center / cover no-repeat; border: 8px double #ab9462; box-shadow: 0 28px 80px rgba(48,38,21,.28); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif; max-width: 680px; padding: 32px; }
 .certificate-modal__panel::before { border: 1px solid rgba(153,126,72,.35); content: ""; inset: 12px; pointer-events: none; position: absolute; }
