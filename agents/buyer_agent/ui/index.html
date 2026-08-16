@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="VeriProof Buyer Agent chat">
+  <title>VeriProof · Buyer Agent</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/buyer-demo.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="/demo/" aria-label="VeriProof Buyer Agent home">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span>VERIPROOF</span>
+      </a>
+      <div class="agent-label"><span>BUYER AGENT</span><b>A2A</b></div>
+      <div class="connection" id="connectionStatus" role="status">
+        <span></span><b id="connectionLabel">Connecting</b>
+      </div>
+    </header>
+
+    <main class="chat-shell">
+      <section class="intro" id="intro">
+        <div class="agent-avatar robot-avatar buyer-robot" aria-hidden="true"><span class="robot-face"><i></i><i></i></span></div>
+        <h1>What would you like<br>to license?</h1>
+        <p>Describe the asset, usage, budget, and settlement preference.</p>
+        <div class="suggestions" aria-label="Example prompts">
+          <button type="button" data-prompt="Find a public sea image for a commercial campaign under 10 USDC. Use USDC through x402. Do not purchase until I explicitly confirm.">Sea image · under 10 USDC</button>
+          <button type="button" data-prompt="Find an abstract visual available for digital advertising. Show me the verified license terms before any purchase.">Abstract visual · advertising</button>
+        </div>
+      </section>
+
+      <section class="messages" id="messages" aria-live="polite" aria-label="Buyer Agent conversation"></section>
+    </main>
+
+    <div class="composer-wrap">
+      <form class="composer" id="chatForm">
+        <label class="sr-only" for="chatInput">Message Buyer Agent</label>
+        <textarea id="chatInput" rows="1" maxlength="2000" placeholder="Message Buyer Agent…" required></textarea>
+        <button type="submit" id="sendButton" aria-label="Send message"><span>↑</span></button>
+        <div class="composer-footer">
+          <fieldset class="mode-switch">
+            <legend>Purchase mode</legend>
+            <label><input type="radio" name="paymentMode" value="autonomous" checked><span>Agent buys</span></label>
+            <label><input type="radio" name="paymentMode" value="approval"><span>Ask approval</span></label>
+          </fieldset>
+          <span class="shortcut"><kbd>⌘</kbd><kbd>↵</kbd></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <dialog class="payment-dialog" id="paymentDialog" aria-labelledby="paymentDialogTitle">
+    <form method="dialog">
+      <div class="dialog-icon" aria-hidden="true">$</div>
+      <p class="dialog-eyebrow">PAYMENT REQUIRED</p>
+      <h2 id="paymentDialogTitle">Approve this purchase?</h2>
+      <p>The agent reached the payment step and is paused before signing. Payment proceeds only if you approve.</p>
+      <dl>
+        <div><dt>Method</dt><dd id="approvalMethod">—</dd></div>
+        <div><dt>Asset</dt><dd id="approvalAsset">—</dd></div>
+      </dl>
+      <div class="dialog-actions">
+        <button type="button" value="declined" id="declinePayment">Do not pay</button>
+        <button type="button" value="approved" id="approvePayment">Approve payment</button>
+      </div>
+      <small id="approvalWait" hidden>Waiting for the current agent turn to finish…</small>
+    </form>
+  </dialog>
+
+  <template id="turnTemplate">
+    <article class="turn">
+      <div class="user-row">
+        <div><span class="message-author">YOU</span><div class="user-message"></div></div>
+        <div class="human-avatar" aria-hidden="true"><i></i></div>
+      </div>
+      <div class="agent-dialogue"></div>
+      <div class="assistant-row">
+        <div class="assistant-avatar robot-avatar buyer-robot" aria-hidden="true"><span class="robot-face"><i></i><i></i></span></div>
+        <div class="assistant-content">
+          <span class="message-author">BUYER AGENT</span>
+          <div class="assistant-message is-loading">
+            <span class="typing"><i></i><i></i><i></i></span>
+          </div>
+          <details class="execution" open>
+            <summary>
+              <span class="execution-icon" aria-hidden="true">⌁</span>
+              <span class="execution-label">Execution</span>
+              <span class="execution-status">Working</span>
+              <span class="chevron" aria-hidden="true">⌄</span>
+            </summary>
+            <ol class="execution-list"></ol>
+          </details>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template id="agentMessageTemplate">
+    <div class="agent-exchange">
+      <div class="exchange-avatar robot-avatar" aria-hidden="true"><span class="robot-face"><i></i><i></i></span></div>
+      <div class="exchange-content">
+        <div class="exchange-meta"><strong></strong><span class="exchange-route"></span><b>A2A</b></div>
+        <div class="exchange-message"></div>
+      </div>
+    </div>
+  </template>
+
+  <template id="executionItemTemplate">
+    <li class="execution-item">
+      <span class="step-dot"></span>
+      <div class="step-content">
+        <div class="step-heading"><strong></strong><span></span></div>
+        <p class="step-description"></p>
+        <pre hidden></pre>
+      </div>
+    </li>
+  </template>
+
+  <script src="assets/buyer-demo.js" defer></script>
+</body>
+</html>

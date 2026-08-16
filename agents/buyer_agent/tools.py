@@ -14,6 +14,7 @@ from x402.http.utils import (
 )
 
 from .payments import AutonomousPaymentError, AutonomousSolBuyer, AutonomousX402Buyer
+from .payment_approval import payment_approval_gate
 
 _ACCEPTED_SESSION_STATE_KEY = "buyer:accepted_x402_sessions"
 
@@ -268,6 +269,13 @@ async def purchase_x402_asset(
             대화에서 이 자산에 대해 수락된 협상 세션을 사용한다.
     """
     try:
+        approval_result = payment_approval_gate(
+            tool_context,
+            asset_id=asset_id,
+            payment_method="USDC_X402",
+        )
+        if approval_result is not None:
+            return approval_result
         buyer = AutonomousX402Buyer()
         resolved_session_id = _resolve_session_id(
             asset_id, session_id, tool_context
@@ -295,6 +303,13 @@ async def purchase_sol_asset(
     Devnet에서 확인하고 라이선스를 발급한 경우에만 ``purchased``를 반환한다.
     """
     try:
+        approval_result = payment_approval_gate(
+            tool_context,
+            asset_id=asset_id,
+            payment_method="SOL_NATIVE",
+        )
+        if approval_result is not None:
+            return approval_result
         resolved_session_id = _resolve_session_id(asset_id, session_id, tool_context)
         return await AutonomousSolBuyer().purchase(
             _asset_url(asset_id),
