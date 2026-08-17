@@ -186,13 +186,13 @@
                 }) || null;
             });
         }
-        function requireRegistrationWallet(continueRegistration) {
+        function requireRegistrationWallet(continueRegistration, onUnavailable) {
             activeRegistrationWallet().then(function (activeWallet) {
-                if (!activeWallet) { return setStatus(t("workspace.status.wallet_keys_register"), true); }
+                if (!activeWallet) { return onUnavailable(t("workspace.status.wallet_keys_register")); }
                 state.registrationWalletAddress = activeWallet.address;
                 continueRegistration(activeWallet.address);
             }).catch(function () {
-                setStatus(t("workspace.status.wallet_check_failed"), true);
+                onUnavailable(t("workspace.status.wallet_check_failed"));
             });
         }
         function openCanvas() {
@@ -326,29 +326,42 @@
             });
         }
         /**
-         * 등록 확정 흐름을 실행한다. 파일 포함 초안 저장 → 확정 토큰 발급 →
-         * 파일 업로드(uploadConfirmed) 순으로 진행하며 각 단계 실패를 에러로 표시한다.
+         * 등록 확정 흐름을 실행한다. 지갑 확인 → 파일 포함 초안 저장 → 확정 토큰 발급 →
+         * 진행 스트림(SSE) 연결 → 파일 업로드(uploadConfirmed) 순으로 진행하며,
+         * 각 단계를 라이브 진행 오버레이(VP.registrationProgress)에 반영하고 실패를 에러로 표시한다.
          */
         function confirmAndRegister() {
             if (!state.file) { return renderDraftError(t("workspace.status.choose_first")); }
+            captureActiveFields();
+            var progress = VP.registrationProgress && VP.registrationProgress.open({ title: fields().title, fileName: state.file.name }) ? VP.registrationProgress : null;
+            function abort(message) {
+                renderDraftError(message);
+                setStatus(message, true);
+                if (progress) { progress.fail(message); }
+            }
             requireRegistrationWallet(function (creatorWallet) {
-                captureActiveFields();
+                if (progress) { progress.step("wallet", "done", creatorWallet.slice(0, 6) + "…" + creatorWallet.slice(-6)); }
                 var profile = activeFileProfile();
                 saveDraft(creatorWallet).then(function () {
                     if (!profile.draft) { throw new Error(t("workspace.status.draft_save_failed")); }
-                    return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: creatorWallet }) }).then(function (confirmed) {
-                        if (!confirmed || !confirmed.ok) { return renderDraftError((confirmed && confirmed.body.detail) || t("workspace.status.confirm_incomplete")); }
-                        uploadConfirmed(confirmed.body.confirmation_token, profile.draft.draft_id, creatorWallet);
+                    if (progress) { progress.step("draft", "done"); }
+                    return request("/api/v1/assistant/registration-drafts/" + encodeURIComponent(profile.draft.draft_id) + "/confirm", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ creator_wallet: creatorWallet }) });
+                }).then(function (confirmed) {
+                    if (!confirmed || !confirmed.ok) { throw new Error((confirmed && confirmed.body.detail) || t("workspace.status.confirm_incomplete")); }
+                    if (progress) { progress.step("confirm", "done"); }
+                    return (progress ? progress.connect() : Promise.resolve(false)).then(function () {
+                        uploadConfirmed(confirmed.body.confirmation_token, profile.draft.draft_id, creatorWallet, progress);
                     });
                 }).catch(function (error) {
-                    renderDraftError(error.message || t("workspace.status.draft_save_failed"));
+                    abort(error.message || t("workspace.status.draft_save_failed"));
                 });
-            });
+            }, abort);
         }
         /**
          * 확정 토큰과 함께 파일을 등록 엔드포인트로 업로드한다. 패키지 모드면 나머지 파일을 지원 파일로 첨부한다.
+         * 서버 파이프라인 단계는 SSE로 오버레이에 반영되고, 응답으로 최종 결과를 확정한다.
          */
-        function uploadConfirmed(token, draftId, creatorWallet) {
+        function uploadConfirmed(token, draftId, creatorWallet, progress) {
             var data = new FormData();
             data.append("image", state.file);
             data.append("creator_wallet", creatorWallet);
@@ -364,13 +377,23 @@
             }
             renderDraftMessage(t("workspace.status.confirming"));
             request(shell.dataset.registerUrl, { method: "POST", body: data }).then(function (result) {
-                if (!result.ok) { return renderDraftError(result.body.detail || result.body.error || t("workspace.status.register_failed")); }
+                if (!result.ok) {
+                    var failure = result.body.detail || result.body.error || t("workspace.status.register_failed");
+                    renderDraftError(failure);
+                    if (progress) { progress.fail(failure); }
+                    return;
+                }
                 var completionMessage = t(result.body.anchor_tx ? "workspace.status.registered_available" : "workspace.status.registered_pending");
                 renderDraftMessage(completionMessage);
                 if (VP.refreshSummary) { VP.refreshSummary(); }
                 resetRegisteredCanvas();
                 closeCanvas();
                 setStatus(completionMessage);
+                if (progress) { progress.finish(result.body); }
+            }).catch(function () {
+                var failure = t("workspace.status.network");
+                renderDraftError(failure);
+                if (progress) { progress.fail(failure); }
             });
         }
         /**

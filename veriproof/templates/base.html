@@ -10,6 +10,7 @@
     <meta name="theme-color" content="#ffffff">
     <link rel="service-desc" type="application/json" href="/.well-known/ai-plugin.json">
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    {% block styles %}{% endblock %}
     {% comment %}Load the server-selected locale before page scripts render UI.{% endcomment %}
     <script>window.__VP_LANG__ = "{{ vp_active_lang|default:'en' }}"; window.__VP_AUTHED__ = {{ request.user.is_authenticated|yesno:"true,false" }};</script>
     <script src="{% static 'i18n/messages.js' %}"></script>

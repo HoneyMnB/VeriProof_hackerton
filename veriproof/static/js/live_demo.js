@@ -16,6 +16,7 @@
         REGISTRATION_STARTED: ["Registration started", "ai"], CONTENT_HASHED: ["Content fingerprinted", "proof"],
         AI_ANALYZED: ["AI metadata analyzed", "ai"], ANCHORING_STARTED: ["Anchoring requested", "chain"],
         ANCHORED: ["Work anchored", "chain"], REGISTRATION_CERTIFICATE_ISSUED: ["Registration proof issued", "proof"],
+        CONTENT_STORED: ["Content stored", "proof"],
         ASSET_REGISTERED: ["Asset registered", "proof"], REGISTRATION_FAILED: ["Registration stopped", "error"],
         ASSET_DISCOVERED: ["Asset discovered", "ai"], HTTP_402: ["Payment terms requested", "chain"],
         OFFER: ["Buyer offer", "ai"], COUNTER: ["Seller counter-offer", "ai"], ACCEPT: ["Terms accepted", "ai"],

@@ -224,6 +224,15 @@ class RegistrationService:
             raise RegistrationError(
                 "storage_unavailable", "content storage could not be completed", 503
             ) from exc
+        self.event_recorder.record(
+            "CONTENT_STORED",
+            {
+                "title": metadata.title,
+                "gallery_count": len(gallery_artifacts),
+                "retention_days": int(settings.ORIGINAL_RETENTION_DAYS),
+            },
+            **event_context,
+        )
 
         with transaction.atomic():
             creator, _ = Creator.objects.get_or_create(wallet_address=metadata.creator_wallet)

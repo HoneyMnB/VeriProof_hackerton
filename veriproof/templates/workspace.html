@@ -53,7 +53,41 @@
     <div class="vp-registration-canvas__actions"><button id="ask-registration-advice" type="button" class="vp-canvas-secondary" data-i18n="workspace.canvas.ask_advice">Get AI feedback on this information</button><button id="confirm-registration" type="button" data-i18n="workspace.canvas.confirm">Register selected file</button></div>
     <ul id="analysis-feed" class="analysis-feed" aria-live="polite"></ul>
 </aside>
+{# 등록 진행 라이브 오버레이: 지갑 확인 → 초안 저장/확정 → 서버 파이프라인(SSE) 단계를 실시간 표시 #}
+<div id="registration-progress" class="vp-regprog" hidden role="dialog" aria-modal="true" aria-labelledby="registration-progress-title" aria-describedby="registration-progress-status">
+    <div class="vp-regprog__backdrop"></div>
+    <div class="vp-regprog__panel">
+        <header class="vp-regprog__head">
+            <div>
+                <p class="vp-regprog__eyebrow"><span id="registration-progress-live" class="vp-regprog__live" data-i18n="workspace.progress.live">Live</span><span data-i18n="workspace.progress.eyebrow">Work registration</span></p>
+                <h2 id="registration-progress-title" class="vp-regprog__title"></h2>
+                <p id="registration-progress-file" class="vp-regprog__file"></p>
+            </div>
+            <button id="registration-progress-close" class="vp-regprog__close" type="button" hidden aria-label="Close registration progress" data-i18n-aria-label="workspace.progress.close" title="Close" data-i18n-title="workspace.progress.close_short"><span aria-hidden="true">×</span></button>
+        </header>
+        <div class="vp-regprog__body">
+            <div class="vp-regprog__hero">
+                <div class="vp-regprog__ring" aria-hidden="true">
+                    <span class="vp-regprog__ring-halo"></span>
+                    <svg viewBox="0 0 120 120"><circle class="vp-regprog__ring-track" cx="60" cy="60" r="52"></circle><circle id="registration-progress-ring" class="vp-regprog__ring-fill" cx="60" cy="60" r="52"></circle></svg>
+                    <div class="vp-regprog__ring-label"><strong id="registration-progress-count">0/9</strong><span data-i18n="workspace.progress.steps">steps</span><span class="vp-regprog__ring-mark">✓</span></div>
+                </div>
+                <div class="vp-regprog__status" aria-live="polite">
+                    <p class="vp-regprog__status-label" data-i18n="workspace.progress.now">Current stage</p>
+                    <h3 id="registration-progress-status"></h3>
+                    <p id="registration-progress-detail" class="vp-regprog__status-detail"></p>
+                </div>
+            </div>
+            <ol id="registration-progress-steps" class="vp-regprog__steps"></ol>
+        </div>
+        <footer id="registration-progress-result" class="vp-regprog__result" hidden></footer>
+    </div>
+</div>
+{% endblock %}
+{% block styles %}
+<link rel="stylesheet" href="{% static 'css/registration-progress.css' %}">
 {% endblock %}
 {% block page_scripts %}
+<script src="{% static 'js/registration-progress.js' %}"></script>
 <script src="{% static 'js/workspace.js' %}"></script>
 {% endblock %}

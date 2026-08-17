@@ -6,13 +6,14 @@ literal ``ip/batch/...`` paths (where ``batch`` is not a UUID) do not collide.
 from django.urls import path
 from apps.common import views_live_demo
 
-from . import views_api, views_assistant
+from . import views_api, views_assistant, views_registration_stream
 
 app_name = "ip"
 
 urlpatterns = [
     # Registration + access (x402 interceptor)
     path("ip/register", views_api.register, name="api-register"),
+    path("ip/register/stream", views_registration_stream.stream, name="api-register-stream"),
     path("ip/<uuid:asset_id>", views_api.get_asset, name="api-get-asset"),
     path("ip/<uuid:asset_id>/solpay/verify", views_api.verify_solpay, name="api-solpay-verify"),
     path("ip/<uuid:asset_id>/sponsored-usdc", views_api.create_sponsored_usdc_payment, name="api-sponsored-usdc"),
