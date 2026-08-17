@@ -13,9 +13,10 @@
 ### 1.1 애플리케이션 코어
 | 계층 | 기술 | 비고 |
 |------|------|------|
-| Backend | **Django 5.x** (동기 뷰 + 서비스 레이어) | M2M API는 순수 `JsonResponse`로 402 정밀 제어 |
+| Backend | **Django 5.x + ASGI/Uvicorn** | 동기 M2M API + 비동기 SSE, 서비스 레이어 |
 | 시스템 오브 레코드 | **PostgreSQL 16 (Cloud SQL)** | 관계형 트랜잭션 데이터. Django ORM |
-| Frontend | **Vanilla HTML + CSS + JS** (Django Templates) | 프레임워크 미사용. `fetch` + Firebase JS SDK(`onSnapshot`) |
+| Frontend | **Vanilla HTML + CSS + JS** (Django Templates) | `fetch` + 브라우저 `EventSource`, SSE 실패 시 폴링 |
+| 인증 | **Django Session + WebAuthn/FIDO2** | Passkey 로그인·관리, 인증서 조회 step-up 인증 |
 | AI | **Google Gemini** (`google-genai` / Vertex AI) | `gemini-3.6-flash`(멀티모달·협상추론), `gemini-3.5-flash-lite`(구조화 JSON·배치) |
 | 이미지 처리 | **Pillow** | 썸네일·워터마크 생성, SHA-256 해시 |
 | 테스트 | **pytest + pytest-django + pytest-cov** | 외부 I/O는 전부 mock, 커버리지 ≥ 85% |
@@ -39,7 +40,7 @@
 | **Pub/Sub** | 결제 이벤트 메시지 큐(유실 방지) |
 | **Eventarc** | 이벤트 감지 → Workflows 트리거 |
 | **Workflows** | 정산 후속처리 오케스트레이션(순차 실행) |
-| **Firestore** | 실시간 상태 현황판(`onSnapshot`) — 결제상태·샌드박스 라이브 피드 |
+| **Firestore** | 상태·이벤트 미러 및 서버 `on_snapshot` 리스너 — Django SSE로 브라우저 전달 |
 | **BigQuery** | 거래·이벤트 감사로그 장부(분석) |
 | **Cloud KMS / Secret Manager** | 서명키·시크릿 관리 |
 | **Cloud Storage(GCS)** | 하이브리드 이미지 저장(썸네일·워터마크·임시원본) |
@@ -76,6 +77,9 @@ GCS_BUCKET=...
 
 # --- App ---
 DATABASE_URL=postgres://user:pass@localhost:5432/veriproof
+PASSKEY_RP_ID=app.example.com
+PASSKEY_RP_NAME=VeriProof
+PASSKEY_ORIGINS=https://app.example.com
 ORIGINAL_RETENTION_DAYS=7
 DOWNLOAD_TOKEN_TTL_SECONDS=3600
 
@@ -96,13 +100,14 @@ SANDBOX_MODE=live|mock             # 샌드박스 온체인 실연동/모의 (SP
 ```text
 [Browser: 창작자/관람자]                       [외부 구매자 AI / a2a-x402 클라이언트 / pay.sh]
    │ Django Templates + Vanilla JS               │ M2M REST (X-Agent-Protocol: x402)
-   │ Firebase JS SDK(onSnapshot, 실시간)           │
+   │ WebAuthn + EventSource(SSE)                  │
    ▼                                             ▼
 ┌──────────────────────────── Cloud Run: Django 5 ─────────────────────────────┐
 │ Web Views            M2M API Views              Middleware                     │
-│  / /library /sandbox  register/get(402)/         X402InterceptorMiddleware      │
+│  / /library /live-demo register/get(402)/        X402InterceptorMiddleware      │
 │                       negotiate/settle           (클라이언트 판별)               │
 │                       batch/*  paysh/webhook                                    │
+│  Passkey/WebAuthn     async Firestore→SSE bridge                               │
 │ ───────────────────────── Service Layer (mockable) ──────────────────────────│
 │  GeminiService  SolanaService  StorageService   NegotiationEngine              │
 │  X402Service(a2a-x402/AP2)  KmsSigner  LicenseService  RoyaltyService          │
@@ -110,7 +115,7 @@ SANDBOX_MODE=live|mock             # 샌드박스 온체인 실연동/모의 (SP
 └───────┬───────────────┬───────────────┬──────────────┬───────────────┬────────┘
         ▼               ▼               ▼              ▼               ▼
  [Gemini/Vertex]  [Blockchain RPC]  [Cloud SQL]   [Firestore]     [Pub/Sub]
-  Vision/Reason    USDC/Memo/KMS     PostgreSQL    실시간 상태        결제이벤트
+  Vision/Reason    USDC/Memo/KMS     PostgreSQL    상태·events        결제이벤트
                                      (SoR)                            │
                                                                       ▼
                                                         [Eventarc] → [Workflows]
@@ -142,6 +147,13 @@ SANDBOX_MODE=live|mock             # 샌드박스 온체인 실연동/모의 (SP
 ```
 
 > **동기 폴백**: GCP 파이프라인 미가용(로컬/TDD) 시 `POST /settle`가 A~E 단계를 **동기적으로** 직접 수행한다. Workflows는 동일 서비스 메서드를 호출할 뿐이므로 로직 중복이 없다(서비스 레이어 재사용).
+
+### 2.2 현재 인증·라이브 이벤트 경로
+
+- Passkey는 WebAuthn 공개 자격증명만 DB에 저장하고 Django 세션을 발급한다. 등록된 자격증명은 계정 설정에서 조회·삭제할 수 있다.
+- `/library` 인증서 PDF는 소유권 확인 후 5분 유효 step-up 인증을 요구한다. Passkey 보유자는 Passkey, 미보유자는 계정 비밀번호를 사용한다.
+- `AgentEvent`는 PostgreSQL을 기준 원장으로 유지하면서 `events` 컬렉션에 복제된다. `/live-demo`는 판매자 등록과 구매자 A2A 흐름을 `correlation_id`로 그룹화한다.
+- 브라우저는 Firestore에 직접 접근하지 않는다. 인증된 Django ASGI 스트림이 서버 `on_snapshot` 결과를 SSE로 전달하며, 연결 실패 시 snapshot API를 5초 간격으로 폴링한다.
 
 ---
 
@@ -366,8 +378,9 @@ BatchOrder 1──* BatchItem *──1 IpAsset
 | `asset_status` | asset_id | `{status, price_usdc, buyer_agent_id, updated_at}` | 결제상태 실시간(UNPAID→NEGOTIATING→LICENSED) |
 | `sessions/{id}/events` | auto | `{type, payload, ts}` | 샌드박스 라이브 협상·네트워크 로그 |
 | `sandbox_feed` | auto | `{asset_id, type, message, ts}` | Page 3 실시간 스트림 |
+| `events` | AgentEvent ID | `{type, asset_id, session_id, correlation_id, owner_user_id, payload, created_at}` | `/live-demo` 등록·A2A 흐름 |
 
-> 프론트는 Firebase JS SDK `onSnapshot`으로 구독. `FIRESTORE_ENABLED=false`면 `/api/v1/events` 폴링 폴백.
+> `/live-demo`는 인증된 `/api/v1/live-demo/stream` SSE를 우선 사용하고 `/api/v1/live-demo/events` 폴링을 폴백으로 사용한다. 서버가 Firestore를 구독하므로 Firebase 브라우저 자격증명을 노출하지 않는다.
 > **주의**: `asset_status`(asset_id 키)는 **최신/진행 중 세션**의 표시용 상태 미러다(자산은 다수 구매자를 가질 수 있음). 구매자별 정확한 상태는 `sessions/{id}` 및 PostgreSQL `License`가 SSOT이며, `asset_status`의 status값(UNPAID/NEGOTIATING/LICENSED)은 PostgreSQL의 `IpAsset.status`(draft/anchored/listed/retired, 자산 생애주기)와는 별개 축이다.
 
 ### 5.3 BigQuery (감사 장부) — `BIGQUERY_DATASET` 설정 시
@@ -397,6 +410,8 @@ BatchOrder 1──* BatchItem *──1 IpAsset
 | POST | `/api/v1/sandbox/run` | 구매자 AI 시뮬레이션 실행(SPEC-006) | 200/202 | 404 |
 | GET | `/.well-known/ai-plugin.json` | 에이전트 디스커버리 | 200 | |
 | GET | `/api/v1/events?asset_id=&since=` | 이벤트 폴링(Firestore 폴백) | 200 | |
+| GET | `/api/v1/live-demo/stream` | 인증된 Firestore→SSE 실시간 이벤트 | 200 stream | 302/503 |
+| GET | `/api/v1/live-demo/events` | 라이브 데모 snapshot·폴링 폴백 | 200 | 302/503 |
 
 ### 6.2 협상 응답 계약
 ```json
@@ -425,6 +440,7 @@ BatchOrder 1──* BatchItem *──1 IpAsset
 |------|--------|------|
 | `/` | 창작자 워크스페이스 | SPEC-001 / SPEC-005 |
 | `/library` | IP 라이브러리·증명서 | SPEC-005 |
+| `/live-demo` | 등록·A2A 이벤트 실시간 시각화 | SPEC-009 |
 | `/sandbox` | 협상 샌드박스 | SPEC-006 |
 | `/files/{token}` | 원본 서명 다운로드 | SPEC-004 |
 

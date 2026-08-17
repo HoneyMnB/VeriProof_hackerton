@@ -7,8 +7,8 @@ W3C WebAuthn과 FIDO2 표준을 Django 인증·세션 위에 연결한다. 브�
 Windows Hello, Touch ID, Face ID, 기기 PIN 또는 보안키를 통해 사용자를 확인하고,
 VeriProof 서버는 그 결과로 생성된 서명을 검증한다.
 
-Passkey는 Solana 지갑 키가 아니다. 현재 역할은 VeriProof 계정 로그인에 한정하며,
-온체인 등록·결제 서명은 기존 Solana/KMS 경로가 별도로 담당한다.
+Passkey는 Solana 지갑 키가 아니다. VeriProof 계정 로그인과 소유자 인증서 조회 전
+재인증에 사용하며, 온체인 등록·결제 서명은 기존 Solana/KMS 경로가 별도로 담당한다.
 
 ## 2. 저장되는 정보
 
@@ -50,7 +50,21 @@ Passkey 개인키, 지문, 얼굴 정보와 기기 PIN은 서버로 전달되거
 Challenge는 ceremony 종류와 함께 Django 세션에 저장되며 5분 후 만료되고, 성공과
 실패 여부와 관계없이 검증 요청에서 한 번 소비된다. 따라서 재전송할 수 없다.
 
-## 5. 도메인 설정
+## 5. Passkey 관리
+
+로그인한 사용자는 계정 설정에서 자신의 `user_id`에 연결된 Passkey 목록과 기기명,
+등록·최근 사용 시각을 조회하고 개별 자격증명을 삭제할 수 있다. 다른 사용자의
+자격증명은 조회·삭제할 수 없으며, 비밀번호가 없는 계정은 마지막 Passkey를 삭제할
+수 없다.
+
+## 6. 인증서 조회 재인증
+
+`/library`에서 인증서 보기를 선택하면 소유권 검사 뒤 별도 step-up 인증을 수행한다.
+Passkey가 하나라도 등록된 계정은 해당 Passkey만 사용할 수 있고, 등록된 Passkey가
+없는 계정은 현재 비밀번호를 확인한다. 성공 권한은 해당 사용자·작품에만 적용되며
+5분 뒤 만료된다. PDF 응답은 `private, no-store`로 캐시를 차단한다.
+
+## 7. 도메인 설정
 
 WebAuthn 자격증명은 RP ID와 origin에 묶인다. 로컬에서는 환경값이 비어 있으면 현재
 요청의 `localhost` 호스트를 사용한다. 운영에서는 최종 HTTPS 도메인을 명시한다.
@@ -67,18 +81,19 @@ PASSKEY_ORIGINS=https://app.example.com
 - Reverse proxy 환경에서는 Django가 `X-Forwarded-Proto: https`를 신뢰하도록 현재
   `SECURE_PROXY_SSL_HEADER` 설정을 유지한다.
 
-## 6. 기존 인증과 복구
+## 8. 기존 인증과 복구
 
 현재 이메일·비밀번호 가입과 로그인은 그대로 유지한다. 이는 기존 사용자 호환성과
 Passkey 기기 분실 시 계정 복구 수단이다. Passkey 인증 성공 뒤에도 권한 모델과
 로그인 상태는 Django 세션을 그대로 사용하므로 기존 `login_required`, CSRF 및
 소유권 검사가 동일하게 적용된다.
 
-## 7. 관련 코드와 운영 절차
+## 9. 관련 코드와 운영 절차
 
 - 모델: `apps/accounts/models.py::PasskeyCredential`
 - ceremony와 검증: `apps/accounts/passkeys.py`
 - HTTP 경계: `apps/accounts/views_passkey.py`
+- 인증서 step-up: `apps/ip/views_web.py`
 - 브라우저 코드: `static/js/passkeys.js`
 - DB migration: `accounts.0006_passkeycredential`
 

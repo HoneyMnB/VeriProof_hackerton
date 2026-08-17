@@ -123,12 +123,13 @@ docker compose down
 포트 충돌이 발생하면 먼저 `8000`, `8001`, `8002`, `5432`, `6379` 포트를 사용하는 기존 프로세스나 컨테이너가 있는지 확인하십시오. `docker compose down`은 PostgreSQL named volume을 보존합니다.
 
 ## 목표 아키텍처 (운영 전환 시)
-- **App**: Django 5 + Vanilla HTML/CSS/JS, **PostgreSQL(Cloud SQL)** 시스템 오브 레코드
+- **App**: Django 5(ASGI/Uvicorn) + Vanilla HTML/CSS/JS, **PostgreSQL(Cloud SQL)** 시스템 오브 레코드
+- **인증**: Django Session + WebAuthn/Passkey(로그인·인증서 조회 재인증)
 - **컴퓨트**: **Cloud Run** (GKE 미사용)
 - **AI**: Gemini `gemini-3.1-flash-lite`(현재 모든 호출 기본 모델), Vertex AI 또는 Gemini API
 - **결제**: x402 + **a2a-x402**(`x402_a2a`) + **AP2**(VDC mandate) + **pay.sh** + Solana Pay
 - **체인**: Solana Devnet, **Google Cloud Blockchain RPC**, SPL USDC + Memo, **Cloud KMS/Secret Manager** 서명
-- **비동기/데이터**: **Pub/Sub + Eventarc + Workflows**, **Firestore**(실시간) + **BigQuery**(감사로그)
+- **비동기/데이터**: **Pub/Sub + Eventarc + Workflows**, **Firestore** 서버 리스너 → 인증된 Django SSE(폴링 폴백), **BigQuery**(감사로그)
 
 > 이 절은 목표 배포 구조다. 현재 로컬 런타임은 Django + SQLite + local storage, 실제 Gemini 호출, 실제 Solana RPC/Memo 제출 어댑터로 동작한다. Memo 서명자 키가 없으면 등록 앵커·등록 인증서·라이선스 인증서 발급은 실패한다. Cloud Run·Cloud SQL·GCP 이벤트 파이프라인은 아직 운영 전환 대상이다.
 
@@ -140,8 +141,10 @@ docker compose down
 |---|---|---|
 | 창작자 등록 | 로그인한 사용자가 파일·가격·공개 여부를 입력해 작품을 등록한다. 다중 이미지는 하나의 작품/매니페스트/인증서로 처리하고 SHA-256 기반 Memo를 Solana에 제출한다. | multipart 등록, Gemini 분석, preview 저장, Solana Memo 제출 단위 테스트 |
 | Gemini 비서 | 대화·등록 준비·제한된 도구 계획(`record_expense`, `update_asset_terms`, `prepare_registration`)과 감사 기록을 제공한다. | 실제 Gemini 응답과 등록 준비 액션 런타임 확인 |
+| 계정 인증 | WebAuthn Passkey 등록·로그인·목록·삭제를 제공한다. 인증서 조회는 Passkey 보유 계정이면 Passkey, 미보유 계정이면 비밀번호로 5분 유효 재인증을 요구한다. | Django 세션·CSRF·소유권 검사와 WebAuthn challenge 검증 |
 | 공개 탐색 | 공개·앵커·등록 인증서 조건을 충족한 작품만 catalog/discover에 노출하고 원본은 숨긴다. | catalog HTTP 200, 워터마크 preview 경로 |
 | 외부 에이전트 구매 | manifest/OpenAPI → catalog → x402 402 → Gemini 협상 → settle → 만료형 다운로드 토큰 흐름을 제공한다. | 외부 에이전트 역할 HTTP E2E: 402, ACCEPT, settle 200, 다운로드 200 |
+| 라이브 데모 | 판매자 등록과 구매자 A2A 협상·결제 이벤트를 `correlation_id`로 묶어 탭별 표시한다. Firestore 서버 리스너를 인증된 SSE로 전달하며 실패 시 5초 폴링으로 전환한다. | `/live-demo`, `/api/v1/live-demo/stream`, `/api/v1/live-demo/events` |
 | 정합성·회귀 방지 | 등록 API의 가시성 입력을 정규화하여 `PUBLIC`도 `public`으로 보존한다. | 전체 pytest 329 passed, 실제 HTTP 재등록 및 catalog 노출 |
 | DB 이관 자료 | 최신 migration과 런타임 검증 데이터가 포함된 portable Django fixture를 제공한다. | `veriproof_current_db_django_fixture_2026-07-25_post_runtime_e2e.json` (308 records) |
 
@@ -161,28 +164,30 @@ docker compose down
 
 이미지 작품은 여러 장을 하나의 작품으로 등록할 수 있습니다. 첫 이미지는 디스커버 카드의 대표 이미지가 되고, 상세 페이지에서는 워터마크된 전체 이미지가 썸네일 갤러리로 표시됩니다. 작품 전체는 하나의 매니페스트 해시로 앵커링되므로 등록 인증서와 구매 라이선스는 각각 한 건만 발급됩니다. 라이선스 다운로드는 구성 이미지 전체를 하나의 ZIP으로 제공합니다.
 
-DB를 새 환경에 적용할 때는 최신 Django migration(`ip.0016_asset_image`)까지 실행해야 합니다. 작품당 이미지 수는 `MAX_WORK_IMAGES` 환경 변수로 제한하며 기본값은 10입니다.
+DB를 새 환경에 적용할 때는 최신 Django migration(`accounts.0006_passkeycredential`, `common.0002_agentevent_live_flow`, `ip.0016_asset_image`)까지 실행해야 합니다. 작품당 이미지 수는 `MAX_WORK_IMAGES` 환경 변수로 제한하며 기본값은 10입니다.
 
 ## 문서 구성
 | 문서 | 내용 |
 |------|------|
-| [PRD.md](./PRD.md) | 제품 요구사항, 목표, 범위, 설계결정(DD), 유스케이스, NFR, 리스크, DoD |
-| [00-architecture-and-data-model.md](./00-architecture-and-data-model.md) | 기술스택, 시스템/비동기 아키텍처, 결제 프로토콜, 서비스 인터페이스, 데이터모델(PostgreSQL/Firestore/BigQuery), API 계약, 프로젝트 구조 |
-| [test-plan.md](./test-plan.md) | TDD 전략, 계층, 픽스처, 실패주입 매트릭스, SPEC↔테스트 매핑, E2E |
-| [policy_system_v01.md](./policy_system_v01.md) | 현재 구현의 정책, 실행 검증, 데이터 흐름, 운영 경계 |
-| [docs_develop_v01.md](./docs_develop_v01.md) | 코드·설정·서비스·API·DB 스키마·PostgreSQL 이관 fixture를 기준으로 한 개발자 인수인계 문서 |
+| [PRD.md](./docs/PRD.md) | 제품 요구사항, 목표, 범위, 설계결정(DD), 유스케이스, NFR, 리스크, DoD |
+| [00-architecture-and-data-model.md](./docs/00-architecture-and-data-model.md) | 기술스택, 시스템/비동기 아키텍처, 결제 프로토콜, 서비스 인터페이스, 데이터모델(PostgreSQL/Firestore/BigQuery), API 계약, 프로젝트 구조 |
+| [passkey.md](./docs/passkey.md) | WebAuthn 등록·로그인·관리와 인증서 조회 재인증 흐름 |
+| [live-demo-presentation-scenario.md](./docs/live-demo-presentation-scenario.md) | 판매자 등록 및 구매자 A2A 라이브 데모 시연 순서 |
+| [test-plan.md](./docs/test-plan.md) | TDD 전략, 계층, 픽스처, 실패주입 매트릭스, SPEC↔테스트 매핑, E2E |
+| [policy_system_v01.md](./docs/policy_system_v01.md) | 현재 구현의 정책, 실행 검증, 데이터 흐름, 운영 경계 |
+| [docs_develop_v01.md](./docs/docs_develop_v01.md) | 코드·설정·서비스·API·DB 스키마·PostgreSQL 이관 fixture를 기준으로 한 개발자 인수인계 문서 |
 
 ## SPEC (EARS + 인수조건 + TDD 테스트명세)
 | SPEC | 제목 | 시나리오/페이지 |
 |------|------|----------------|
-| [SPEC-001](./specs/SPEC-001-ip-registration.md) | IP 등록 & 온체인 앵커링 | S1 / Page 1 |
-| [SPEC-002](./specs/SPEC-002-x402-interceptor.md) | x402 접근 인터셉터 & 클라이언트 판별 | S1·S2 / 프로토콜 |
-| [SPEC-003](./specs/SPEC-003-negotiation.md) | Gemini 자율 가격 협상 | S1 / 협상 |
-| [SPEC-004](./specs/SPEC-004-settlement.md) | Solana USDC 정산 & 라이선스·인증서 | S1 / 정산 |
-| [SPEC-005](./specs/SPEC-005-library-dashboard.md) | IP 라이브러리 & 온체인 증명서 | Page 1·2 |
-| [SPEC-006](./specs/SPEC-006-sandbox.md) | Multi-Agent 협상 샌드박스 | Page 3 |
-| [SPEC-007](./specs/SPEC-007-batch-licensing.md) | B2B 초소액 대량 라이선싱 | S2 |
-| [SPEC-008](./specs/SPEC-008-royalty-split.md) | 2차 창작 로열티 자동 분배 | S3 |
+| [SPEC-001](./docs/specs/SPEC-001-ip-registration.md) | IP 등록 & 온체인 앵커링 | S1 / Page 1 |
+| [SPEC-002](./docs/specs/SPEC-002-x402-interceptor.md) | x402 접근 인터셉터 & 클라이언트 판별 | S1·S2 / 프로토콜 |
+| [SPEC-003](./docs/specs/SPEC-003-negotiation.md) | Gemini 자율 가격 협상 | S1 / 협상 |
+| [SPEC-004](./docs/specs/SPEC-004-settlement.md) | Solana USDC 정산 & 라이선스·인증서 | S1 / 정산 |
+| [SPEC-005](./docs/specs/SPEC-005-library-dashboard.md) | IP 라이브러리 & 온체인 증명서 | Page 1·2 |
+| [SPEC-006](./docs/specs/SPEC-006-sandbox.md) | Multi-Agent 협상 샌드박스 | Page 3 |
+| [SPEC-007](./docs/specs/SPEC-007-batch-licensing.md) | B2B 초소액 대량 라이선싱 | S2 |
+| [SPEC-008](./docs/specs/SPEC-008-royalty-split.md) | 2차 창작 로열티 자동 분배 | S3 |
 
 ## 후속 구현 순서 (권장)
 
