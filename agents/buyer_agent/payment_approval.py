@@ -5,6 +5,7 @@ import uuid
 from google.adk.tools.tool_context import ToolContext
 
 PAYMENT_MODE_STATE_KEY = "buyer:payment_mode"
+PAYMENT_MODE_INSTRUCTION_STATE_KEY = "buyer_payment_mode"
 PAYMENT_APPROVAL_STATE_KEY = "buyer:payment_approval"
 PAYMENT_MODE_AUTONOMOUS = "autonomous"
 PAYMENT_MODE_APPROVAL = "approval"

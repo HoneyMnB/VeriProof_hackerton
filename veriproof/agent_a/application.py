@@ -18,7 +18,7 @@ def build_agent_card() -> AgentCard:
     endpoint = f"{settings.A2A_PUBLIC_BASE_URL}/a2a/"
     return AgentCard(
         name="VeriProof Seller Agent",
-        description="Discovers registered works and public SOL licensing terms.",
+        description="Discovers registered works and fulfills settled licenses.",
         supported_interfaces=[
             AgentInterface(
                 url=endpoint,
@@ -35,11 +35,20 @@ def build_agent_card() -> AgentCard:
                 id="discover-licensable-assets",
                 name="Discover licensable assets",
                 description=(
-                    "Search registered public works and inspect their SOL terms."
+                    "Search registered public works and inspect their licensing terms."
                 ),
                 tags=["marketplace", "licensing", "SOL", "images"],
                 examples=["Find a sea image available for licensing under 10 SOL."],
-            )
+            ),
+            AgentSkill(
+                id="fulfill-settled-license",
+                name="Fulfill settled license",
+                description=(
+                    "Returns the persisted download link and gasless receipt facts "
+                    "only after a matching license settlement."
+                ),
+                tags=["marketplace", "license", "fulfillment", "USDC"],
+            ),
         ],
     )
 

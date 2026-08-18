@@ -5,8 +5,11 @@ import uuid
 from typing import Any
 
 from asgiref.sync import sync_to_async
+from django.conf import settings
+from django.utils import timezone
 
 from apps.ip.models import IpAsset
+from apps.settlement.models import License
 from services.catalog_service import get_catalog_service
 
 from .schemas import AssetType
@@ -108,3 +111,69 @@ def _get_licensable_asset(asset_id: str) -> dict[str, Any]:
 async def get_licensable_asset(asset_id: str) -> dict[str, Any]:
     """하나의 자산 ID에 대한 공개 라이선스 정보를 반환한다."""
     return await sync_to_async(_get_licensable_asset, thread_sensitive=True)(asset_id)
+
+
+def _get_purchase_fulfillment(
+    asset_id: str,
+    transaction_signature: str,
+) -> dict[str, Any]:
+    """Return delivery facts only for a settled, still-downloadable license."""
+    try:
+        parsed_asset_id = uuid.UUID(asset_id)
+    except (TypeError, ValueError, AttributeError):
+        return {"status": "invalid_asset_id"}
+
+    signature = str(transaction_signature or "").strip()
+    if not signature or len(signature) > 90:
+        return {"status": "invalid_transaction_signature"}
+
+    license = (
+        License.objects.select_related("asset")
+        .filter(asset_id=parsed_asset_id, payment_tx_sig=signature)
+        .first()
+    )
+    if license is None:
+        return {"status": "not_settled"}
+    if not license.download_token or (
+        license.download_expires_at is not None
+        and license.download_expires_at <= timezone.now()
+    ):
+        return {"status": "download_unavailable"}
+
+    download_url = (
+        f"{settings.A2A_PUBLIC_BASE_URL.rstrip('/')}/files/{license.download_token}"
+    )
+    return {
+        "status": "fulfilled",
+        "delivery": {
+            "asset_id": str(license.asset_id),
+            "asset_title": license.asset.title,
+            "license_id": str(license.id),
+            "transaction_signature": license.payment_tx_sig,
+            "amount_usdc": str(license.price_usdc),
+            "currency": license.payment_currency,
+            "network_fee_usdc": "0",
+            "fee_sponsor": "VeriProof",
+            "download_url": download_url,
+            "download_expires_at": (
+                license.download_expires_at.isoformat()
+                if license.download_expires_at
+                else None
+            ),
+        },
+    }
+
+
+async def get_purchase_fulfillment(
+    asset_id: str,
+    transaction_signature: str,
+) -> dict[str, Any]:
+    """Return the actual download and receipt data for one completed purchase.
+
+    This tool never creates a payment or a license. It can only disclose a
+    persisted fulfillment record whose asset and transaction both match.
+    """
+    return await sync_to_async(_get_purchase_fulfillment, thread_sensitive=True)(
+        asset_id,
+        transaction_signature,
+    )

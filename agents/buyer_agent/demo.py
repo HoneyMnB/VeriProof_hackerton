@@ -2,8 +2,10 @@
 
 import json
 import logging
+import re
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import urlparse
 from uuid import UUID, uuid4
 
 from google.adk.runners import Runner
@@ -17,6 +19,7 @@ from .payment_approval import (
     PAYMENT_APPROVAL_STATE_KEY,
     PAYMENT_MODE_APPROVAL,
     PAYMENT_MODE_AUTONOMOUS,
+    PAYMENT_MODE_INSTRUCTION_STATE_KEY,
     PAYMENT_MODE_STATE_KEY,
     PAYMENT_MODES,
 )
@@ -35,6 +38,17 @@ _SENSITIVE_KEY_PARTS = (
     "signature",
     "token",
 )
+_RECEIPT_LABELS = (
+    ("asset_id", "작품 ID"),
+    ("asset_title", "작품명"),
+    ("amount_usdc", "결제 금액"),
+    ("network_fee", "네트워크 수수료"),
+    ("license_id", "라이선스 ID"),
+    ("transaction_signature", "트랜잭션 서명"),
+    ("download_expires_at", "다운로드 기한"),
+)
+_MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(https?://[^\s)]+\)")
+_BARE_URL_PATTERN = re.compile(r"https?://[^\s<>\[\]()]+")
 
 _session_service = InMemorySessionService()
 _runner = Runner(
@@ -58,7 +72,7 @@ def safe_tool_value(value: Any, *, depth: int = 0) -> Any:
     if isinstance(value, dict):
         return {
             str(key): "[redacted]"
-            if _is_sensitive_key(key)
+            if _is_sensitive_key(key) and str(key) != "transaction_signature"
             else safe_tool_value(item, depth=depth + 1)
             for key, item in list(value.items())[:_MAX_COLLECTION_ITEMS]
         }
@@ -92,6 +106,158 @@ def _agent_message_text(value: Any) -> str:
     return json.dumps(safe_value, ensure_ascii=False, indent=2)
 
 
+def _linkify_bare_urls(text: str) -> str:
+    """Keep named Markdown links and convert every remaining HTTP(S) URL."""
+    def linkify_segment(segment: str) -> str:
+        def replace_url(match: re.Match[str]) -> str:
+            raw_url = match.group(0)
+            url = raw_url.rstrip(".,;:!?")
+            suffix = raw_url[len(url) :]
+            hostname = urlparse(url).netloc
+            return f"[{hostname}]({url}){suffix}" if hostname else raw_url
+
+        return _BARE_URL_PATTERN.sub(replace_url, segment)
+
+    parts: list[str] = []
+    cursor = 0
+    for match in _MARKDOWN_LINK_PATTERN.finditer(text):
+        parts.append(linkify_segment(text[cursor : match.start()]))
+        parts.append(match.group(0))
+        cursor = match.end()
+    parts.append(linkify_segment(text[cursor:]))
+    return "".join(parts)
+
+
+def _receipt_values(message: str) -> dict[str, str] | None:
+    """Extract the complete seller receipt whether it arrived as lines or one line."""
+    label_pattern = "|".join(re.escape(label) for _, label in _RECEIPT_LABELS)
+    matches = list(re.finditer(rf"({label_pattern})\s*:\s*", message))
+    if len(matches) != len(_RECEIPT_LABELS):
+        return None
+
+    labels = {label: key for key, label in _RECEIPT_LABELS}
+    values: dict[str, str] = {}
+    for index, match in enumerate(matches):
+        next_start = matches[index + 1].start() if index + 1 < len(matches) else len(message)
+        value = message[match.end() : next_start]
+        value = re.sub(r"\s*\[[^\]]+\]\(https?://[^\s)]+\)\s*$", "", value)
+        value = value.strip().rstrip("-* ").strip().strip("`")
+        if not value or match.group(1) not in labels:
+            return None
+        key = labels[match.group(1)]
+        if key in values:
+            return None
+        values[key] = value
+    return values if len(values) == len(_RECEIPT_LABELS) else None
+
+
+def _receipt_markdown(message: str) -> str:
+    """Normalize only a complete receipt; all other seller text remains untouched."""
+    values = _receipt_values(message)
+    if values is None:
+        return message
+
+    lines = ["## 구매 완료", ""]
+    code_keys = {"asset_id", "license_id", "transaction_signature"}
+    for key, label in _RECEIPT_LABELS:
+        value = values[key]
+        formatted_value = f"`{value}`" if key in code_keys else value
+        lines.append(f"- **{label}**: {formatted_value}")
+    download_match = re.search(r"\[[^\]]+\]\((https?://[^\s)]+)\)", message)
+    if download_match:
+        lines.extend(("", f"[원본 다운로드]({download_match.group(1)})"))
+    return "\n".join(lines)
+
+
+def _seller_message_text(value: Any) -> str:
+    message = _agent_message_text(value)
+    rendered = _receipt_markdown(message) if isinstance(value, str) else message
+    return _linkify_bare_urls(rendered)
+
+
+def _delivery_payload(value: Any) -> dict[str, str] | None:
+    """Accept only the seller's complete, display-safe fulfillment contract."""
+    safe_value = safe_tool_value(value)
+    if isinstance(safe_value, str):
+        try:
+            safe_value = json.loads(safe_value)
+        except json.JSONDecodeError:
+            fenced_json = safe_value.strip()
+            if fenced_json.startswith("```json") and fenced_json.endswith("```"):
+                try:
+                    safe_value = json.loads(
+                        fenced_json.removeprefix("```json").removesuffix("```").strip()
+                    )
+                except json.JSONDecodeError:
+                    return None
+            else:
+                return _markdown_delivery_payload(safe_value)
+    if not isinstance(safe_value, dict):
+        return None
+    candidate = safe_value.get("delivery", safe_value)
+    if not isinstance(candidate, dict):
+        return None
+
+    required = (
+        "asset_id",
+        "asset_title",
+        "license_id",
+        "transaction_signature",
+        "amount_usdc",
+        "currency",
+        "network_fee_usdc",
+        "fee_sponsor",
+        "download_url",
+    )
+    if any(not isinstance(candidate.get(key), str) for key in required):
+        return None
+    try:
+        UUID(candidate["asset_id"])
+        UUID(candidate["license_id"])
+    except (ValueError, TypeError):
+        return None
+    parsed_url = urlparse(candidate["download_url"])
+    if parsed_url.scheme not in {"http", "https"} or not parsed_url.netloc:
+        return None
+    if candidate["currency"] != "USDC" or candidate["network_fee_usdc"] != "0":
+        return None
+
+    return {
+        key: candidate[key]
+        for key in (*required, "download_expires_at")
+        if isinstance(candidate.get(key), str)
+    }
+
+
+def _markdown_delivery_payload(message: str) -> dict[str, str] | None:
+    """Extract a complete receipt only from the Seller's labelled Markdown contract."""
+    values = _receipt_values(message)
+    if values is None:
+        return None
+
+    download_match = re.search(r"\[[^\]]+\]\((https?://[^\s)]+)\)", message)
+    fee_match = re.fullmatch(
+        r"`?0\s+USDC`?\s*·\s*VeriProof 부담",
+        values["network_fee"],
+    )
+    amount_match = re.fullmatch(r"(.+?)\s+(USDC)", values["amount_usdc"])
+    if not download_match or not fee_match or not amount_match:
+        return None
+
+    return {
+        "asset_id": values["asset_id"],
+        "asset_title": values["asset_title"],
+        "amount_usdc": amount_match.group(1),
+        "currency": amount_match.group(2),
+        "license_id": values["license_id"],
+        "transaction_signature": values["transaction_signature"],
+        "network_fee_usdc": "0",
+        "fee_sponsor": "VeriProof",
+        "download_url": download_match.group(1),
+        "download_expires_at": values["download_expires_at"],
+    }
+
+
 def _event_payloads(event) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for call in event.get_function_calls():
@@ -102,7 +268,8 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                     "from": "buyer_agent",
                     "to": "seller_agent",
                     "protocol": "A2A",
-                    "text": _agent_message_text(call.args or {}),
+                    "call_id": call.id,
+                    "text": _linkify_bare_urls(_agent_message_text(call.args or {})),
                 }
             )
         payloads.append(
@@ -124,15 +291,20 @@ def _event_payloads(event) -> list[dict[str, Any]]:
             }
         )
         if response.name == "veriproof_seller_agent":
+            delivery = _delivery_payload(output)
             payloads.append(
                 {
                     "type": "agent_message",
                     "from": "seller_agent",
                     "to": "buyer_agent",
                     "protocol": "A2A",
-                    "text": _agent_message_text(output),
+                    "call_id": response.id,
+                    "text": _seller_message_text(output),
+                    "delivery": delivery,
                 }
             )
+            if delivery is not None:
+                payloads.append({"type": "license_delivery", "delivery": delivery})
         if isinstance(output, dict) and output.get("status") == "approval_required":
             payloads.append(
                 {
@@ -150,7 +322,10 @@ def _event_payloads(event) -> list[dict[str, Any]]:
         ]
         if texts:
             payloads.append(
-                {"type": "assistant_message", "text": "\n".join(texts)}
+                {
+                    "type": "assistant_message",
+                    "text": _linkify_bare_urls("\n".join(texts)),
+                }
             )
     return payloads
 
@@ -231,7 +406,10 @@ async def stream_demo_chat(request: Request):
     if payment_mode not in PAYMENT_MODES:
         return JSONResponse({"error": "Invalid payment_mode."}, status_code=400)
 
-    state_delta: dict[str, Any] = {PAYMENT_MODE_STATE_KEY: payment_mode}
+    state_delta: dict[str, Any] = {
+        PAYMENT_MODE_STATE_KEY: payment_mode,
+        PAYMENT_MODE_INSTRUCTION_STATE_KEY: payment_mode,
+    }
     payment_decision = payload.get("payment_decision")
     if payment_decision is not None:
         if payment_mode != PAYMENT_MODE_APPROVAL:

@@ -89,7 +89,7 @@
           <details class="execution" open>
             <summary>
               <span class="execution-icon" aria-hidden="true">⌁</span>
-              <span class="execution-label">Execution</span>
+              <span class="execution-label">Excution</span>
               <span class="execution-status">Working</span>
               <span class="chevron" aria-hidden="true">⌄</span>
             </summary>
@@ -106,8 +106,23 @@
       <div class="exchange-content">
         <div class="exchange-meta"><strong></strong><span class="exchange-route"></span><b>A2A</b></div>
         <div class="exchange-message"></div>
+        <details class="execution" open>
+          <summary>
+            <span class="execution-icon" aria-hidden="true">⌁</span>
+            <span class="execution-label">Excution</span>
+            <span class="execution-status">Queued</span>
+            <span class="chevron" aria-hidden="true">⌄</span>
+          </summary>
+          <ol class="execution-list"></ol>
+        </details>
       </div>
     </div>
+  </template>
+
+  <template id="deliveryTemplate">
+    <section class="license-delivery" aria-label="Settled license delivery">
+      <div class="delivery-markdown"></div>
+    </section>
   </template>
 
   <template id="executionItemTemplate">

@@ -1,7 +1,12 @@
 (() => {
   "use strict";
 
-  const state = { sessionId: null, busy: false, pendingApproval: null };
+  const state = {
+    sessionId: null,
+    busy: false,
+    pendingApproval: null,
+    agentMessagesByCall: new Map(),
+  };
   const elements = {
     form: document.querySelector("#chatForm"),
     input: document.querySelector("#chatInput"),
@@ -19,6 +24,7 @@
     declinePayment: document.querySelector("#declinePayment"),
     turnTemplate: document.querySelector("#turnTemplate"),
     agentMessageTemplate: document.querySelector("#agentMessageTemplate"),
+    deliveryTemplate: document.querySelector("#deliveryTemplate"),
     itemTemplate: document.querySelector("#executionItemTemplate"),
   };
 
@@ -70,7 +76,7 @@
   function createTurn(message) {
     const fragment = elements.turnTemplate.content.cloneNode(true);
     const turn = fragment.querySelector(".turn");
-    turn.querySelector(".user-message").textContent = message;
+    renderMarkdown(turn.querySelector(".user-message"), message);
     elements.messages.append(fragment);
     return elements.messages.lastElementChild;
   }
@@ -89,7 +95,14 @@
     return JSON.stringify(value, null, 2);
   }
 
-  function addExecutionItem(turn, { kind = "status", title, description, detail }) {
+  function executionRoot(container) {
+    if (container.classList.contains("turn")) {
+      return container.querySelector(".assistant-content .execution");
+    }
+    return container.querySelector(".execution");
+  }
+
+  function addExecutionItem(container, { kind = "status", title, description, detail }) {
     const fragment = elements.itemTemplate.content.cloneNode(true);
     const item = fragment.querySelector(".execution-item");
     item.classList.add(kind);
@@ -106,20 +119,180 @@
         pre.hidden = !pre.hidden;
       });
     }
-    turn.querySelector(".execution-list").append(fragment);
+    executionRoot(container).querySelector(".execution-list").append(fragment);
   }
 
-  function setExecutionStatus(turn, text, kind = "") {
-    const status = turn.querySelector(".execution-status");
+  function setExecutionStatus(container, text, kind = "") {
+    const status = executionRoot(container).querySelector(".execution-status");
     status.textContent = text;
     status.className = `execution-status ${kind}`.trim();
   }
 
+  function setExecutionLabel(container, text) {
+    executionRoot(container).querySelector(".execution-label").textContent = text;
+  }
+
+  function resetExecution(container, label = "Excution") {
+    const execution = executionRoot(container);
+    execution.querySelector(".execution-list").replaceChildren();
+    execution.querySelector(".execution-label").textContent = label;
+    setExecutionStatus(container, "Working", "working");
+  }
+
+  function appendInlineMarkdown(parent, text) {
+    const tokens = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
+    let cursor = 0;
+    for (const match of text.matchAll(tokens)) {
+      parent.append(document.createTextNode(text.slice(cursor, match.index)));
+      const token = match[0];
+      if (token.startsWith("`")) {
+        const code = document.createElement("code");
+        code.textContent = token.slice(1, -1);
+        parent.append(code);
+      } else if (token.startsWith("**")) {
+        const strong = document.createElement("strong");
+        strong.textContent = token.slice(2, -2);
+        parent.append(strong);
+      } else {
+        const linkEnd = token.lastIndexOf("](");
+        const link = document.createElement("a");
+        link.href = token.slice(linkEnd + 2, -1);
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = token.slice(1, linkEnd);
+        parent.append(link);
+      }
+      cursor = (match.index || 0) + token.length;
+    }
+    parent.append(document.createTextNode(text.slice(cursor)));
+  }
+
+  function renderMarkdown(target, markdown) {
+    const fragment = document.createDocumentFragment();
+    const lines = String(markdown || "").replace(/\r\n?/g, "\n").split("\n");
+    let paragraph = [];
+    let list = null;
+    let codeLines = null;
+
+    const flushParagraph = () => {
+      if (!paragraph.length) return;
+      const node = document.createElement("p");
+      node.className = "markdown-paragraph";
+      appendInlineMarkdown(node, paragraph.join(" "));
+      fragment.append(node);
+      paragraph = [];
+    };
+    const flushList = () => {
+      if (!list) return;
+      fragment.append(list);
+      list = null;
+    };
+
+    for (const line of lines) {
+      if (line.startsWith("```")) {
+        flushParagraph();
+        flushList();
+        if (codeLines === null) codeLines = [];
+        else {
+          const pre = document.createElement("pre");
+          const code = document.createElement("code");
+          code.textContent = codeLines.join("\n");
+          pre.append(code);
+          fragment.append(pre);
+          codeLines = null;
+        }
+        continue;
+      }
+      if (codeLines !== null) {
+        codeLines.push(line);
+        continue;
+      }
+      const heading = line.match(/^(#{1,3})\s+(.+)$/);
+      const listItem = line.match(/^\s*([-*]|\d+\.)\s+(.+)$/);
+      if (heading) {
+        flushParagraph();
+        flushList();
+        const node = document.createElement(`h${heading[1].length + 2}`);
+        appendInlineMarkdown(node, heading[2]);
+        fragment.append(node);
+      } else if (listItem) {
+        flushParagraph();
+        const ordered = listItem[1].endsWith(".");
+        if (!list || (list.tagName === "OL") !== ordered) {
+          flushList();
+          list = document.createElement(ordered ? "ol" : "ul");
+        }
+        const item = document.createElement("li");
+        appendInlineMarkdown(item, listItem[2]);
+        list.append(item);
+      } else if (!line.trim()) {
+        flushParagraph();
+        flushList();
+      } else {
+        flushList();
+        paragraph.push(line.trim());
+      }
+    }
+    if (codeLines !== null) paragraph.push(codeLines.join("\n"));
+    flushParagraph();
+    flushList();
+    target.replaceChildren(fragment);
+  }
+
   function showAssistantMessage(turn, text, isError = false) {
+    turn.querySelector(".assistant-row").hidden = false;
     const message = turn.querySelector(".assistant-message");
     message.classList.remove("is-loading");
     message.classList.toggle("error", isError);
-    message.textContent = text;
+    renderMarkdown(message, text);
+  }
+
+  function setAssistantLoading(turn, visible) {
+    const assistantRow = turn.querySelector(".assistant-row");
+    assistantRow.hidden = !visible;
+    if (!visible) return;
+
+    const message = turn.querySelector(".assistant-message");
+    message.classList.remove("error");
+    message.classList.add("is-loading");
+    message.replaceChildren();
+    const typing = document.createElement("span");
+    typing.className = "typing";
+    typing.setAttribute("aria-label", "Buyer Agent is preparing a response");
+    for (let index = 0; index < 3; index += 1) typing.append(document.createElement("i"));
+    message.append(typing);
+  }
+
+  function purchaseCompletionMarkdown(delivery) {
+    return [
+      "## 구매가 완료되었습니다",
+      "",
+      "**작품 ID**",
+      `\`${delivery.asset_id}\``,
+      "",
+      "**트랜잭션**",
+      `\`${delivery.transaction_signature}\``,
+      "",
+      `구매 증빙 및 [원본 다운로드](${delivery.download_url})를 확인해 주세요.`,
+    ].join("\n");
+  }
+
+  function deliveryMarkdown(delivery) {
+    const lines = [
+      "## 구매 증빙",
+      `### ${delivery.asset_title}`,
+      "",
+      `- **작품 ID**: \`${delivery.asset_id}\``,
+      `- **라이선스 ID**: \`${delivery.license_id}\``,
+      `- **결제 금액**: ${delivery.amount_usdc} ${delivery.currency}`,
+      `- **네트워크 수수료**: ${delivery.network_fee_usdc} ${delivery.currency} · ${delivery.fee_sponsor} 부담`,
+      `- **트랜잭션**: \`${delivery.transaction_signature}\``,
+    ];
+    if (delivery.download_expires_at) {
+      lines.push(`- **다운로드 기한**: ${delivery.download_expires_at}`);
+    }
+    lines.push("", `[원본 다운로드](${delivery.download_url})`);
+    return lines.join("\n");
   }
 
   function addAgentMessage(turn, event) {
@@ -134,7 +307,87 @@
     fragment.querySelector(".exchange-meta strong").textContent = sender;
     fragment.querySelector(".exchange-route").textContent = `→ ${recipient}`;
     fragment.querySelector(".exchange-meta b").textContent = event.protocol;
-    fragment.querySelector(".exchange-message").textContent = event.text;
+    const message = fragment.querySelector(".exchange-message");
+    if (fromSeller && event.delivery) {
+      exchange.classList.add("purchase-message");
+      renderMarkdown(message, purchaseCompletionMarkdown(event.delivery));
+    } else {
+      renderMarkdown(message, event.text);
+    }
+    const existingExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
+    if (fromSeller && existingExchange) {
+      existingExchange.querySelector(".exchange-message").replaceChildren();
+      existingExchange.classList.remove("is-loading");
+      if (event.delivery) existingExchange.classList.add("purchase-message");
+      existingExchange.querySelector(".exchange-meta strong").textContent = sender;
+      existingExchange.querySelector(".exchange-route").textContent = `→ ${recipient}`;
+      existingExchange.querySelector(".exchange-meta b").textContent = event.protocol;
+      if (event.delivery) {
+        renderMarkdown(existingExchange.querySelector(".exchange-message"), purchaseCompletionMarkdown(event.delivery));
+      } else {
+        renderMarkdown(existingExchange.querySelector(".exchange-message"), event.text);
+      }
+      addExecutionItem(existingExchange, {
+        kind: "tool-result",
+        title: "A2A response received",
+        description: "Seller Agent returned the response shown above.",
+        detail: event.text,
+      });
+      setExecutionStatus(existingExchange, "Completed");
+      setExecutionLabel(existingExchange, "Excution");
+      state.agentMessagesByCall.delete(event.call_id);
+      setAssistantLoading(turn, true);
+      return existingExchange;
+    }
+    turn.querySelector(".agent-dialogue").append(fragment);
+    const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
+    if (event.call_id) state.agentMessagesByCall.set(event.call_id, exchangeElement);
+    if (!fromSeller) {
+      addExecutionItem(exchangeElement, {
+        kind: "tool-call",
+        title: "A2A request prepared",
+        description: "Buyer Agent prepared this request for Seller Agent.",
+        detail: event.text,
+      });
+      setExecutionStatus(exchangeElement, "Queued", "queued");
+    } else {
+      setAssistantLoading(turn, true);
+    }
+    return exchangeElement;
+  }
+
+  function addSellerActivity(turn, event) {
+    const fragment = elements.agentMessageTemplate.content.cloneNode(true);
+    const exchange = fragment.querySelector(".agent-exchange");
+    exchange.classList.add("seller-message", "is-loading");
+    fragment.querySelector(".exchange-avatar").classList.add("seller-robot");
+    fragment.querySelector(".exchange-meta strong").textContent = "SELLER AGENT";
+    fragment.querySelector(".exchange-route").textContent = "→ BUYER AGENT";
+    fragment.querySelector(".exchange-meta b").textContent = "A2A";
+    const message = fragment.querySelector(".exchange-message");
+    const typing = document.createElement("span");
+    typing.className = "typing";
+    typing.setAttribute("aria-label", "Seller Agent is processing");
+    for (let index = 0; index < 3; index += 1) typing.append(document.createElement("i"));
+    message.append(typing);
+    turn.querySelector(".agent-dialogue").append(fragment);
+    const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
+    addExecutionItem(exchangeElement, {
+      kind: "tool-call",
+      title: event.tool,
+      description: "Seller Agent is processing the A2A request.",
+      detail: event.input,
+    });
+    setExecutionLabel(exchangeElement, event.tool);
+    setExecutionStatus(exchangeElement, "Working", "working");
+    if (event.call_id) state.agentMessagesByCall.set(event.call_id, exchangeElement);
+    return exchangeElement;
+  }
+
+  function addLicenseDelivery(turn, delivery) {
+    const fragment = elements.deliveryTemplate.content.cloneNode(true);
+    const card = fragment.querySelector(".license-delivery");
+    renderMarkdown(card.querySelector(".delivery-markdown"), deliveryMarkdown(delivery));
     turn.querySelector(".agent-dialogue").append(fragment);
   }
 
@@ -152,6 +405,7 @@
           setExecutionStatus(turn, "Working", "working");
         } else if (event.status === "completed") {
           setExecutionStatus(turn, "Completed");
+          setExecutionLabel(turn, "Excution");
           addExecutionItem(turn, {
             kind: "tool-result",
             title: "Response completed",
@@ -160,14 +414,40 @@
         }
         break;
       case "tool_call":
+        if (event.tool === "veriproof_seller_agent") {
+          resetExecution(turn, event.tool);
+          setAssistantLoading(turn, false);
+          const buyerExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
+          if (buyerExchange) {
+            addExecutionItem(buyerExchange, {
+              kind: "tool-call",
+              title: event.tool,
+              description: "Buyer Agent sent this A2A request to Seller Agent.",
+              detail: event.input,
+            });
+            setExecutionLabel(buyerExchange, event.tool);
+            setExecutionStatus(buyerExchange, "Sent");
+          }
+          addSellerActivity(turn, event);
+          break;
+        }
         addExecutionItem(turn, {
           kind: "tool-call",
           title: event.tool,
           description: "Tool called with the runtime arguments shown below",
           detail: event.input,
         });
+        setExecutionLabel(turn, event.tool);
+        setExecutionStatus(turn, "Working", "working");
         break;
       case "tool_result":
+        if (event.tool === "veriproof_seller_agent") {
+          const sellerExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
+          if (sellerExchange) {
+            setExecutionStatus(sellerExchange, "Responding", "working");
+          }
+          break;
+        }
         addExecutionItem(turn, {
           kind: "tool-result",
           title: `${event.tool} returned`,
@@ -181,8 +461,12 @@
       case "agent_message":
         addAgentMessage(turn, event);
         break;
+      case "license_delivery":
+        addLicenseDelivery(turn, event.delivery);
+        break;
       case "payment_approval_required":
         setExecutionStatus(turn, "Approval required", "working");
+        setExecutionLabel(turn, "Payment approval");
         addExecutionItem(turn, {
           kind: "tool-call",
           title: "Payment paused",
@@ -193,6 +477,7 @@
       case "error":
         showAssistantMessage(turn, event.message, true);
         setExecutionStatus(turn, "Failed", "failed");
+        setExecutionLabel(turn, "Excution");
         addExecutionItem(turn, {
           kind: "failed",
           title: "Execution failed",
@@ -270,12 +555,15 @@
       title: "Preparing request",
       description: "Sending the buyer instruction to the live agent",
     });
+    setExecutionLabel(turn, "Preparing request");
+    setExecutionStatus(turn, "Working", "working");
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
     try {
       await sendMessage(message, turn, paymentDecision);
     } catch (error) {
       showAssistantMessage(turn, error.message || "The request failed.", true);
       setExecutionStatus(turn, "Failed", "failed");
+      setExecutionLabel(turn, "Excution");
       addExecutionItem(turn, {
         kind: "failed",
         title: "Connection failed",

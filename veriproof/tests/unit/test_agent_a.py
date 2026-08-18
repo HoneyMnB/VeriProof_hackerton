@@ -14,8 +14,8 @@ def test_agent_card_is_available_at_the_standard_well_known_path():
     assert response.status_code == 200
     payload = response.json()
     assert payload["name"] == "VeriProof Seller Agent"
-    assert "SOL" in payload["description"]
-    assert "USDC" not in str(payload)
+    assert "fulfills settled licenses" in payload["description"]
+    assert any(skill["id"] == "fulfill-settled-license" for skill in payload["skills"])
     assert payload["supportedInterfaces"][0]["protocolBinding"] == "JSONRPC"
     assert payload["supportedInterfaces"][0]["url"].endswith("/a2a/")
 
@@ -58,3 +58,32 @@ def test_agent_catalog_tool_rejects_noncanonical_asset_type():
     assert result["status"] == "invalid_asset_type"
     assert "image" in result["allowed_asset_types"]
     assert result["assets"] == []
+
+
+@pytest.mark.django_db
+def test_settled_license_fulfillment_returns_only_persisted_delivery_data(settings):
+    from agent_a.tools import _get_purchase_fulfillment
+    from apps.settlement.models import License
+    from tests.factories import IpAssetFactory
+
+    asset = IpAssetFactory()
+    license = License.objects.create(
+        asset=asset,
+        buyer_wallet="buyer-wallet",
+        price_usdc="1.250000",
+        payment_currency="USDC",
+        usage_type="commercial",
+        payment_tx_sig="settled-transaction",
+        download_token="persisted-download-token",
+    )
+    settings.A2A_PUBLIC_BASE_URL = "https://seller.test"
+
+    result = _get_purchase_fulfillment(str(asset.id), "settled-transaction")
+
+    assert result["status"] == "fulfilled"
+    assert result["delivery"]["license_id"] == str(license.id)
+    assert result["delivery"]["download_url"] == "https://seller.test/files/persisted-download-token"
+    assert result["delivery"]["network_fee_usdc"] == "0"
+    assert _get_purchase_fulfillment(str(asset.id), "other-transaction") == {
+        "status": "not_settled"
+    }
