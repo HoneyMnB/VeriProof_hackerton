@@ -1,6 +1,6 @@
 # VeriProof AI 개발자 인수인계 문서 v0.1
 
-> 작성 기준: 2026-07-25. 이 문서는 현재 저장소의 실행 코드, Django 설정, 마이그레이션, 테스트 및 로컬 DB를 직접 점검해 작성했다. 기획 문서가 아니라 현재 구현을 우선하며, 계획과 구현의 차이는 별도로 표시한다.
+> 작성 기준: 2026-07-25, 최근 기능 갱신: 2026-08-16. 이 문서는 현재 저장소의 실행 코드, Django 설정과 마이그레이션을 기준으로 하며, 계획과 구현의 차이는 별도로 표시한다.
 
 ## 1. 시스템 목적과 범위
 
@@ -9,9 +9,11 @@ VeriProof AI는 창작물이 등록·보호·공개되고, 외부 구매자 에�
 핵심 원칙은 다음과 같다.
 
 - 관계형 데이터의 기준 원장은 Django DB이며, `AgentEvent`는 Firestore·BigQuery에 보조 복제될 수 있다.
+- 인증은 Django 세션을 기준으로 하며 WebAuthn Passkey 로그인·관리와 인증서 조회 step-up 인증을 제공한다.
+- `/live-demo`는 Firestore 이벤트를 Django ASGI SSE로 전달하고 등록/A2A 흐름을 `correlation_id`로 묶는다. SSE 실패 시 snapshot 폴링으로 전환한다.
 - 등록은 작품 매니페스트 SHA-256 중복 검사, AI 분석, 미리보기/임시 원본 저장, Solana 앵커 및 등록 인증서 발급이 모두 성공할 때만 DB에 확정된다. 이미지 작품은 여러 장을 하나의 작품으로 등록할 수 있다.
 - 원본 파일 URL과 바이트는 공개 카탈로그 응답에 노출하지 않는다. 공개 미리보기는 서버의 `/previews/...` 경로로 읽는다.
-- 로컬 기본값은 외부 서비스를 흉내 내는 숨은 fallback이 아니라, 명시적인 `mock` Solana/결제 어댑터와 로컬 저장소다. Gemini가 설정되지 않은 경우 AI 답변·협상은 503/실패로 종료한다.
+- 런타임 Solana·결제 경로는 실제 어댑터만 사용하고 필수 키나 RPC 검증이 실패하면 fail-closed한다. 로컬은 SQLite·로컬 저장소가 기본이며, 외부 I/O fake는 테스트에서만 주입한다.
 
 ## 2. 저장소와 실행 단위
 
@@ -28,12 +30,13 @@ GoogleSolana/
 │   ├── tests/                         # unit/integration/smoke pytest
 │   ├── demo_assets/                   # DEBUG 전용 데모 등록 소스
 │   ├── db.sqlite3                     # 이 점검 시점의 기본 로컬 DB
-│   └── Dockerfile                     # Cloud Run용 Gunicorn 이미지
+│   └── Dockerfile                     # 보조 컨테이너 정의
+├── Dockerfile.web                     # Cloud Run용 Uvicorn/ASGI 이미지
 └── veriproof_current_db_django_fixture_2026-07-25_post_runtime_e2e.json
                                       # 현재 DB 데이터 덤프(루트)
 ```
 
-애플리케이션 패키지는 `apps*`, `services*`, `config*`이며 Python 3.11 이상을 요구한다. 컨테이너는 Python 3.13 slim에서 Gunicorn worker 2개, thread 4개로 `config.wsgi:application`을 실행한다.
+애플리케이션 패키지는 `apps*`, `services*`, `config*`이며 Python 3.11 이상을 요구한다. 메인 웹 컨테이너는 `Dockerfile.web`에서 Uvicorn으로 `config.asgi:application`을 실행해 비동기 SSE를 지원한다.
 
 ## 3. 실행 및 환경 구성
 
@@ -56,6 +59,7 @@ Celery 앱과 워커 실행 경로는 현재 존재하지 않는다. `start.sh`�
 | Solana | Devnet RPC 기본 URL, signer 없으면 Memo 제출 fail-closed | RPC, escrow/KMS signer |
 | 결제 | 실제 Solana verifier 사용, 테스트는 fake 주입 | mint/수취자/서명 검증 |
 | GCP 보조 sink | Firestore/BigQuery/PubSub 비활성 또는 no-op | 각 SDK(`requirements-gcp.txt`), 프로젝트/토픽/데이터셋/권한 |
+| Passkey | 요청 host 기반 로컬 RP 설정 | 고정 HTTPS 도메인의 `PASSKEY_RP_ID`, `PASSKEY_ORIGINS` |
 
 `requirements.txt`는 Django, Pillow, ReportLab, DB URL 파서, Gemini SDK, Solana/solders와 테스트 도구를 설치한다. `pyproject.toml`의 `ai`, `solana`, `gcp`, `dev` extras는 패키지 배포 관점의 선택 의존성이다. GCP 전용 호환 버전은 `requirements-gcp.txt`를 따른다.
 
@@ -69,6 +73,8 @@ Browser / external agent
   -> Django ORM / local-or-cloud adapters
   -> SQLite 또는 PostgreSQL (기준 데이터)
      + 선택적 Firestore, BigQuery, Pub/Sub, GCS, Gemini, Solana
+
+Firestore events -> Django async listener -> authenticated SSE -> Browser EventSource
 ```
 
 `config.urls`는 `/api/v1/` 아래 IP·협상·정산·sandbox 앱을 mount하고, 웹 페이지와 `/.well-known/ai-plugin.json`을 별도 mount한다. `AgentDiscoveryMiddleware`가 에이전트 발견 헤더/표현을 보조한다. 뷰는 JSON/템플릿 경계에 머물고, 비즈니스 상태 변경은 서비스가 수행한다.
@@ -81,18 +87,21 @@ Browser / external agent
 4. **정산/라이선스** — settlement API가 제출 결제를 해석·검증한 뒤 `LicenseService.grant`로 작품 단위 라이선스를 만든다. `payment_tx_sig` unique가 멱등키다. 인증서와 다운로드 토큰/만료시각을 부여하며, 다중 이미지 작품의 토큰은 모든 구성 이미지를 하나의 ZIP으로 전달한다. 2차 창작물은 `RoyaltyService`가 원작/2차 창작자 분배 leg를 만든다.
 5. **창작자 비서** — `CreatorAssistantService`가 Gemini 대화, 대화 이력/지침/첨부를 묶는다. 모델이 제안한 변경은 `CreatorActionService`의 allowlist(`record_expense`, `update_asset_terms`, `prepare_registration`)만 실행하며, DB 재조회로 결과를 검증하고 `AssistantAction` 감사 행을 남긴다.
 6. **이벤트 팬아웃** — `EventRecorder.record`는 먼저 `common.AgentEvent`에 저장하고, 활성화된 Firestore와 BigQuery sink로 best-effort 복제한다. 보조 sink 실패는 기준 DB transaction을 취소하지 않는다.
+7. **인증·증명서 보호** — WebAuthn Passkey로 로그인하고 자격증명을 조회·삭제할 수 있다. `/library` 인증서 PDF는 소유권 확인과 5분 유효 step-up 인증 뒤에만 내려준다. Passkey 보유 계정은 Passkey, 미보유 계정은 비밀번호를 사용한다.
+8. **라이브 데모** — 판매자 등록과 구매자 A2A 협상·결제 이벤트를 별도 탭으로 표시하고 `correlation_id` 단위로 그룹화한다. Firestore 서버 리스너를 인증된 SSE로 브리지하며 연결 실패 시 5초 snapshot 폴링을 사용한다.
 
 ## 5. 앱별 책임과 API
 
 | 앱 | 책임 | 주요 HTTP 경로 |
 |---|---|---|
-| `accounts` | 로그인/가입, preferences, 공개 지갑 구성 | `/accounts/login/`, `signup/`, `preferences/`, `wallets/`, `password/` |
+| `accounts` | 로그인/가입, Passkey 등록·로그인·목록·삭제, preferences, 공개 지갑 구성 | `/accounts/login/`, `/accounts/passkeys/*`, `preferences/`, `wallets/`, `password/` |
 | `ip` | 자산 등록·검색·인증서·이벤트, 창작자 비서 | `/api/v1/ip/register`, `/api/v1/ip/{id}`, `/api/v1/assets`, `/api/v1/catalog`, `/api/v1/assistant/*` |
+| `common` | 상관관계 이벤트와 인증된 라이브 스트림 | `/live-demo`, `/api/v1/live-demo/stream`, `/api/v1/live-demo/events` |
 | `negotiation` | 자산별 구매자 에이전트 협상 | `/api/v1/ip/{id}/negotiate` |
 | `settlement` | 단건/배치 정산, webhook, 다운로드 | `/api/v1/ip/{id}/settle`, `/api/v1/ip/batch/*`, `/api/v1/paysh/webhook`, `/files/{token}` |
 | `sandbox` | 샌드박스 실행과 화면 | `/api/v1/sandbox/run`, `/sandbox` |
 
-웹 진입점은 `/` 및 `/workspace`(창작자), `/discover`, `/discover/{asset_id}`, `/library`, `/library/{asset_id}/certificate.pdf`, `/previews/{asset_id}/{variant}`, `/previews/{asset_id}/gallery/{image_id}`이다. 공개 상세는 첫 워터마크 이미지를 메인으로 표시하고, 추가 이미지는 썸네일 선택으로 전환한다. 완전한 machine-readable 계약은 실행 중 `GET /api/v1/openapi.json`, 외부 에이전트 발견 정보는 `GET /.well-known/ai-plugin.json`에서 확인한다.
+웹 진입점은 `/` 및 `/workspace`(창작자), `/discover`, `/discover/{asset_id}`, `/library`, `/live-demo`, `/library/{asset_id}/certificate.pdf`, `/previews/{asset_id}/{variant}`, `/previews/{asset_id}/gallery/{image_id}`이다. 인증서 PDF는 별도 재인증을 통과해야 한다. 공개 상세는 첫 워터마크 이미지를 메인으로 표시하고, 추가 이미지는 썸네일 선택으로 전환한다. 완전한 machine-readable 계약은 실행 중 `GET /api/v1/openapi.json`, 외부 에이전트 발견 정보는 `GET /.well-known/ai-plugin.json`에서 확인한다.
 
 ## 6. 서비스와 외부 어댑터
 
@@ -238,7 +247,7 @@ agent 402 응답에는 공식 x402 V2 Base64 `PAYMENT-REQUIRED` 헤더가 있다
 ### 10.1 관계와 삭제 정책
 
 ```text
-auth.User 1--1 accounts.UserPreference; 1--* accounts.WalletConfiguration
+auth.User 1--1 accounts.UserPreference; 1--* accounts.WalletConfiguration / PasskeyCredential
 auth.User 1--* ip.IpAsset(account_owner, nullable SET_NULL)
 ip.Creator 1--* ip.IpAsset / AssistantMessage / Attachment / Directive / Action /
                Subscription / Draft / Expense
@@ -255,6 +264,7 @@ BatchOrder 1--* BatchItem
 |---|---|---|
 | `accounts.UserPreference` | OneToOne `user`; `display_name(80)`, `language(ko/en)`, `recovery_email`, `contact_phone(30)`, `creator_wallet(64)`, `updated_at` | 사용자 표시/복구/기본 창작자 지갑. 비밀키는 저장하지 않는다. |
 | `accounts.WalletConfiguration` | BigAuto id; FK user; `label(40)`, `address(64)`, `accepts_deposits`, `receives_payouts`, `is_active`, `created_at` | `(user,address)` unique; active/created 역순. |
+| `accounts.PasskeyCredential` | BigAuto id; FK user; WebAuthn user handle, credential ID, 공개키, sign count, transports, 기기명/유형, backup, 생성·최근 사용 시각 | credential ID unique. 생체정보·기기 PIN·개인키는 저장하지 않는다. |
 | `ip.Creator` | BigAuto id; `wallet_address(44)`, `display_name(80 nullable)`, `created_at` | wallet unique+index. |
 | `ip.IpAsset` | UUID id; FK creator, nullable FK account_owner; title/description/AI description, type, visibility, MIME, tags/AI tags JSON, category, originality score, min/target USDC, SHA-256, perceptual hash, preview/original URLs·만료·purged, anchor/certificate tx, parent, royalty bps, status, created_at | SHA unique; type/visibility/status/creator/perceptual/tx indexes; public ID는 id alias. parent가 있으면 bps 1–10,000을 `save`에서도 강제. 상태: draft/anchored/listed/retired. |
 | `ip.AssetComponent` | UUID id; FK asset; file name, MIME, SHA-256, storage URL, created_at | 등록 패키지 보조 파일 manifest; 공개 응답에 노출하지 않는다. |
@@ -272,13 +282,13 @@ BatchOrder 1--* BatchItem
 | `settlement.RoyaltyDistribution` | UUID id; FK license; recipient, role, amount, transfer tx, status | original/secondary 및 pending/settled/failed. |
 | `settlement.BatchOrder` | UUID id; buyer agent, total, status, payment tx, created | quoted/paid/settled/partial/failed. |
 | `settlement.BatchItem` | UUID id; CASCADE order, PROTECT asset, price, nullable SET_NULL license, created | batch 정산 완료 시 License 연결. |
-| `common.AgentEvent` | BigAuto id; nullable SET_NULL asset/session; type, payload JSON, created | type 및 `(asset,created_at)` index, 최신순. |
+| `common.AgentEvent` | BigAuto id; nullable SET_NULL asset/session/account owner; nullable UUID correlation ID; type, payload JSON, created | type, `(asset,created_at)`, `(correlation_id,created_at)` index. 등록/A2A 타임라인의 기준 이벤트. |
 
 Django 기본 테이블도 사용한다: `auth_*`, `django_content_type`, `django_migrations`, `django_session`, `django_admin_log`. 현 DB에는 30개 테이블이 존재한다. `sandbox`는 영속 모델이 없다.
 
 ### 10.3 마이그레이션과 변경 규칙
 
-마이그레이션은 Alembic이 아니라 Django migration이다. 현재 `accounts.0001–0003`, `common.0001`, `ip.0001–0016`, `negotiation.0001`, `settlement.0001` 및 Django 내장 migration이 적용돼 있다. IP 앱의 최신 선형 경로는 `0014_ipasset_ai_description_ipasset_ai_tags` → `0015_ipasset_account_owner` → `0016_asset_image`이며, `showmigrations`, `manage.py check`, `makemigrations --check --dry-run`에서 graph 또는 모델 변경 문제가 없음을 확인했다.
+마이그레이션은 Alembic이 아니라 Django migration이다. 현재 최신 기능 마이그레이션은 `accounts.0006_passkeycredential`, `common.0002_agentevent_live_flow`, `ip.0016_asset_image`다. 새 환경에서는 `manage.py migrate`로 전체 앱의 선형 migration graph를 적용한다.
 
 스키마를 바꾸면 반드시 새 Django migration을 만들고 `veriproof/db_reference.md`에 변경 이유, 필수값/영향 범위, 검증 및 Alembic 불필요 사유를 누적한다. 기존 log를 덮어쓰지 않는다.
 
@@ -353,6 +363,8 @@ python manage.py makemigrations --check --dry-run   변경 없음
 | 공개·발견 | 공개/앵커/등록 인증서 조건의 catalog, 보호 preview, 원본 비노출 | 공개 catalog와 preview 응답 확인 |
 | 외부 에이전트 | manifest/OpenAPI, x402 402, Gemini 협상, settle, 라이선스/다운로드 토큰 | 외부 에이전트 HTTP E2E에서 402→ACCEPT→settle 200→download 200 확인 |
 | 창작자 비서 | 실제 Gemini 대화, 등록 준비 액션, 제한 도구 allowlist, DB 사후 검증/감사 | `assistant/chat` 실제 Gemini 한국어 응답 및 `prepare_registration` 액션 확인 |
+| 계정·증명서 인증 | Passkey 등록·로그인·관리, 인증서 조회의 Passkey/비밀번호 step-up | WebAuthn challenge·소유권·5분 세션 grant 경계 |
+| 라이브 데모 | 등록/A2A 이벤트 그룹 및 탭 UI, Firestore→비동기 SSE, 폴링 폴백 | 실제 `/live-demo` 라우트와 EventSource 데이터 경로 |
 | 오류 보완 | multipart 가시성 대소문자 정규화 | `visibility=PUBLIC` 실제 등록이 `public` 저장 및 catalog 노출, 회귀 테스트 추가 |
 | 품질 | Django migration, check, 테스트 | migration drift 없음, 전체 pytest 329 passed |
 
@@ -371,7 +383,7 @@ python manage.py makemigrations --check --dry-run   변경 없음
 
 ### 13.3 현재 운영 불가 선언
 
-현재 로컬에서 결제·Solana는 `mock`이며, AP2 mandate는 unsigned JSON이고 실제 a2a runtime transport는 없다. 따라서 이 코드베이스는 **실결제·실체인·강한 사용자 인증 운영에 사용할 수 없다.** Gemini가 구성되지 않은 환경에서는 분석/협상/비서도 fail-closed로 실패한다. 목표 Cloud Run/GCP 문서는 배포 설계이며 현재 기본 실행은 SQLite와 local storage다.
+현재 런타임은 실제 Solana RPC·USDC 검증 어댑터와 Passkey 인증을 사용하지만, 운영 signer/KMS, 실제 SPL 분배 송금, 서명된 AP2 mandate와 GCP 비동기 정산 파이프라인은 별도 운영 검증이 필요하다. Gemini가 구성되지 않은 환경에서는 분석·협상·비서가 fail-closed로 실패하며, 로컬 기본 데이터 저장소는 SQLite와 local storage다.
 
 ## 14. 자주 쓰는 운영 명령
 
