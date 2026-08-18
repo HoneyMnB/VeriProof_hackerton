@@ -270,3 +270,5 @@ crash.*.log
 
 # Keep variable examples
 !**/*.tfvars.example
+
+.poapo_docs/

@@ -16,8 +16,10 @@ Every payload the frontend consumes MUST exclude original bytes/urls.
 """
 from __future__ import annotations
 
+import base64
 import decimal
 import uuid
+from types import SimpleNamespace
 
 import pytest
 from freezegun import freeze_time
@@ -41,6 +43,10 @@ def _login_creator(client, wallet: str):
     preference.save(update_fields=["creator_wallet", "updated_at"])
     client.force_login(user)
     return user
+
+
+def _encoded(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode()
 
 
 # --- R5 / AC-4: /library renders only owner assets --------------------------
@@ -118,12 +124,185 @@ def test_owner_can_download_registration_certificate_pdf(client):
         registration_certificate_tx_sig="registration_transaction_123",
     )
 
+    protected = client.get(f"/library/{asset.id}/certificate.pdf")
+    assert protected.status_code == 403
+
+    verified = client.post(
+        f"/library/{asset.id}/certificate/auth/password",
+        data={"password": "test-password-123"},
+        content_type="application/json",
+    )
+    assert verified.status_code == 200
+    assert verified.json()["certificate"]["asset_id"] == str(asset.id)
+
     response = client.get(f"/library/{asset.id}/certificate.pdf")
     assert response.status_code == 200
     assert response["Content-Type"] == "application/pdf"
     assert response["Content-Disposition"].endswith(f"{asset.id}.pdf\"")
     assert response.content.startswith(b"%PDF")
     assert b"original_url" not in response.content
+
+
+@pytest.mark.django_db
+def test_certificate_password_fallback_rejects_invalid_password(client):
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    asset = IpAssetFactory(creator=owner, account_owner=user)
+
+    response = client.post(
+        f"/library/{asset.id}/certificate/auth/password",
+        data={"password": "wrong-password"},
+        content_type="application/json",
+    )
+    assert response.status_code == 401
+    assert client.get(f"/library/{asset.id}/certificate.pdf").status_code == 403
+
+
+@pytest.mark.django_db
+def test_certificate_access_grant_is_asset_scoped_and_expires(client):
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    first = IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        anchor_tx_sig="anchor_first",
+        registration_certificate_tx_sig="certificate_first",
+    )
+    second = IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        anchor_tx_sig="anchor_second",
+        registration_certificate_tx_sig="certificate_second",
+    )
+
+    with freeze_time("2026-08-15 10:00:00"):
+        verified = client.post(
+            f"/library/{first.id}/certificate/auth/password",
+            data={"password": "test-password-123"},
+            content_type="application/json",
+        )
+        assert verified.status_code == 200
+        assert client.get(f"/library/{first.id}/certificate.pdf").status_code == 200
+        assert client.get(f"/library/{second.id}/certificate.pdf").status_code == 403
+
+    with freeze_time("2026-08-15 10:06:00"):
+        assert client.get(f"/library/{first.id}/certificate.pdf").status_code == 403
+
+
+@pytest.mark.django_db
+def test_certificate_passkey_step_up_preserves_current_session(client, monkeypatch):
+    from apps.accounts.models import PasskeyCredential
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    credential = PasskeyCredential.objects.create(
+        user=user,
+        user_handle=b"u" * 64,
+        credential_id=b"certificate-credential",
+        public_key=b"public-key",
+        sign_count=2,
+    )
+    asset = IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        anchor_tx_sig="anchor_transaction_456",
+        registration_certificate_tx_sig="registration_transaction_456",
+    )
+
+    password = client.post(
+        f"/library/{asset.id}/certificate/auth/password",
+        data={"password": "test-password-123"},
+        content_type="application/json",
+    )
+    assert password.status_code == 409
+    assert password.json()["error"] == "passkey_required"
+
+    options = client.post(f"/library/{asset.id}/certificate/auth/options")
+    assert options.status_code == 200
+    assert options.json()["userVerification"] == "required"
+    assert options.json()["allowCredentials"][0]["id"] == _encoded(b"certificate-credential")
+
+    monkeypatch.setattr(
+        "apps.ip.views_web.verify_authentication",
+        lambda *args, **kwargs: SimpleNamespace(new_sign_count=3),
+    )
+    verified = client.post(
+        f"/library/{asset.id}/certificate/auth/passkey",
+        data={
+            "credential": {
+                "id": _encoded(b"certificate-credential"),
+                "response": {"userHandle": _encoded(b"u" * 64)},
+            }
+        },
+        content_type="application/json",
+    )
+    assert verified.status_code == 200
+    assert verified.json()["certificate"]["image_sha256"] == asset.image_sha256
+    assert client.session["_auth_user_id"] == str(user.pk)
+    credential.refresh_from_db()
+    assert credential.sign_count == 3
+    assert client.get(f"/library/{asset.id}/certificate.pdf").status_code == 200
+
+
+@pytest.mark.django_db
+def test_certificate_passkey_rejects_another_accounts_credential(client, monkeypatch):
+    from django.contrib.auth.models import User
+    from apps.accounts.models import PasskeyCredential
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    PasskeyCredential.objects.create(
+        user=user, user_handle=b"u" * 64, credential_id=b"own-credential", public_key=b"own-key",
+    )
+    other = User.objects.create_user("other-passkey@test.com", password="other-password")
+    PasskeyCredential.objects.create(
+        user=other, user_handle=b"o" * 64, credential_id=b"other-credential", public_key=b"other-key",
+    )
+    asset = IpAssetFactory(creator=owner, account_owner=user)
+    assert client.post(f"/library/{asset.id}/certificate/auth/options").status_code == 200
+
+    monkeypatch.setattr(
+        "apps.ip.views_web.verify_authentication",
+        lambda *args, **kwargs: SimpleNamespace(new_sign_count=1),
+    )
+    response = client.post(
+        f"/library/{asset.id}/certificate/auth/passkey",
+        data={
+            "credential": {
+                "id": _encoded(b"other-credential"),
+                "response": {"userHandle": _encoded(b"o" * 64)},
+            }
+        },
+        content_type="application/json",
+    )
+    assert response.status_code == 400
+    assert client.session["_auth_user_id"] == str(user.pk)
+
+
+@pytest.mark.django_db
+def test_library_does_not_embed_protected_certificate_payload(client):
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    owner = CreatorFactory(wallet_address=_OWNER_WALLET)
+    user = _login_creator(client, _OWNER_WALLET)
+    IpAssetFactory(
+        creator=owner,
+        account_owner=user,
+        image_sha256="protected-fingerprint-value",
+        anchor_tx_sig="protected-anchor-value",
+        registration_certificate_tx_sig="protected-certificate-value",
+    )
+
+    content = client.get("/library").content.decode()
+    assert 'data-image-sha256=' not in content
+    assert 'data-anchor-tx-sig=' not in content
+    assert 'data-certificate-tx-sig=' not in content
 
 
 @pytest.mark.django_db

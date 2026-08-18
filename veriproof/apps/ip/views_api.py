@@ -626,11 +626,11 @@ def create_agent_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUI
     principal = _agent_sponsored_payment_principal(request)
     if isinstance(principal, JsonResponse):
         return principal
-    buyer_user, buyer_wallet = principal
+    buyer_wallet = principal
     return _create_sponsored_usdc_intent(
         request,
         asset_id,
-        buyer_user=buyer_user,
+        buyer_user=None,
         buyer_wallet=buyer_wallet,
         channel=SponsoredPaymentIntent.AGENT,
     )
@@ -731,11 +731,11 @@ def settle_agent_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUI
     principal = _agent_sponsored_payment_principal(request)
     if isinstance(principal, JsonResponse):
         return principal
-    buyer_user, _buyer_wallet = principal
+    _buyer_wallet = principal
     return _settle_sponsored_usdc_intent(
         request,
         asset_id,
-        buyer_user=buyer_user,
+        buyer_user=None,
         channel=SponsoredPaymentIntent.AGENT,
     )
 
@@ -826,12 +826,7 @@ def _settle_sponsored_usdc_intent(
 
 
 def _agent_sponsored_payment_principal(request: HttpRequest):
-    """Return the single configured agent license owner and Buyer KMS wallet.
-
-    The wallet and user are deployment configuration rather than agent input,
-    preventing a bearer-token holder from charging the sponsor for arbitrary
-    wallets or assigning licenses to arbitrary accounts.
-    """
+    """Return the configured Agent Buyer wallet after bearer-token verification."""
     configured_token = settings.AGENT_SPONSORED_PAYMENT_TOKEN.strip()
     authorization = request.headers.get("Authorization", "")
     scheme, _, received_token = authorization.partition(" ")
@@ -840,16 +835,11 @@ def _agent_sponsored_payment_principal(request: HttpRequest):
     ):
         return _error("agent_authentication_required", "valid agent authorization required", status=401)
 
-    username = settings.AGENT_SPONSORED_PAYMENT_BUYER_USERNAME.strip()
     buyer_wallet = settings.AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY.strip()
-    if not username or not _is_valid_pubkey(buyer_wallet):
+    if not _is_valid_pubkey(buyer_wallet):
         logger.error("agent sponsored payment is not configured")
         return _error("payment_unavailable", "agent payment is temporarily unavailable", status=503)
-    buyer_user = get_user_model().objects.filter(username=username, is_active=True).first()
-    if buyer_user is None:
-        logger.error("agent sponsored payment buyer user is unavailable username=%s", username)
-        return _error("payment_unavailable", "agent payment is temporarily unavailable", status=503)
-    return buyer_user, buyer_wallet
+    return buyer_wallet
 
 
 def _sponsored_payment_response(request: HttpRequest, intent: SponsoredPaymentIntent, result=None) -> JsonResponse:

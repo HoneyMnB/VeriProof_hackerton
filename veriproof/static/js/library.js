@@ -185,37 +185,80 @@
 
     function wireCertificateModal() {
         var modal = document.getElementById("certificate-modal");
+        var authModal = document.getElementById("certificate-auth-modal");
         var qrBox = document.getElementById("certificate-qr");
         var fieldsBox = document.getElementById("certificate-fields");
-        if (!modal) { return; }
+        var authStatus = document.getElementById("certificate-auth-status");
+        var passkeyButton = document.getElementById("certificate-passkey-button");
+        var passwordForm = document.getElementById("certificate-password-form");
+        var authMethod = authModal ? authModal.dataset.authMethod : "password";
+        var pendingAssetId = null;
+        var authTrigger = null;
+        if (!modal || !authModal) { return; }
 
         modal.addEventListener("click", function (event) {
             var closeControl = event.target && event.target.closest ? event.target.closest("[data-modal-close]") : null;
             if (closeControl) { event.preventDefault(); hideModal(); }
         });
         document.addEventListener("keydown", function (e) {
-            if (e.key === "Escape") { hideModal(); }
+            if (e.key === "Escape") { hideModal(); hideAuthModal(); }
+        });
+        authModal.addEventListener("click", function (event) {
+            var closeControl = event.target && event.target.closest ? event.target.closest("[data-certificate-auth-close]") : null;
+            if (closeControl) { event.preventDefault(); hideAuthModal(); }
+        });
+        document.addEventListener("veriproof:passkey-registered", function () { setAuthMethod("passkey"); });
+        document.addEventListener("veriproof:passkey-deleted", function (event) {
+            if (event.detail && event.detail.count === 0) { setAuthMethod("password"); }
         });
 
         document.querySelectorAll(".btn--certificate").forEach(function (btn) {
             btn.addEventListener("click", function () {
-                // Reconstruct the proof payload from per-field data attributes —
-                // by construction no original bytes/url is present in the DOM.
-                var asset = {
-                    asset_id: btn.getAttribute("data-asset-id"),
-                    image_sha256: btn.getAttribute("data-image-sha256"),
-                    anchor_tx_sig: btn.getAttribute("data-anchor-tx-sig") || null,
-                    creator_wallet: btn.getAttribute("data-creator-wallet")
-                };
-                var certTx = btn.getAttribute("data-certificate-tx-sig") || null;
-                var payload = VP.buildCertificatePayload(asset, certTx);
-                showModal(payload, btn.getAttribute("data-work-title"), btn.getAttribute("data-registered-at"));
+                pendingAssetId = btn.getAttribute("data-asset-id");
+                authTrigger = btn;
+                showAuthModal();
             });
         });
 
+        if (passkeyButton) {
+            passkeyButton.addEventListener("click", function () {
+                if (!pendingAssetId || !window.VPPasskeys) { return; }
+                setAuthBusy(passkeyButton, "Waiting for your device...");
+                var base = "/library/" + encodeURIComponent(pendingAssetId) + "/certificate/auth/";
+                window.VPPasskeys.authenticate(base + "options", base + "passkey")
+                    .then(finishAuthentication)
+                    .catch(function (error) {
+                        if (error.code === "password_required") { setAuthMethod("password"); }
+                        showAuthError(window.VPPasskeys.friendlyError(error));
+                        passkeyButton.disabled = false;
+                    });
+            });
+        }
+
+        if (passwordForm) {
+            passwordForm.addEventListener("submit", function (event) {
+                event.preventDefault();
+                if (!pendingAssetId) { return; }
+                var submit = passwordForm.querySelector('button[type="submit"]');
+                var input = document.getElementById("certificate-password");
+                setAuthBusy(submit, "Verifying password...");
+                postJson(
+                    "/library/" + encodeURIComponent(pendingAssetId) + "/certificate/auth/password",
+                    { password: input.value }
+                ).then(finishAuthentication).catch(function (error) {
+                    if (error.code === "passkey_required") { setAuthMethod("passkey"); }
+                    showAuthError(error.message);
+                    submit.disabled = false;
+                    input.select();
+                });
+            });
+        }
+
         var lastTrigger = null;
         function focusableIn(modalEl) {
-            return modalEl.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])');
+            return Array.from(modalEl.querySelectorAll('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(function (item) {
+                return !item.hidden && !item.closest("[hidden]");
+            });
         }
         function trapFocus(event) {
             if (event.key !== "Tab") { return; }
@@ -225,11 +268,19 @@
             if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
             else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
         }
+        function trapAuthFocus(event) {
+            if (event.key !== "Tab") { return; }
+            var items = focusableIn(authModal);
+            if (!items.length) { event.preventDefault(); return; }
+            var first = items[0], last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+            else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
         /**
          * 인증서 모달을 연다. QR과 증명 필드를 채우고 포커스 트랩을 걸며 닫기 버튼으로 포커스를 옮긴다.
          */
-        function showModal(payload, workTitle, registeredAt) {
-            lastTrigger = document.activeElement;
+        function showModal(payload) {
+            lastTrigger = authTrigger;
             if (qrBox) { VP.renderQr(qrBox, payload); }
             if (fieldsBox) {
                 fieldsBox.innerHTML = fieldRow(t("library.field.asset_id"), payload.asset_id) +
@@ -239,12 +290,12 @@
                     fieldRow(t("library.field.creator_wallet"), payload.creator_wallet) +
                     fieldRow(t("library.field.explorer_url"), payload.explorer_url);
             }
-            document.getElementById("certificate-work-title").textContent = workTitle || payload.asset_id;
-            document.getElementById("certificate-registered-at").textContent = formatTs(registeredAt);
+            document.getElementById("certificate-work-title").textContent = payload.work_title || payload.asset_id;
+            document.getElementById("certificate-registered-at").textContent = formatTs(payload.registered_at);
             var download = document.getElementById("certificate-download");
             if (download) {
-                download.hidden = !payload.certificate_tx_sig;
-                download.href = "/library/" + encodeURIComponent(payload.asset_id) + "/certificate.pdf";
+                download.hidden = !payload.download_url;
+                download.href = payload.download_url || "";
             }
             modal.hidden = false;
             document.body.style.overflow = "hidden";
@@ -260,10 +311,77 @@
          * 인증서 모달을 닫고 포커스 트랩을 해제하며 이전 트리거로 포커스를 되돌린다.
          */
         function hideModal() {
+            if (modal.hidden) { return; }
             modal.hidden = true;
             document.body.style.overflow = "";
             modal.removeEventListener("keydown", trapFocus);
             if (lastTrigger && typeof lastTrigger.focus === "function") { lastTrigger.focus(); lastTrigger = null; }
+        }
+
+        function showAuthModal() {
+            authStatus.textContent = "";
+            authStatus.classList.remove("is-error");
+            if (passwordForm) { passwordForm.reset(); }
+            authModal.hidden = false;
+            document.body.style.overflow = "hidden";
+            authModal.removeEventListener("keydown", trapAuthFocus);
+            authModal.addEventListener("keydown", trapAuthFocus);
+            var firstControl = authMethod === "passkey" ? passkeyButton : document.getElementById("certificate-password");
+            if (firstControl) { firstControl.focus(); }
+        }
+
+        function setAuthMethod(method) {
+            authMethod = method;
+            authModal.dataset.authMethod = method;
+            authModal.querySelectorAll("[data-certificate-auth-panel]").forEach(function (panel) {
+                panel.hidden = panel.dataset.certificateAuthPanel !== method;
+            });
+        }
+
+        function hideAuthModal(restoreFocus) {
+            if (authModal.hidden) { return; }
+            authModal.hidden = true;
+            document.body.style.overflow = "";
+            authModal.removeEventListener("keydown", trapAuthFocus);
+            if (restoreFocus !== false && authTrigger) { authTrigger.focus(); }
+        }
+
+        function setAuthBusy(button, message) {
+            button.disabled = true;
+            authStatus.classList.remove("is-error");
+            authStatus.textContent = message;
+        }
+
+        function showAuthError(message) {
+            authStatus.textContent = message || "Authentication failed.";
+            authStatus.classList.add("is-error");
+        }
+
+        function finishAuthentication(result) {
+            var payload = result && result.certificate;
+            if (!payload) { throw new Error("Certificate response is invalid."); }
+            hideAuthModal(false);
+            if (passkeyButton) { passkeyButton.disabled = false; }
+            if (passwordForm) { passwordForm.querySelector('button[type="submit"]').disabled = false; }
+            showModal(payload);
+        }
+
+        function postJson(url, body) {
+            var csrf = document.querySelector("[name=csrfmiddlewaretoken]");
+            return fetch(url, {
+                method: "POST", credentials: "same-origin",
+                headers: { "Content-Type": "application/json", "X-CSRFToken": csrf ? csrf.value : "" },
+                body: JSON.stringify(body || {})
+            }).then(function (response) {
+                return response.json().then(function (data) {
+                    if (!response.ok) {
+                        var error = new Error(data.detail || "Authentication failed.");
+                        error.code = data.error || "certificate_auth_failed";
+                        throw error;
+                    }
+                    return data;
+                });
+            });
         }
     }
 

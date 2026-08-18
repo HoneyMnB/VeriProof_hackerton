@@ -23,13 +23,38 @@ docker_host_path()
     printf '%s\n' "$path"
 }
 
+existing_host_file()
+{
+    local candidate="$1"
+    local converted
+
+    if [[ -f $candidate ]]; then
+        printf '%s\n' "$candidate"
+        return 0
+    fi
+
+    if command -v cygpath >/dev/null 2>&1; then
+        converted="$(cygpath -u "$candidate" 2>/dev/null || true)"
+    elif command -v wslpath >/dev/null 2>&1; then
+        converted="$(wslpath -u "$candidate" 2>/dev/null || true)"
+    fi
+
+    if [[ -n ${converted:-} && -f $converted ]]; then
+        printf '%s\n' "$converted"
+        return 0
+    fi
+
+    return 1
+}
+
 find_adc_file()
 {
     local candidate
+    local windows_appdata
 
     if [[ -n ${GOOGLE_APPLICATION_CREDENTIALS:-} ]]; then
         candidate="$GOOGLE_APPLICATION_CREDENTIALS"
-        if [[ -f $candidate ]]; then
+        if candidate="$(existing_host_file "$candidate")"; then
             printf '%s\n' "$candidate"
             return 0
         fi
@@ -37,14 +62,27 @@ find_adc_file()
 
     if [[ -n ${APPDATA:-} ]]; then
         candidate="$APPDATA/gcloud/application_default_credentials.json"
-        if [[ -f $candidate ]]; then
+        if candidate="$(existing_host_file "$candidate")"; then
+            printf '%s\n' "$candidate"
+            return 0
+        fi
+    fi
+
+    if command -v powershell.exe >/dev/null 2>&1; then
+        windows_appdata="$(
+            powershell.exe -NoProfile -NonInteractive -Command \
+                "[Environment]::GetFolderPath('ApplicationData')" \
+                2>/dev/null | tr -d '\r'
+        )"
+        candidate="$windows_appdata/gcloud/application_default_credentials.json"
+        if candidate="$(existing_host_file "$candidate")"; then
             printf '%s\n' "$candidate"
             return 0
         fi
     fi
 
     candidate="${HOME:-}/.config/gcloud/application_default_credentials.json"
-    if [[ -f $candidate ]]; then
+    if candidate="$(existing_host_file "$candidate")"; then
         printf '%s\n' "$candidate"
         return 0
     fi

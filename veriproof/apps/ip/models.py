@@ -517,7 +517,13 @@ class SponsoredPaymentIntent(UUIDPrimaryKey):
     ]
 
     asset = models.ForeignKey(IpAsset, on_delete=models.PROTECT, related_name="sponsored_payment_intents")
-    buyer_user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="sponsored_payment_intents")
+    buyer_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="sponsored_payment_intents",
+        null=True,
+        blank=True,
+    )
     buyer_wallet = models.CharField(max_length=64)
     recipient_wallet = models.CharField(max_length=64)
     amount_usdc = models.DecimalField(max_digits=12, decimal_places=6)

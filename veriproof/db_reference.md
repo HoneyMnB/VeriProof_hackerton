@@ -1,5 +1,18 @@
 # VeriProof AI DB 변경 이력
 
+## 2026-08-17 — Agent sponsor 결제의 사용자 계정 비의존화 (migration `ip.0022`)
+
+- 변경: `SponsoredPaymentIntent.buyer_user`를 nullable로 변경했다. Agent sponsor USDC 경로는
+  bearer token과 서버 설정의 Buyer 공개키로 식별하며, Django `User`를 조회하거나 intent에
+  연결하지 않는다. 브라우저 sponsor 결제는 계속 로그인한 `request.user`를 intent에 저장한다.
+- 영향 범위: Agent intent와 그 정산에서 `buyer_user=None`이 전달되며, 해당 Agent 라이선스는
+  계정 소유권 FK 없이 Buyer 지갑과 결제 거래 서명으로 식별된다. DB 필수 FK를 유지한 채
+  조회만 제거하는 경우 intent 저장이 실패하므로 nullable 변경이 필요하다.
+- 검증: Agent intent 통합 테스트가 `User` 레코드 없이 201을 반환하고 `buyer_user is None`으로
+  저장되는지 확인한다.
+- Alembic 필요 여부: 불필요. Django migration
+  `apps/ip/migrations/0022_sponsoredpaymentintent_buyer_user_nullable.py`를 적용한다.
+
 ## 2026-07-28 — 지갑 개인키 암호화 저장 (migration `accounts.0005`)
 
 - `WalletConfiguration.private_address` (nullable varchar 512): Solana 공개 주소와 일치함을

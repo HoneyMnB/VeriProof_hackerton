@@ -252,12 +252,8 @@ SPONSORED_PAYMENT_TTL_SECONDS = int(
     os.environ.get("SPONSORED_PAYMENT_TTL_SECONDS", "300")
 )
 # The autonomous Buyer Agent authenticates with this dedicated bearer token.
-# Its wallet and license owner are server-side configuration, never request
-# parameters, so an agent cannot redirect sponsored transactions or licenses.
+# Its wallet is server-side configuration, never a request parameter.
 AGENT_SPONSORED_PAYMENT_TOKEN = os.environ.get("AGENT_SPONSORED_PAYMENT_TOKEN", "")
-AGENT_SPONSORED_PAYMENT_BUYER_USERNAME = os.environ.get(
-    "AGENT_SPONSORED_PAYMENT_BUYER_USERNAME", ""
-)
 AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY = os.environ.get(
     "AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY", ""
 )

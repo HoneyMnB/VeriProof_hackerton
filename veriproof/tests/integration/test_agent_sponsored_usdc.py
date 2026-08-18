@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.test import override_settings
 from solders.keypair import Keypair
 
@@ -16,13 +16,11 @@ from tests.factories import CreatorFactory, IpAssetFactory
 @pytest.mark.django_db
 @override_settings(
     AGENT_SPONSORED_PAYMENT_TOKEN="agent-token",
-    AGENT_SPONSORED_PAYMENT_BUYER_USERNAME="buyer-agent",
     PAYMENT_SPONSOR_PUBKEY="Sponsor111111111111111111111111111111111",
 )
-def test_agent_intent_uses_configured_wallet_user_and_canonical_amount(client, monkeypatch, settings):
+def test_agent_intent_uses_configured_wallet_without_user_lookup(client, monkeypatch, settings):
     buyer_wallet = str(Keypair().pubkey())
     settings.AGENT_SPONSORED_PAYMENT_BUYER_PUBKEY = buyer_wallet
-    buyer = get_user_model().objects.create_user("buyer-agent", password="safe-password")
     creator = CreatorFactory(wallet_address=str(Keypair().pubkey()))
     asset = IpAssetFactory(
         creator=creator,
@@ -35,7 +33,7 @@ def test_agent_intent_uses_configured_wallet_user_and_canonical_amount(client, m
     class FakeSponsoredService:
         def build_transaction(self, **kwargs):
             assert kwargs["buyer_wallet"] == buyer_wallet
-            assert str(kwargs["amount_usdc"]) == "0.250000"
+            assert kwargs["amount_usdc"] == Decimal("0.250000")
             return SimpleNamespace(serialized_transaction="partial-transaction", sponsor=str(Keypair().pubkey()))
 
     monkeypatch.setattr("apps.ip.views_api.get_sponsored_payment_service", lambda: FakeSponsoredService())
@@ -50,9 +48,9 @@ def test_agent_intent_uses_configured_wallet_user_and_canonical_amount(client, m
     assert response.status_code == 201
     body = response.json()
     assert body["buyer_wallet"] == buyer_wallet
-    assert body["amount_usdc"] == "0.250000"
+    assert Decimal(body["amount_usdc"]) == Decimal("0.250000")
     intent = SponsoredPaymentIntent.objects.get(id=body["intent_id"])
-    assert intent.buyer_user == buyer
+    assert intent.buyer_user is None
     assert intent.buyer_wallet == buyer_wallet
     assert intent.channel == SponsoredPaymentIntent.AGENT
 

@@ -54,13 +54,27 @@ def registration_options(request, user, credentials) -> str:
     return options_to_json(options)
 
 
-def authentication_options(request) -> str:
+def authentication_options(
+    request, credentials=None, *, ceremony_kind: str = "authenticate",
+    ceremony_data: dict | None = None,
+) -> str:
     rp_id, _ = context_for_request(request)
+    existing = list(credentials) if credentials is not None else None
     options = generate_authentication_options(
         rp_id=rp_id,
         user_verification=UserVerificationRequirement.REQUIRED,
+        allow_credentials=(
+            [
+                PublicKeyCredentialDescriptor(id=bytes(item.credential_id))
+                for item in existing
+            ]
+            if existing is not None else None
+        ),
     )
-    _store_ceremony(request, "authenticate", options.challenge)
+    _store_ceremony(
+        request, ceremony_kind, options.challenge,
+        extra=ceremony_data,
+    )
     return options_to_json(options)
 
 
@@ -102,13 +116,15 @@ def verify_authentication(request, credential, stored, expected_challenge: bytes
 
 def _store_ceremony(
     request, kind: str, challenge: bytes, user_id: int | None = None,
-    user_handle: str | None = None,
+    user_handle: str | None = None, extra: dict | None = None,
 ) -> None:
-    request.session[CEREMONY_SESSION_KEY] = {
+    ceremony = {
         "kind": kind, "challenge": _b64url(challenge),
         "created_at": timezone.now().isoformat(), "user_id": user_id,
         "user_handle": user_handle,
     }
+    ceremony.update(extra or {})
+    request.session[CEREMONY_SESSION_KEY] = ceremony
 
 
 def _b64url(value: bytes) -> str:
@@ -116,4 +132,11 @@ def _b64url(value: bytes) -> str:
 
 
 def _b64url_decode(value: str) -> bytes:
+    if not isinstance(value, str) or not value:
+        raise PasskeyCeremonyError("Credential identifier is missing.")
     return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def decode_base64url(value: str) -> bytes:
+    """Decode a required WebAuthn base64url value at an HTTP boundary."""
+    return _b64url_decode(value)

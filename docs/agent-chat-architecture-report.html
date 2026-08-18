@@ -1,0 +1,1330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeriProof AI 에이전트 채팅 및 저작권 등록 아키텍처 분석 리포트</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+KR:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --font-main: 'Plus Jakarta Sans', 'Noto Sans KR', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+
+      --bg-base: #0c0f17;
+      --bg-surface: #141923;
+      --bg-surface-elevated: #1a2232;
+      --bg-surface-active: #222d42;
+
+      --border-subtle: #242f44;
+      --border-strong: #334360;
+
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+
+      --accent-cyan: #06b6d4;
+      --accent-cyan-glow: rgba(6, 182, 212, 0.15);
+      --accent-teal: #10b981;
+      --accent-teal-glow: rgba(16, 185, 129, 0.15);
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-blue: #38bdf8;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-xl: 24px;
+
+      --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
+      --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
+      --shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-main);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    a {
+      color: var(--accent-cyan);
+      text-decoration: none;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-base);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-strong);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--text-muted);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 0 24px;
+    }
+
+    /* Header */
+    header {
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(12, 15, 23, 0.85);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      padding: 16px 0;
+    }
+
+    .nav-wrapper {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--accent-cyan), #2563eb);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .brand-title {
+      font-size: 18px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      font-size: 11px;
+      font-weight: 600;
+      background: var(--accent-cyan-glow);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 3px 8px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .nav-links {
+      display: flex;
+      gap: 20px;
+      list-style: none;
+    }
+
+    .nav-links a {
+      color: var(--text-secondary);
+      font-size: 14px;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+
+    .nav-links a:hover {
+      color: var(--text-primary);
+    }
+
+    /* Hero Section */
+    .hero {
+      padding: 64px 0 48px;
+      text-align: center;
+      background: radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.08) 0%, transparent 70%);
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 20px;
+    }
+
+    .hero-eyebrow span.pulse-dot {
+      width: 8px;
+      height: 8px;
+      background: var(--accent-teal);
+      border-radius: 50%;
+      box-shadow: 0 0 8px var(--accent-teal);
+    }
+
+    .hero-title {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -0.03em;
+      line-height: 1.25;
+      margin-bottom: 18px;
+    }
+
+    .hero-subtitle {
+      font-size: 18px;
+      color: var(--text-secondary);
+      max-width: 840px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    /* Interactive Stats / Verdict Row */
+    .verdict-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 48px;
+    }
+
+    .verdict-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 20px;
+      text-align: left;
+      transition: transform 0.2s, border-color 0.2s;
+    }
+
+    .verdict-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--border-strong);
+    }
+
+    .verdict-header {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .verdict-val {
+      font-size: 20px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+    }
+
+    .verdict-val.status-good { color: var(--accent-teal); }
+    .verdict-val.status-info { color: var(--accent-cyan); }
+    .verdict-val.status-warn { color: var(--accent-amber); }
+
+    .verdict-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    /* Tab Section */
+    .section-nav-tabs {
+      display: flex;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-subtle);
+      margin-bottom: 32px;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-secondary);
+      padding: 10px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+      white-space: nowrap;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .tab-btn:hover {
+      color: var(--text-primary);
+      background: var(--bg-surface);
+    }
+
+    .tab-btn.active {
+      color: var(--accent-cyan);
+      background: var(--bg-surface-elevated);
+      border-color: var(--border-subtle);
+    }
+
+    .tab-btn .tab-badge {
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      background: var(--bg-base);
+    }
+
+    /* Content Panels */
+    .tab-panel {
+      display: none;
+      animation: fadeIn 0.3s ease-in-out;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Section Component Header */
+    .section-header {
+      margin-bottom: 24px;
+    }
+
+    .section-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 8px;
+      letter-spacing: -0.02em;
+    }
+
+    .section-description {
+      font-size: 15px;
+      color: var(--text-secondary);
+    }
+
+    /* Simulator Workspace Layout */
+    .sim-layout {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 40px;
+    }
+
+    /* Interactive Simulation Flow Box */
+    .sim-controls {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .sim-step-card {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .sim-step-card:hover {
+      border-color: var(--border-strong);
+      transform: translateX(4px);
+    }
+
+    .sim-step-card.active {
+      border-color: var(--accent-cyan);
+      background: var(--bg-surface-active);
+    }
+
+    .sim-step-card.active::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+      background: var(--accent-cyan);
+    }
+
+    .sim-step-num {
+      font-size: 11px;
+      font-weight: 700;
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+
+    .sim-step-title {
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      color: var(--text-primary);
+    }
+
+    .sim-step-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    /* Live Preview Screen */
+    .sim-screen {
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sim-screen-bar {
+      background: var(--bg-surface-elevated);
+      padding: 10px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .sim-screen-title {
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .sim-screen-dots {
+      display: flex;
+      gap: 6px;
+    }
+
+    .sim-screen-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--border-strong);
+    }
+
+    .sim-screen-body {
+      padding: 20px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      max-height: 480px;
+    }
+
+    /* Chat Messages Mock in Screen */
+    .mock-msg {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      gap: 4px;
+    }
+
+    .mock-msg.user {
+      align-self: flex-end;
+      align-items: flex-end;
+    }
+
+    .mock-msg.assistant {
+      align-self: flex-start;
+      align-items: flex-start;
+    }
+
+    .mock-bubble {
+      padding: 12px 16px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .mock-msg.user .mock-bubble {
+      background: #2563eb;
+      color: #fff;
+      border-bottom-right-radius: 2px;
+    }
+
+    .mock-msg.assistant .mock-bubble {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+      border-bottom-left-radius: 2px;
+    }
+
+    .mock-attachment-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(6, 182, 212, 0.12);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+      padding: 6px 12px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--accent-cyan);
+      margin-top: 6px;
+    }
+
+    .mock-canvas-popup {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--accent-teal);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      width: 100%;
+      margin-top: 8px;
+      box-shadow: var(--shadow-sm);
+      animation: slideUp 0.3s ease-out;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(10px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .mock-canvas-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent-teal);
+      margin-bottom: 8px;
+    }
+
+    .mock-form-field {
+      margin-bottom: 8px;
+    }
+
+    .mock-form-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 2px;
+      display: block;
+    }
+
+    .mock-form-val {
+      font-size: 12px;
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      padding: 6px 8px;
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+    }
+
+    /* Code Block Display */
+    .code-box {
+      background: #090c12;
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      line-height: 1.6;
+      color: #cbd5e1;
+      overflow-x: auto;
+    }
+
+    .code-box .token-key { color: var(--accent-blue); }
+    .code-box .token-str { color: #86efac; }
+    .code-box .token-num { color: #fde047; }
+    .code-box .token-bool { color: #f472b6; }
+    .code-box .token-comment { color: var(--text-muted); font-style: italic; }
+
+    /* Comparison Table */
+    .table-container {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      margin-bottom: 40px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    table.benchmark-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 14px;
+    }
+
+    table.benchmark-table th {
+      background: var(--bg-surface-elevated);
+      padding: 16px 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+      border-bottom: 1px solid var(--border-strong);
+    }
+
+    table.benchmark-table td {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      vertical-align: top;
+      line-height: 1.5;
+    }
+
+    table.benchmark-table tr:hover td {
+      background: var(--bg-surface-active);
+    }
+
+    .table-pill {
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 12px;
+      margin-bottom: 6px;
+    }
+
+    .table-pill.best {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-teal);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .table-pill.warn {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-amber);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+    }
+
+    .table-pill.info {
+      background: rgba(6, 182, 212, 0.15);
+      color: var(--accent-cyan);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    /* Live Protocol Streaming Demo */
+    .stream-demo-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+
+    .stream-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .stream-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 16px;
+    }
+
+    .stream-title {
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .stream-view {
+      background: var(--bg-base);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      min-height: 200px;
+      flex: 1;
+      font-family: var(--font-main);
+      font-size: 14px;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .stream-text {
+      white-space: pre-wrap;
+      color: var(--text-primary);
+    }
+
+    .cursor {
+      display: inline-block;
+      width: 2px;
+      height: 16px;
+      background: var(--accent-cyan);
+      vertical-align: middle;
+      animation: blink 0.8s infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    .stream-metrics {
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+
+    .btn-action {
+      background: var(--accent-cyan);
+      color: #090c12;
+      font-weight: 700;
+      border: none;
+      padding: 10px 18px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      transition: opacity 0.2s;
+      font-family: inherit;
+      font-size: 13px;
+    }
+
+    .btn-action:hover {
+      opacity: 0.9;
+    }
+
+    /* Key Takeaway Bento Cards */
+    .takeaway-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+      margin-bottom: 60px;
+    }
+
+    .takeaway-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-md);
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .takeaway-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .takeaway-title {
+      font-size: 17px;
+      font-weight: 700;
+    }
+
+    .takeaway-body {
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* Footer */
+    footer {
+      border-top: 1px solid var(--border-subtle);
+      padding: 32px 0;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Responsive */
+    @media (max-width: 992px) {
+      .verdict-grid { grid-template-columns: repeat(2, 1fr); }
+      .sim-layout { grid-template-columns: 1fr; }
+      .stream-demo-container { grid-template-columns: 1fr; }
+      .takeaway-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header Navigation -->
+  <header>
+    <div class="container nav-wrapper">
+      <div class="brand-logo">
+        <div class="brand-icon">V</div>
+        <div class="brand-title">VeriProof AI Architecture</div>
+        <div class="brand-badge">Audit Report</div>
+      </div>
+      <ul class="nav-links">
+        <li><a href="#simulator">프로토콜 시뮬레이터</a></li>
+        <li><a href="#benchmark">상용 3사 비교</a></li>
+        <li><a href="#streaming-demo">스트리밍 비교 데모</a></li>
+        <li><a href="#roadmap">고도화 로드맵</a></li>
+      </ul>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container">
+      <div class="hero-eyebrow">
+        <span class="pulse-dot"></span>
+        <span>에이전트 채팅 및 저작권 등록 프로토콜 검증 완료</span>
+      </div>
+      <h1 class="hero-title">에이전트 플랫폼 대화·등록 아키텍처<br>심층 벤치마크 및 프로토콜 점검</h1>
+      <p class="hero-subtitle">
+        VeriProof의 대화형 저작권 등록(Two-Phase Attachment, Grounded RAG, Side-Canvas Prefill)이 현존 최고 수준의 상용 플랫폼(ChatGPT, Claude, Gemini)과 비교하여 어떻게 설계되었는지 인터랙티브하게 검증합니다.
+      </p>
+
+      <!-- Quick Verdict Metrics -->
+      <div class="verdict-grid">
+        <div class="verdict-card">
+          <div class="verdict-header">파일 첨부 프로토콜</div>
+          <div class="verdict-val status-good">
+            <span>Two-Phase</span>
+            <span style="font-size:14px;">(최적)</span>
+          </div>
+          <div class="verdict-desc">`/attachment` 선업로드 후 ID 전달 구조로 OpenAI/Gemini 공식 권장 표준과 100% 일치</div>
+        </div>
+
+        <div class="verdict-card">
+          <div class="verdict-header">대화 송수신 프로토콜</div>
+          <div class="verdict-val status-warn">
+            <span>HTTP REST</span>
+            <span style="font-size:14px;">(안정)</span>
+          </div>
+          <div class="verdict-desc">기능적으로 안정적이나, 상용 플랫폼 수준 체감 속도를 위해 SSE 토큰 스트리밍 도입 권장</div>
+        </div>
+
+        <div class="verdict-card">
+          <div class="verdict-header">등록 캔버스 인터랙션</div>
+          <div class="verdict-val status-good">
+            <span>Artifact Canvas</span>
+            <span style="font-size:14px;">(우수)</span>
+          </div>
+          <div class="verdict-desc">Claude Artifacts 및 ChatGPT Canvas와 동일한 2-패널 프리필 하이브리드 UX 확보</div>
+        </div>
+
+        <div class="verdict-card">
+          <div class="verdict-header">도구 실행 격리</div>
+          <div class="verdict-val status-info">
+            <span>Grounded Plan</span>
+            <span style="font-size:14px;">(안전)</span>
+          </div>
+          <div class="verdict-desc">Gemini 구조화 스키마 검증 후 서버 서비스 계층에서 안전하게 온체인 앵커링 조율</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Main Content Tabs -->
+  <main class="container">
+
+    <div class="section-nav-tabs">
+      <button class="tab-btn active" onclick="switchTab('simulator')">
+        <span>🔄 프로토콜 시뮬레이터</span>
+        <span class="tab-badge">인터랙티브</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('benchmark')">
+        <span>📊 상용 3사 비교 매트릭스</span>
+        <span class="tab-badge">ChatGPT / Claude / Gemini</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('streaming-demo')">
+        <span>⚡ REST vs SSE 스트리밍 비교</span>
+        <span class="tab-badge">실시간 데모</span>
+      </button>
+      <button class="tab-btn" onclick="switchTab('roadmap')">
+        <span>🚀 3단계 고도화 로드맵</span>
+      </button>
+    </div>
+
+    <!-- TAB 1: Protocol Simulator -->
+    <section id="tab-simulator" class="tab-panel active">
+      <div class="section-header">
+        <h2 class="section-title">End-to-End 대화형 저작권 등록 시뮬레이션</h2>
+        <p class="section-description">아래 각 단계를 클릭하여 실제 클라이언트(JS), 백엔드(Django), 외부 AI(Gemini), 온체인(Solana) 간의 데이터 흐름과 페이로드를 확인하세요.</p>
+      </div>
+
+      <div class="sim-layout">
+        <!-- Controls / Steps -->
+        <div class="sim-controls">
+
+          <div class="sim-step-card active" onclick="selectStep(1)">
+            <div class="sim-step-num">Step 01 • Client & Storage</div>
+            <div class="sim-step-title">파일 드롭 및 Two-Phase 사전 업로드</div>
+            <div class="sim-step-desc">`POST /api/v1/assistant/attachments`로 바이너리 선전송 후 고유 `attachment_id` 획득</div>
+          </div>
+
+          <div class="sim-step-card" onclick="selectStep(2)">
+            <div class="sim-step-num">Step 02 • Client to Backend</div>
+            <div class="sim-step-title">채팅 메시지 및 첨부 ID 전송</div>
+            <div class="sim-step-desc">`POST /api/v1/assistant/chat` (Wallet, Message, Attachment IDs, Conv ID)</div>
+          </div>
+
+          <div class="sim-step-card" onclick="selectStep(3)">
+            <div class="sim-step-num">Step 03 • Orchestrator & Gemini</div>
+            <div class="sim-step-title">Grounded RAG 컨텍스트 조립 & AI 분석</div>
+            <div class="sim-step-desc">지갑 현황 + 라이브러리 + 이미지 바이너리 주입 → Structured Metadata 생성</div>
+          </div>
+
+          <div class="sim-step-card" onclick="selectStep(4)">
+            <div class="sim-step-num">Step 04 • Client Canvas Prefill</div>
+            <div class="sim-step-title">사이드 캔버스 자동 활성화 & 폼 프리필</div>
+            <div class="sim-step-desc">채팅 답변과 함께 수신된 메타데이터가 등록 캔버스에 자동 주입되어 검토 대기</div>
+          </div>
+
+          <div class="sim-step-card" onclick="selectStep(5)">
+            <div class="sim-step-num">Step 05 • Solana Anchoring</div>
+            <div class="sim-step-title">초안 확정 및 온체인 영구 앵커링</div>
+            <div class="sim-step-desc">`POST /api/v1/ip/register`로 pHash 추출 및 블록체인 트랜잭션 발행</div>
+          </div>
+
+        </div>
+
+        <!-- Dynamic Screen Preview -->
+        <div class="sim-screen">
+          <div class="sim-screen-bar">
+            <div class="sim-screen-title" id="screen-step-label">Step 01 • POST /api/v1/assistant/attachments</div>
+            <div class="sim-screen-dots">
+              <div class="sim-screen-dot"></div>
+              <div class="sim-screen-dot"></div>
+              <div class="sim-screen-dot"></div>
+            </div>
+          </div>
+
+          <div class="sim-screen-body" id="screen-content">
+            <!-- Dynamic Injection via JS -->
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Commercial Benchmark Matrix -->
+    <section id="tab-benchmark" class="tab-panel">
+      <div class="section-header">
+        <h2 class="section-title">상용 에이전트 플랫폼(ChatGPT, Claude, Gemini) 비교 분석</h2>
+        <p class="section-description">글로벌 3대 에이전트 플랫폼의 아키텍처 스펙과 VeriProof의 현재 설계를 비교한 매트릭스입니다.</p>
+      </div>
+
+      <div class="table-container">
+        <table class="benchmark-table">
+          <thead>
+            <tr>
+              <th style="width: 18%;">비교 항목</th>
+              <th style="width: 22%;">VeriProof (현재 구현)</th>
+              <th style="width: 20%;">OpenAI ChatGPT</th>
+              <th style="width: 20%;">Anthropic Claude</th>
+              <th style="width: 20%;">Google Gemini</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>파일 첨부 방식</strong></td>
+              <td>
+                <span class="table-pill best">Two-Phase (Out-of-band)</span>
+                <div>`/assistant/attachments`로 선행 업로드 후 고유 ID만 채팅 페이로드로 참조</div>
+              </td>
+              <td>
+                <span class="table-pill best">Two-Phase (Files API)</span>
+                <div>`POST /v1/files` 선행 업로드 후 `file_ids` 참조 (Assistants/Chat)</div>
+              </td>
+              <td>
+                <span class="table-pill info">Hybrid (Base64 / Files API)</span>
+                <div>Base64 인라인 페이로드 및 Files API 사전 업로드 병용 지원</div>
+              </td>
+              <td>
+                <span class="table-pill best">Two-Phase (File API)</span>
+                <div>`client.files.upload` 선행 업로드 후 Resource URI를 Part로 전달</div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>채팅 통신 프로토콜</strong></td>
+              <td>
+                <span class="table-pill warn">HTTP POST (Single JSON)</span>
+                <div>단일 요청-응답 동기 통신 (구현 단순/안정, 응답 대기 시간 존재)</div>
+              </td>
+              <td>
+                <span class="table-pill best">SSE (Server-Sent Events)</span>
+                <div>토큰 단위 실시간 스트리밍 (`text/event-stream`)으로 TTFT 최소화</div>
+              </td>
+              <td>
+                <span class="table-pill best">SSE (Server-Sent Events)</span>
+                <div>이벤트/블록 단위 토큰 스트리밍 표준 채택</div>
+              </td>
+              <td>
+                <span class="table-pill best">SSE & Bidi WebSocket</span>
+                <div>SSE 스트리밍 및 Gemini Live 양방향 웹소켓 프로토콜 제공</div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>파일 분석 시점</strong></td>
+              <td>
+                <span class="table-pill best">지연 분석 (Lazy Analysis)</span>
+                <div>업로드 시 임시 저장만 수행하고, 사용자가 질문/등록 요청 시 LLM 전달 (비용 절감)</div>
+              </td>
+              <td>
+                <span class="table-pill info">사전/지연 혼합</span>
+                <div>Code Interpreter는 사전 인덱싱, Vision은 프롬프트 생성 시 처리</div>
+              </td>
+              <td>
+                <span class="table-pill best">지연 분석 (Lazy Analysis)</span>
+                <div>메시지 생성 턴에 문서/이미지 파싱 후 컨텍스트 주입</div>
+              </td>
+              <td>
+                <span class="table-pill best">지연 분석 (Lazy Analysis)</span>
+                <div>업로드 후 `generate_content` 호출 시점에 멀티모달 추론 수행</div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>UI 상호작용 모델</strong></td>
+              <td>
+                <span class="table-pill best">Chat + Side Canvas (Form)</span>
+                <div>대화 중 메타데이터 생성 시 우측 캔버스 폼이 자동으로 열리고 프리필 연동</div>
+              </td>
+              <td>
+                <span class="table-pill best">ChatGPT Canvas</span>
+                <div>사이드 에디터 패널 연동을 통한 문서/코드 협업</div>
+              </td>
+              <td>
+                <span class="table-pill best">Claude Artifacts</span>
+                <div>독립된 우측 뷰어/에디터 패널 (React/SVG/문서 렌더링)</div>
+              </td>
+              <td>
+                <span class="table-pill info">Side Panel / Extensions</span>
+                <div>사이드 패널 및 Google Workspace 도구 연동</div>
+              </td>
+            </tr>
+            <tr>
+              <td><strong>도구 실행 통제</strong></td>
+              <td>
+                <span class="table-pill best">Grounded Plan + Schema</span>
+                <div>JSON Schema로 AI의 행동을 제한하고 서버 서비스에서 유효성 검증 후 실행</div>
+              </td>
+              <td>
+                <span class="table-pill info">Native Tool Calling</span>
+                <div>Model-native Function Calling + Multi-turn Tool Execution Loop</div>
+              </td>
+              <td>
+                <span class="table-pill info">Native Tool Use</span>
+                <div>`tools` 정의 블록 기반 모델 주도 도구 호출 루프</div>
+              </td>
+              <td>
+                <span class="table-pill info">Native Function Calling</span>
+                <div>`FunctionDeclaration` 기반 클라이언트/서버 도구 실행</div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 3: Streaming Protocol Interactive Demo -->
+    <section id="tab-streaming-demo" class="tab-panel">
+      <div class="section-header">
+        <h2 class="section-title">동기식 HTTP REST vs SSE 토큰 스트리밍 체감 비교</h2>
+        <p class="section-description">아래 시뮬레이션 버튼을 눌러 사용자가 느끼는 응답 속도와 UI 피드백의 차이를 직접 비교해 보세요.</p>
+      </div>
+
+      <div class="stream-demo-container">
+
+        <!-- REST Box -->
+        <div class="stream-card">
+          <div class="stream-card-header">
+            <div class="stream-title">1. 현재 방식: 동기식 HTTP POST (JSON)</div>
+            <span class="table-pill warn">전체 생성 후 일괄 노출</span>
+          </div>
+          <div class="stream-view" id="rest-box">
+            <div class="stream-text" id="rest-text">대기 중... 테스트 버튼을 눌러주세요.</div>
+            <div class="stream-metrics">
+              <span>Time To First Token: <strong id="rest-ttft">-</strong></span>
+              <span>Total Latency: <strong id="rest-total">-</strong></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- SSE Box -->
+        <div class="stream-card">
+          <div class="stream-card-header">
+            <div class="stream-title">2. 개선 권장: SSE (Server-Sent Events) 스트리밍</div>
+            <span class="table-pill best">실시간 토큰 스트리밍</span>
+          </div>
+          <div class="stream-view" id="sse-box">
+            <div class="stream-text" id="sse-text">대기 중... 테스트 버튼을 눌러주세요.</div>
+            <div class="stream-metrics">
+              <span>Time To First Token: <strong id="sse-ttft" style="color:var(--accent-teal);">-</strong></span>
+              <span>Total Latency: <strong id="sse-total">-</strong></span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <div style="text-align: center; margin-bottom: 48px;">
+        <button class="btn-action" onclick="runStreamingSimulation()">⚡ 두 방식 동시 시뮬레이션 시작</button>
+      </div>
+    </section>
+
+    <!-- TAB 4: Architecture Roadmap -->
+    <section id="tab-roadmap" class="tab-panel">
+      <div class="section-header">
+        <h2 class="section-title">향후 아키텍처 고도화 로드맵</h2>
+        <p class="section-description">상용 플랫폼 수준의 완성도를 달성하기 위한 3단계 점진적 아키텍처 개선 계획입니다.</p>
+      </div>
+
+      <div class="takeaway-grid">
+        <div class="takeaway-card">
+          <div class="takeaway-icon" style="background: rgba(6, 182, 212, 0.15); color: var(--accent-cyan);">01</div>
+          <div class="takeaway-title">Phase 1: SSE 토큰 스트리밍</div>
+          <div class="takeaway-body">
+            Django `StreamingHttpResponse` 또는 ASGI를 도입하여 어시스턴트의 생각과 텍스트를 실시간 청크 단위로 스트리밍. 마지막 청크에서 구조화된 Canvas 메타데이터를 전송하여 사용자 체감 지연(TTFT)을 80% 이상 개선.
+          </div>
+        </div>
+
+        <div class="takeaway-card">
+          <div class="takeaway-icon" style="background: rgba(16, 185, 129, 0.15); color: var(--accent-teal);">02</div>
+          <div class="takeaway-title">Phase 2: Multi-turn Function Calling</div>
+          <div class="takeaway-body">
+            Gemini 네이티브 Function Declaration 기반 다단계 에이전트 루프 도입. "지갑 조회 → 이전 라이선스 판매 이력 분석 → 적정 가격 계산 → 등록 캔버스 제안"으로 이어지는 자율적 복합 태스크 처리.
+          </div>
+        </div>
+
+        <div class="takeaway-card">
+          <div class="takeaway-icon" style="background: rgba(245, 158, 11, 0.15); color: var(--accent-amber);">03</div>
+          <div class="takeaway-title">Phase 3: Direct S3/GCS Presigned Upload</div>
+          <div class="takeaway-body">
+            대용량 고해상도 비디오나 마스터 오디오 파일 등록을 위해, 웹서버를 거치지 않고 오브젝트 스토리지로 직접 업로드하는 Presigned URL 체계 구축 및 비동기 Celery 해시 추출 파이프라인 결합.
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      VeriProof AI Autonomous IP Registration & Settlement Protocol • Architecture Analysis Report
+    </div>
+  </footer>
+
+  <script>
+    // Tab Switching Logic
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+
+      event.currentTarget.classList.add('active');
+      document.getElementById('tab-' + tabId).classList.add('active');
+    }
+
+    // Step Simulator Data
+    const stepDetails = {
+      1: {
+        label: "Step 01 • POST /api/v1/assistant/attachments",
+        html: `
+          <div class="mock-msg user">
+            <div class="mock-bubble">사용자가 로컬에서 <code>artwork_final.png</code> (3.4MB)를 컴포저에 드래그&드롭</div>
+            <div class="mock-attachment-chip">📎 artwork_final.png (MIME: image/png)</div>
+          </div>
+          <div class="code-box">
+            <span class="token-comment">// 1. Client -> Server Multipart Upload</span><br>
+            <span class="token-key">POST</span> /api/v1/assistant/attachments HTTP/1.1<br>
+            <span class="token-key">Content-Type</span>: multipart/form-data<br><br>
+            <span class="token-comment">// 2. Server Response (Two-Phase Upload Result)</span><br>
+            {<br>
+            &nbsp;&nbsp;<span class="token-key">"attachment_id"</span>: <span class="token-str">"e7f3a812-9c44-42b5-bb10-38827918a381"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"file_name"</span>: <span class="token-str">"artwork_final.png"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"content_mime_type"</span>: <span class="token-str">"image/png"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"analysis"</span>: {} <span class="token-comment">/* Lazy Analysis: 업로드 시점에 LLM 호출 안함 */</span><br>
+            }
+          </div>
+        `
+      },
+      2: {
+        label: "Step 02 • POST /api/v1/assistant/chat",
+        html: `
+          <div class="mock-msg user">
+            <div class="mock-bubble">"이 첨부한 일러스트 이미지로 저작권 라이선스 등록 초안 작성해줘."</div>
+            <div class="mock-attachment-chip">📎 e7f3a812-9c44-42b5-bb10-38827918a381</div>
+          </div>
+          <div class="code-box">
+            <span class="token-comment">// Client Request Payload</span><br>
+            {<br>
+            &nbsp;&nbsp;<span class="token-key">"creator_wallet"</span>: <span class="token-str">"9WzDXwBbmkg8ZTbNMqUxvQRAyrZzDsGYdLVL9zYtAWWM"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"message"</span>: <span class="token-str">"이 첨부한 일러스트 이미지로 저작권 라이선스 등록 초안 작성해줘."</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"attachment_ids"</span>: [<span class="token-str">"e7f3a812-9c44-42b5-bb10-38827918a381"</span>],<br>
+            &nbsp;&nbsp;<span class="token-key">"conversation_id"</span>: <span class="token-str">"3fa85f64-5717-4562-b3fc-2c963f66afa6"</span><br>
+            }
+          </div>
+        `
+      },
+      3: {
+        label: "Step 03 • CreatorAssistantService & Gemini Vision",
+        html: `
+          <div class="code-box">
+            <span class="token-comment">// Backend Grounded RAG Context Injection</span><br>
+            context = {<br>
+            &nbsp;&nbsp;<span class="token-key">"asset_count"</span>: <span class="token-num">12</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"license_revenue_usdc"</span>: <span class="token-str">"450.00"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"behavior_instructions"</span>: [{ <span class="token-key">"title"</span>: <span class="token-str">"정확한 태그 생성"</span>, <span class="token-key">"instruction"</span>: <span class="token-str">"한국어 태그 5개 이하 작성"</span> }]<br>
+            };<br><br>
+            <span class="token-comment">// Gemini suggest_registration_metadata Structured Output Schema Call</span><br>
+            gemini.suggest_registration_metadata(image_bytes, <span class="token-str">"image/png"</span>, message)
+          </div>
+          <div class="mock-msg assistant">
+            <div class="mock-bubble">이미지의 구도와 스타일을 분석하여 최적의 메타데이터와 권장 가격을 도출했습니다.</div>
+          </div>
+        `
+      },
+      4: {
+        label: "Step 04 • Server Response & Canvas Auto-Prefill",
+        html: `
+          <div class="mock-msg assistant">
+            <div class="mock-bubble">해당 이미지에 대한 저작권 등록 초안을 준비했습니다. 오른쪽 캔버스에서 내용을 확인하고 등록을 확정해 주세요.</div>
+          </div>
+          <div class="mock-canvas-popup">
+            <div class="mock-canvas-header">
+              <span>✦ REGISTRATION CANVAS (AUTO-PREFILLED)</span>
+              <span>DEVNET SOL</span>
+            </div>
+            <div class="mock-form-field">
+              <span class="mock-form-label">작품 제목 (Title)</span>
+              <div class="mock-form-val">사이버펑크 네온 시티 2099</div>
+            </div>
+            <div class="mock-form-field">
+              <span class="mock-form-label">작품 설명 (Description)</span>
+              <div class="mock-form-val">미래 지향적인 네온 라이트와 비 내리는 사이버펑크 도시를 묘사한 고해상도 디지털 아트</div>
+            </div>
+            <div class="mock-form-field">
+              <span class="mock-form-label">디스커버리 태그 (Tags)</span>
+              <div class="mock-form-val">사이버펑크, 디지털아트, 일러스트, 야경, SF</div>
+            </div>
+          </div>
+        `
+      },
+      5: {
+        label: "Step 05 • Solana Devnet On-Chain Anchoring",
+        html: `
+          <div class="code-box">
+            <span class="token-comment">// 1. Draft Confirmation Token Issue</span><br>
+            <span class="token-key">POST</span> /api/v1/assistant/registration-drafts/{draft_id}/confirm<br>
+            → <span class="token-str">{"confirmation_token": "cf_token_88ab4..."}</span><br><br>
+            <span class="token-comment">// 2. Final Asset Registration & Solana Devnet Tx</span><br>
+            <span class="token-key">POST</span> /api/v1/ip/register<br>
+            {<br>
+            &nbsp;&nbsp;<span class="token-key">"asset_id"</span>: <span class="token-str">"ip_asset_8941"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"pHash"</span>: <span class="token-str">"e3b0c44298fc1c149afbf4c8996fb924"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"anchor_tx"</span>: <span class="token-str">"5Knm1...SolanaTxHash...Devnet"</span>,<br>
+            &nbsp;&nbsp;<span class="token-key">"status"</span>: <span class="token-str">"ANCHORED"</span><br>
+            }
+          </div>
+          <div class="mock-msg assistant">
+            <div class="mock-bubble" style="border-color: var(--accent-teal);">✅ 솔라나 블록체인에 영구 저작권 앵커링이 완료되었습니다! 라이브러리에서 디지털 인증서를 확인하실 수 있습니다.</div>
+          </div>
+        `
+      }
+    };
+
+    function selectStep(stepNum) {
+      document.querySelectorAll('.sim-step-card').forEach((card, idx) => {
+        card.classList.toggle('active', idx + 1 === stepNum);
+      });
+      const step = stepDetails[stepNum];
+      document.getElementById('screen-step-label').textContent = step.label;
+      document.getElementById('screen-content').innerHTML = step.html;
+    }
+
+    // Initialize with Step 1
+    selectStep(1);
+
+    // Live Streaming Simulation Demo
+    function runStreamingSimulation() {
+      const restBox = document.getElementById('rest-text');
+      const restTtft = document.getElementById('rest-ttft');
+      const restTotal = document.getElementById('rest-total');
+
+      const sseBox = document.getElementById('sse-text');
+      const sseTtft = document.getElementById('sse-ttft');
+      const sseTotal = document.getElementById('sse-total');
+
+      const sampleResponse = "첨부하신 이미지를 분석했습니다.\n\n" +
+        "1. 작품명: 사이버펑크 네온 시티\n" +
+        "2. 스타일: 미래 SF 디지털 일러스트\n" +
+        "3. 권장 라이선스 가격: 0.05 SOL\n\n" +
+        "우측 등록 캔버스에 메타데이터를 자동으로 채워 넣었습니다. 확인 후 등록 버튼을 눌러주세요.";
+
+      // Reset
+      restBox.innerHTML = '<span class="cursor"></span> (서버 응답 대기 중...)';
+      restTtft.textContent = '-';
+      restTotal.textContent = '-';
+
+      sseBox.innerHTML = '<span class="cursor"></span> (연결 중...)';
+      sseTtft.textContent = '-';
+      sseTotal.textContent = '-';
+
+      const startTime = performance.now();
+
+      // Simulate SSE Streaming
+      setTimeout(() => {
+        const ttftTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        sseTtft.textContent = ttftTime + 's (초고속 체감)';
+
+        let index = 0;
+        sseBox.innerHTML = '';
+        const interval = setInterval(() => {
+          if (index < sampleResponse.length) {
+            sseBox.innerHTML = sampleResponse.slice(0, index + 1) + '<span class="cursor"></span>';
+            index += 2;
+          } else {
+            clearInterval(interval);
+            sseBox.innerHTML = sampleResponse;
+            const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
+            sseTotal.textContent = totalTime + 's';
+          }
+        }, 20);
+      }, 350); // 350ms TTFT
+
+      // Simulate REST (Sync HTTP JSON)
+      setTimeout(() => {
+        const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        restBox.innerHTML = sampleResponse;
+        restTtft.textContent = totalTime + 's (일괄 수신)';
+        restTotal.textContent = totalTime + 's';
+      }, 2600); // 2.6s Total Latency
+    }
+  </script>
+</body>
+</html>
