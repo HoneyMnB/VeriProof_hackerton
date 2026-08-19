@@ -432,3 +432,23 @@ Income is not copied into this table: it is calculated from verified
 - 검증: Agent가 canonical ATA 생성·`transferChecked`·memo transaction만 서명하고 응답 금액 변조를 거절하는 단위 테스트를 통과했다. DB 통합 테스트는 PostgreSQL 실행 환경에서 수행한다.
 - Alembic 필요 여부: Django 앱 DB 스키마 변경이므로 Django migration `ip.0021_sponsoredpaymentintent_channel`이 필요하다. Alembic 대상은 아니다.
 - Alembic 필요 여부: 추가 스키마 변경은 없으며 기존 Django migration `ip.0020_ipasset_amount_currency`를 적용한다. Alembic 대상은 아니다.
+
+## 2026-08-18 — 협상가 기반 sponsor-paid USDC 결제 (migrations `negotiation.0003`, `ip.0023`)
+
+- 변경: `NegotiationSession.currency`로 SOL·USDC 협상 세션을 구분하고,
+  `SponsoredPaymentIntent.negotiation_session`으로 sponsor-paid USDC intent를
+  수락된 협상 세션에 연결한다.
+- 이유: Buyer Agent가 합의한 USDC 가격을 intent 생성·온체인 검증·라이선스 발급
+  전체에서 동일하게 사용하도록 보장하기 위함이다. 클라이언트가 임의 할인 금액을
+  제출하는 방식은 허용하지 않는다.
+- 영향 범위: `session_id`가 없는 기존 sponsor-paid USDC 결제는 정가를 유지한다.
+  `session_id`가 주어진 요청은 동일 자산의 USDC·ACCEPT 세션과 양수
+  `final_price_usdc`가 모두 있어야 하며, 그렇지 않으면 `409`로 거절한다.
+- 검증: Buyer Agent의 canonical sponsor transaction·승인 게이트 단위 테스트 17개와
+  PostgreSQL에서 수락 USDC 세션의 할인 금액 반영·미수락 세션 거절·USDC 협상 세션
+  저장 테스트를 통과했다. 전체 HTTP 통합 스위트는 현재 개발 환경에 없는 `webauthn`
+  패키지가 URL 설정에서 import되어 별도로 실행할 수 없다.
+- Alembic 필요 여부: Django 앱 DB 스키마 변경이므로
+  `apps/negotiation/migrations/0003_negotiationsession_currency.py` 및
+  `apps/ip/migrations/0023_sponsoredpaymentintent_negotiation_session.py` 적용이
+  필요하다. Alembic 대상은 아니다.

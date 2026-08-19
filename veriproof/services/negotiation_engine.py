@@ -10,7 +10,7 @@ import logging
 from typing import Any
 
 from ._payment import resolve_pay_to
-from ._types import NegotiationResult, quantize_sol
+from ._types import NegotiationResult, quantize_sol, quantize_usdc
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,7 @@ class NegotiationEngine:
         session: Any,
         offer_sol: decimal.Decimal,
         usage_type: str,
+        currency: str = "SOL",
     ) -> NegotiationResult:
         """Execute one negotiation round.
 
@@ -59,6 +60,18 @@ class NegotiationEngine:
         if min_price is None or target_price is None:
             raise ValueError("native SOL negotiation prices are not configured")
         offer_meets_min = offer_sol >= min_price
+
+        # 공개 원가를 제시한 구매자는 모델의 변동적 판단과 무관하게 구매할 수
+        # 있어야 한다. 목록 가격은 협상의 최종 안전망이며, 초과 제안도 목록
+        # 가격으로만 수락해 구매자에게 더 높은 가격을 청구하지 않는다.
+        if offer_sol >= target_price:
+            price = quantize_usdc(target_price) if currency == "USDC" else quantize_sol(target_price)
+            return NegotiationResult(
+                status="ACCEPT",
+                price_sol=price,
+                reason="공개 원가 제안을 수락합니다.",
+                pay_address=resolve_pay_to(asset),
+            )
 
         # R9 / AC-6: a below-min offer past the round cap REJECTs. A late offer
         # that meets min still ACCEPTs (creator-friendly; money is money).
@@ -79,6 +92,7 @@ class NegotiationEngine:
                 offer_sol,
                 usage_type,
                 rounds,
+                currency=currency,
             )
         except Exception as exc:  # noqa: BLE001 - external model adapter
             logger.error(
@@ -88,7 +102,7 @@ class NegotiationEngine:
             )
             raise NegotiationUnavailableError("Gemini negotiation could not be completed") from exc
 
-        return self._finalize(raw, asset)
+        return self._finalize(raw, asset, currency=currency)
 
     # --- Internal helpers ----------------------------------------------------
 
@@ -103,7 +117,13 @@ class NegotiationEngine:
         except Exception:  # noqa: BLE001 (settings unavailable in pure-unit ctx)
             return _DEFAULT_MAX_ROUNDS
 
-    def _finalize(self, raw: NegotiationResult, asset: Any) -> NegotiationResult:
+    def _finalize(
+        self,
+        raw: NegotiationResult,
+        asset: Any,
+        *,
+        currency: str,
+    ) -> NegotiationResult:
         """Apply the creator-protection invariants shared by both paths.
 
         - R10: ACCEPT/COUNTER prices are clamped UP to ``min_price`` so a buggy
@@ -130,7 +150,7 @@ class NegotiationEngine:
             pay_address = None
 
         if price is not None:
-            price = quantize_sol(price)
+            price = quantize_usdc(price) if currency == "USDC" else quantize_sol(price)
 
         return NegotiationResult(
             status=status, price_sol=price, reason=reason, pay_address=pay_address

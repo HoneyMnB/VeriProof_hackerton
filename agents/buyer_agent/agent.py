@@ -10,6 +10,7 @@ from .tools import (
     build_seller_agent,
     get_x402_payment_terms,
     negotiate_license,
+    negotiate_usdc_with_list_price_fallback,
     purchase_sponsored_usdc_asset,
     purchase_x402_asset,
     purchase_sol_asset,
@@ -34,7 +35,15 @@ root_agent = Agent(
         "seller to find the single best matching public asset. Next, send a second "
         "A2A message naming that exact asset_id and ask the seller to verify its "
         "published license terms; use the verified returned asset_id for the "
-        "sponsor-paid USDC purchase. This creates two real Buyer-to-Seller and two "
+        "sponsor-paid USDC purchase. Before that sponsor-paid USDC purchase, call "
+        "negotiate_usdc_with_list_price_fallback for the verified asset with a below-list "
+        "but positive USDC opening offer and buyer_agent_id veriproof_buyer_agent. The tool "
+        "uses the Seller's exact counter price, then—only after a rejection—the Seller's "
+        "published list price once. Only after ACCEPT, call "
+        "purchase_sponsored_usdc_asset using that accepted session. "
+        "When the user states a USDC offer, use that exact amount as the opening "
+        "offer; do not replace it with an invented amount. "
+        "This creates two real Buyer-to-Seller and two "
         "real Seller-to-Buyer messages before payment. After payment, send a third "
         "A2A fulfillment request, so the complete journey has at least six actual "
         "Buyer/Seller messages. In autonomous mode, never ask "
@@ -72,6 +81,7 @@ root_agent = Agent(
         get_x402_payment_terms,
         get_sol_payment_terms,
         negotiate_license,
+        negotiate_usdc_with_list_price_fallback,
         purchase_x402_asset,
         purchase_sol_asset,
         purchase_sponsored_usdc_asset,

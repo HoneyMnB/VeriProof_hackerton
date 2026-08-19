@@ -199,6 +199,17 @@ def test_build_payment_required_uses_target_price_as_max_amount():
     assert accept["amount"] == "2750000"
 
 
+def test_build_payment_required_uses_canonical_usdc_amount_when_legacy_price_is_missing():
+    svc = _svc()
+    asset = _make_asset(target_price="2.75")
+    asset.target_price_usdc = None
+    asset.target_amount = decimal.Decimal("1.250000")
+
+    _headers, body = svc.build_payment_required(asset)
+
+    assert body["accepts"][0]["amount"] == "1250000"
+
+
 # === Payment Recipient Resolution (R5b / AC-8 / AC-9) ========================
 
 

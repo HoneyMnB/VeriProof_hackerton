@@ -20,9 +20,11 @@ Covers the SPEC-003 짠5 integration TDD list (10 tests):
 from __future__ import annotations
 
 import decimal
+import json
 import uuid
 
 import pytest
+from django.test.client import RequestFactory
 
 from tests.conftest import VALID_WALLET
 
@@ -67,7 +69,7 @@ def _rule_engine():
     from tests.fakes import FakeGeminiService
 
     class _PricingDouble(FakeGeminiService):
-        def negotiate(self, min_price, target_price, offer_sol, usage_type, history):
+        def negotiate(self, min_price, target_price, offer_sol, usage_type, history, *, currency="SOL"):
             if offer_sol >= min_price:
                 return NegotiationResult("ACCEPT", offer_sol, "test acceptance")
             return NegotiationResult(
@@ -128,11 +130,49 @@ def test_negotiate_accept_returns_pay_address(client, monkeypatch):
     )
 
     assert response.status_code == 200
-    body = response.json()
+    body = json.loads(response.content)
     assert body["status"] == "ACCEPT"
     assert decimal.Decimal(body["price_sol"]) == decimal.Decimal("2.0")
     assert body["pay_address"] == VALID_WALLET
     assert body["session_id"]
+
+
+@pytest.mark.django_db
+def test_negotiate_usdc_stores_an_accepted_usdc_price(monkeypatch):
+    from apps.negotiation.views_api import negotiate
+    from apps.ip.models import IpAsset
+    from apps.negotiation.models import NegotiationSession
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        currency="USDC",
+        min_amount=decimal.Decimal("0.50"),
+        target_amount=decimal.Decimal("1.00"),
+        status=IpAsset.LISTED,
+    )
+    _patch_view_services(monkeypatch, engine=_rule_engine())
+
+    request = RequestFactory().post(
+        NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
+        data={
+            "buyer_agent_id": "buyer-usdc",
+            "offer_usdc": "0.75",
+            "usage_type": "commercial",
+        },
+        content_type="application/json",
+        HTTP_X_AGENT_PROTOCOL="x402",
+        HTTP_ACCEPT="application/json",
+    )
+    response = negotiate(request, asset.id)
+
+    assert response.status_code == 200
+    body = json.loads(response.content)
+    assert body["currency"] == "USDC"
+    assert decimal.Decimal(body["price_usdc"]) == decimal.Decimal("0.750000")
+    session = NegotiationSession.objects.get(id=body["session_id"])
+    assert session.currency == "USDC"
+    assert session.final_price_usdc == decimal.Decimal("0.750000")
 
 
 # === AC-1b: accept routes secondary creation to escrow ======================

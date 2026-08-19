@@ -391,6 +391,37 @@
     turn.querySelector(".agent-dialogue").append(fragment);
   }
 
+  function addNegotiationMessage(turn, event) {
+    const fragment = elements.agentMessageTemplate.content.cloneNode(true);
+    const exchange = fragment.querySelector(".agent-exchange");
+    const avatar = fragment.querySelector(".exchange-avatar");
+    const isOffer = event.type === "negotiation_offer";
+    exchange.classList.add("negotiation-message", isOffer ? "buyer-message" : "seller-message");
+    avatar.classList.add(isOffer ? "buyer-robot" : "seller-robot");
+    fragment.querySelector(".exchange-meta strong").textContent = isOffer ? "구매 에이전트" : "판매 에이전트";
+    fragment.querySelector(".exchange-route").textContent = isOffer ? "→ 판매 에이전트" : "→ 구매 에이전트";
+    fragment.querySelector(".exchange-meta b").textContent = "가격 협상";
+    const message = fragment.querySelector(".exchange-message");
+    const statusLabels = {
+      COUNTER_OFFER: "가격 제안",
+      ACCEPT: "협상 수락",
+      REJECT: "협상 거절",
+    };
+    const lines = isOffer
+      ? ["**구매 제안**", `${event.offer_usdc} USDC`, "", `사용 목적: ${event.usage_type}`]
+      : [
+        `**${statusLabels[event.status] || event.status}**`,
+        event.price_usdc ? `${event.price_usdc} USDC` : "",
+        event.reason || "",
+      ];
+    renderMarkdown(message, lines.filter((line, index) => line || index < 2).join("\n"));
+    turn.querySelector(".agent-dialogue").append(fragment);
+    const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
+    setExecutionLabel(exchangeElement, "가격 협상");
+    setExecutionStatus(exchangeElement, isOffer ? "제안 전송" : "응답 수신");
+    return exchangeElement;
+  }
+
   function handleEvent(turn, event) {
     switch (event.type) {
       case "session":
@@ -431,6 +462,7 @@
           addSellerActivity(turn, event);
           break;
         }
+        if (event.tool === "negotiate_usdc_license" || event.tool === "negotiate_usdc_with_list_price_fallback") break;
         addExecutionItem(turn, {
           kind: "tool-call",
           title: event.tool,
@@ -448,6 +480,7 @@
           }
           break;
         }
+        if (event.tool === "negotiate_usdc_license" || event.tool === "negotiate_usdc_with_list_price_fallback") break;
         addExecutionItem(turn, {
           kind: "tool-result",
           title: `${event.tool} returned`,
@@ -460,6 +493,10 @@
         break;
       case "agent_message":
         addAgentMessage(turn, event);
+        break;
+      case "negotiation_offer":
+      case "negotiation_result":
+        addNegotiationMessage(turn, event);
         break;
       case "license_delivery":
         addLicenseDelivery(turn, event.delivery);

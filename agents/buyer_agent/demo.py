@@ -229,6 +229,48 @@ def _delivery_payload(value: Any) -> dict[str, str] | None:
     }
 
 
+def _usdc_negotiation_result(value: Any) -> dict[str, str] | None:
+    """Project only the Seller API's actual USDC negotiation outcome."""
+    safe_value = safe_tool_value(value)
+    if not isinstance(safe_value, dict):
+        return None
+    body = safe_value.get("body")
+    if not isinstance(body, dict) or body.get("currency") != "USDC":
+        return None
+    status = body.get("status")
+    price = body.get("price_usdc")
+    if status not in {"COUNTER_OFFER", "ACCEPT", "REJECT"}:
+        return None
+    if status != "REJECT" and not isinstance(price, str):
+        return None
+    result = {"status": status}
+    if isinstance(price, str):
+        result["price_usdc"] = price
+    reason = body.get("reason")
+    if (
+        isinstance(reason, str)
+        and reason != "max rounds exceeded"
+        and not re.search(r"SOL", reason, re.IGNORECASE)
+    ):
+        result["reason"] = reason
+    return result
+
+
+def _usdc_negotiation_attempts(value: Any) -> list[dict[str, dict[str, str]]]:
+    """Project each real attempt made by the bounded USDC fallback tool."""
+    safe_value = safe_tool_value(value)
+    if not isinstance(safe_value, dict) or not isinstance(safe_value.get("attempts"), list):
+        return []
+    attempts = []
+    for attempt in safe_value["attempts"]:
+        if not isinstance(attempt, dict) or not isinstance(attempt.get("offer_usdc"), str):
+            continue
+        outcome = _usdc_negotiation_result(attempt.get("result"))
+        if outcome is not None:
+            attempts.append({"offer_usdc": attempt["offer_usdc"], "outcome": outcome})
+    return attempts
+
+
 def _markdown_delivery_payload(message: str) -> dict[str, str] | None:
     """Extract a complete receipt only from the Seller's labelled Markdown contract."""
     values = _receipt_values(message)
@@ -280,6 +322,17 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                 "input": safe_tool_value(call.args or {}),
             }
         )
+        if call.name == "negotiate_usdc_license":
+            args = safe_tool_value(call.args or {})
+            if isinstance(args, dict) and isinstance(args.get("offer_usdc"), (int, float)):
+                payloads.append(
+                    {
+                        "type": "negotiation_offer",
+                        "call_id": call.id,
+                        "offer_usdc": str(args["offer_usdc"]),
+                        "usage_type": args.get("usage_type", "commercial"),
+                    }
+                )
     for response in event.get_function_responses():
         output = safe_tool_value(response.response)
         payloads.append(
@@ -290,6 +343,33 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                 "output": output,
             }
         )
+        if response.name == "negotiate_usdc_license":
+            negotiation = _usdc_negotiation_result(output)
+            if negotiation is not None:
+                payloads.append(
+                    {
+                        "type": "negotiation_result",
+                        "call_id": response.id,
+                        **negotiation,
+                    }
+                )
+        if response.name == "negotiate_usdc_with_list_price_fallback":
+            for attempt in _usdc_negotiation_attempts(output):
+                payloads.extend(
+                    [
+                        {
+                            "type": "negotiation_offer",
+                            "call_id": response.id,
+                            "offer_usdc": attempt["offer_usdc"],
+                            "usage_type": "commercial",
+                        },
+                        {
+                            "type": "negotiation_result",
+                            "call_id": response.id,
+                            **attempt["outcome"],
+                        },
+                    ]
+                )
         if response.name == "veriproof_seller_agent":
             delivery = _delivery_payload(output)
             payloads.append(

@@ -112,10 +112,11 @@ class AutonomousSponsoredUsdcBuyer:
         self._kms_signer = kms_signer or (KmsEd25519Signer(key_name) if key_name else None)
         self._http_client_factory = http_client_factory
 
-    async def purchase(self, resource_url: str) -> dict[str, Any]:
+    async def purchase(self, resource_url: str, session_id: str = "") -> dict[str, Any]:
         headers = self._agent_headers()
+        payload = {"session_id": session_id} if session_id else {}
         async with self._http_client_factory(timeout=60) as client:
-            intent_response = await client.post(resource_url, headers=headers, json={})
+            intent_response = await client.post(resource_url, headers=headers, json=payload)
             intent = self._json_object(intent_response, "Agent payment intent response is invalid.")
             if intent_response.status_code != 201:
                 raise PaymentExecutionError(self._detail(intent, "Agent payment intent is unavailable."))

@@ -2,6 +2,7 @@
 
 import os
 import uuid
+from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 import httpx
@@ -19,6 +20,7 @@ from .payments import (
     AutonomousSponsoredUsdcBuyer,
     AutonomousX402Buyer,
 )
+from .payment_approval import payment_approval_gate
 
 _ACCEPTED_SESSION_STATE_KEY = "buyer:accepted_x402_sessions"
 
@@ -256,6 +258,119 @@ async def negotiate_license(
     }
 
 
+async def negotiate_usdc_license(
+    asset_id: str,
+    buyer_agent_id: str,
+    offer_usdc: float,
+    usage_type: str = "commercial",
+    tool_context: ToolContext | None = None,
+) -> dict:
+    """Submit a USDC license offer for sponsor-paid USDC checkout.
+
+    Args:
+        asset_id: 협상할 VeriProof 자산 UUID.
+        buyer_agent_id: 구매자 에이전트의 안정적인 식별자.
+        offer_usdc: 구매자가 제시하는 USDC 금액.
+        usage_type: commercial, non-commercial, editorial 중 사용 목적.
+    """
+    async with httpx.AsyncClient(timeout=30) as client:
+        response = await client.post(
+            _asset_url(asset_id, "/negotiate"),
+            headers={"Accept": "application/json", "X-Agent-Protocol": "x402"},
+            json={
+                "buyer_agent_id": buyer_agent_id,
+                "offer_usdc": offer_usdc,
+                "usage_type": usage_type,
+            },
+        )
+    body = _response_body(response)
+    if isinstance(body, dict) and body.get("status") == "ACCEPT":
+        _remember_accepted_session(tool_context, asset_id, body)
+    elif isinstance(body, dict) and body.get("status") in {"COUNTER_OFFER", "REJECT"}:
+        _clear_accepted_session(tool_context, asset_id)
+    return {"http_status": response.status_code, "body": body}
+
+
+async def negotiate_usdc_with_list_price_fallback(
+    asset_id: str,
+    buyer_agent_id: str,
+    opening_offer_usdc: float,
+    usage_type: str = "commercial",
+    tool_context: ToolContext | None = None,
+) -> dict:
+    """할인 협상 후 거절되면 공개 원가를 한 번만 최종 제안한다.
+
+    공개 원가는 Seller의 x402 결제 조건에서 읽으므로, 에이전트가 문장이나
+    카탈로그를 보고 가격을 추정하지 않는다. 최종 원가 제안도 거절되면 실제
+    Seller 응답을 그대로 반환하며 추가 반복하지 않는다.
+    """
+    attempts: list[dict] = []
+
+    async def submit(offer_usdc: float) -> dict:
+        result = await negotiate_usdc_license(
+            asset_id,
+            buyer_agent_id,
+            offer_usdc,
+            usage_type,
+            tool_context,
+        )
+        attempts.append({"offer_usdc": str(offer_usdc), "result": result})
+        return result
+
+    result = await submit(opening_offer_usdc)
+    body = result.get("body") if isinstance(result, dict) else None
+    if isinstance(body, dict) and body.get("status") == "COUNTER_OFFER":
+        counter = body.get("price_usdc")
+        try:
+            result = await submit(float(Decimal(str(counter))))
+        except (InvalidOperation, TypeError, ValueError):
+            return {
+                "http_status": result.get("http_status", 502),
+                "body": body,
+                "attempts": attempts,
+                "fallback_error": "seller_counter_price_invalid",
+            }
+        body = result.get("body") if isinstance(result, dict) else None
+
+    if isinstance(body, dict) and body.get("status") == "REJECT":
+        list_price = await _published_usdc_list_price(asset_id)
+        if list_price is None:
+            return {
+                "http_status": result.get("http_status", 502),
+                "body": body,
+                "attempts": attempts,
+                "fallback_error": "published_usdc_list_price_unavailable",
+            }
+        result = await submit(float(list_price))
+
+    return {**result, "attempts": attempts}
+
+
+async def _published_usdc_list_price(asset_id: str) -> Decimal | None:
+    """Read the exact non-negotiated USDC amount from the Seller x402 contract."""
+    terms = await get_x402_payment_terms(asset_id, tool_context=None)
+    if terms.get("status") != "payment_required":
+        return None
+    payment_required = terms.get("payment_required")
+    if not isinstance(payment_required, dict):
+        return None
+    accepts = payment_required.get("accepts")
+    if not isinstance(accepts, list):
+        return None
+    expected_mint = os.environ.get("USDC_MINT_ADDRESS", "").strip()
+    for requirement in accepts:
+        if not isinstance(requirement, dict) or requirement.get("asset") != expected_mint:
+            continue
+        try:
+            atomic = Decimal(str(requirement["amount"]))
+        except (InvalidOperation, KeyError, TypeError):
+            continue
+        amount = atomic / Decimal("1000000")
+        if amount.is_finite() and amount > 0 and amount.as_tuple().exponent >= -6:
+            return amount
+    return None
+
+
 async def purchase_x402_asset(
     asset_id: str,
     session_id: str = "",
@@ -327,7 +442,11 @@ async def purchase_sol_asset(
         }
 
 
-async def purchase_sponsored_usdc_asset(asset_id: str) -> dict:
+async def purchase_sponsored_usdc_asset(
+    asset_id: str,
+    session_id: str = "",
+    tool_context: ToolContext | None = None,
+) -> dict:
     """Buyer KMS 지갑으로 sponsor-paid USDC 즉시 구매를 완료한다.
 
     Phantom 또는 대화 속 개인키를 사용하지 않는다. 서버가 고정한 canonical
@@ -338,7 +457,8 @@ async def purchase_sponsored_usdc_asset(asset_id: str) -> dict:
     """
     try:
         return await AutonomousSponsoredUsdcBuyer().purchase(
-            _asset_url(asset_id, "/agent-sponsored-usdc")
+            _asset_url(asset_id, "/agent-sponsored-usdc"),
+            session_id=_resolve_session_id(asset_id, session_id, tool_context),
         )
     except AutonomousPaymentError as exc:
         return {

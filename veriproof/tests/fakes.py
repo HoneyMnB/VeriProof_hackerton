@@ -83,6 +83,8 @@ class FakeGeminiService:
         offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
+        *,
+        currency: str = "SOL",
     ) -> NegotiationResult:
         self._record(
             "negotiate",

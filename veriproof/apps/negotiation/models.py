@@ -34,6 +34,11 @@ class NegotiationSession(UUIDPrimaryKey):
         on_delete=models.CASCADE,
         related_name="negotiation_sessions",
     )
+    currency = models.CharField(
+        max_length=4,
+        choices=[("SOL", "SOL"), ("USDC", "USDC")],
+        default="SOL",
+    )
     buyer_agent_id = models.CharField(max_length=80)
     # commercial / non-commercial / editorial.
     usage_type = models.CharField(max_length=30)

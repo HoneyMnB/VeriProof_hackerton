@@ -152,11 +152,19 @@ class X402Service:
         amount_usdc: decimal.Decimal | None = None,
     ) -> X402Challenge:
         """동일 GET 재요청의 검증에 사용할 자산별 결제 조건을 생성한다."""
+        resolved_amount = amount_usdc
+        if resolved_amount is None:
+            legacy_amount = getattr(asset, "target_price_usdc", None)
+            resolved_amount = (
+                legacy_amount
+                if legacy_amount is not None
+                else getattr(asset, "target_amount", None)
+            )
         return self._protocol().build_challenge(
             resource_url=resource_url,
             description=f"VeriProof asset {asset.id} license",
             pay_to=resolve_pay_to(asset, escrow_pubkey=self.escrow_pubkey),
-            amount_usdc=amount_usdc or asset.target_price_usdc,
+            amount_usdc=resolved_amount,
             usdc_mint=self.usdc_mint or "",
             memo=f"veriproof:{asset.id}",
         )

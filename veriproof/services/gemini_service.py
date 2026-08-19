@@ -28,10 +28,10 @@ NEGOTIATION_RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
         "status": {"type": "string", "enum": list(NEGOTIATION_STATUSES)},
-        "price_sol": {"type": "number"},
+        "price": {"type": "number"},
         "reason": {"type": "string"},
     },
-    "required": ["status", "price_sol", "reason"],
+    "required": ["status", "price", "reason"],
 }
 BATCH_MAX_RETRIES = 3
 # SPEC-007 R2: structured-output JSON schema forced on the batch pricing call.
@@ -226,6 +226,8 @@ class GeminiService:
         offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
+        *,
+        currency: str = "SOL",
     ) -> NegotiationResult:
         """Reasoning negotiation -> ACCEPT/COUNTER_OFFER/REJECT + price.
 
@@ -246,7 +248,7 @@ class GeminiService:
         for _ in range(NEGOTIATE_MAX_RETRIES):
             try:
                 text = self._call_negotiate(
-                    client, min_price, target_price, offer_sol, usage_type, history
+                    client, min_price, target_price, offer_sol, usage_type, history, currency
                 )
                 return self._parse_negotiate_response(text, min_price, target_price)
             except Exception as exc:  # noqa: BLE001 (SDK errors are broad)
@@ -724,6 +726,7 @@ class GeminiService:
         offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
+        currency: str,
     ) -> str:
         """Invoke the reasoning model with a forced response_schema (R4).
 
@@ -731,7 +734,7 @@ class GeminiService:
         shape as the vision path so injected test stubs work identically.
         """
         prompt = self._negotiation_prompt(
-            min_price, target_price, offer_sol, usage_type, history
+            min_price, target_price, offer_sol, usage_type, history, currency
         )
         config = {
             "response_mime_type": "application/json",
@@ -751,6 +754,7 @@ class GeminiService:
         offer_sol: decimal.Decimal,
         usage_type: str,
         history: list[dict],
+        currency: str,
     ) -> str:
         """Build the instruction string for the negotiation reasoning call."""
         history_json = json.dumps(history or [])
@@ -758,13 +762,15 @@ class GeminiService:
             "You are the seller's autonomous pricing agent for an IP license. "
             "Given the creator's constraints and the buyer's offer, decide "
             "ACCEPT, COUNTER_OFFER, or REJECT.\n"
-            f"Constraints: min_price_sol={min_price}, "
-            f"target_price_sol={target_price}, usage_type={usage_type}.\n"
-            f"Buyer offer: offer_sol={offer_sol}.\n"
+            f"Currency: {currency}.\n"
+            f"Constraints: minimum price={min_price} {currency}, "
+            f"target price={target_price} {currency}, usage_type={usage_type}.\n"
+            f"Buyer offer: {offer_sol} {currency}.\n"
             f"Prior rounds: {history_json}\n"
             "Return JSON with exactly: status (ACCEPT|COUNTER_OFFER|REJECT), "
-            "price_sol (number, your proposed final/counter price), "
-            "reason (short string). Never accept below min_price."
+            "price (number, your proposed final/counter price in the stated currency), "
+            "reason (short Korean string that uses only the stated currency). "
+            "Never accept below the minimum price."
         )
 
     def _parse_negotiate_response(
@@ -783,7 +789,7 @@ class GeminiService:
         if status not in NEGOTIATION_STATUSES:
             # Unknown status -> let the fallback handle it.
             raise ValueError(f"unknown negotiation status: {status!r}")
-        price_raw = data.get("price_sol")
+        price_raw = data.get("price")
         price: decimal.Decimal | None
         try:
             price = decimal.Decimal(str(price_raw)) if price_raw is not None else None

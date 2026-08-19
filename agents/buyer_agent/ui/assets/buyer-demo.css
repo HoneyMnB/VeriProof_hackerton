@@ -79,6 +79,9 @@ button:focus-visible, textarea:focus-visible, a:focus-visible, summary:focus-vis
 .exchange-message { padding: 14px 17px; border: 1px solid #d4d6cf; border-radius: 4px 18px 18px 18px; background: #eceee8; color: #42483f; font-size: 14px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
 .buyer-message .exchange-message { border: 0; border-radius: 18px 18px 4px 18px; background: #e7e5de; color: var(--ink); text-align: left; }
 .seller-message .exchange-message { border-color: #d5dfcb; background: #f4f8ed; }
+.negotiation-message .exchange-meta b { background: #e5ddf5; color: #564480; }
+.negotiation-message.seller-message .exchange-message { border-color: #cbd9be; background: #f4f8ed; }
+.negotiation-message .exchange-message p:first-child { color: #4d3f79; font: 600 11px/1.2 var(--mono); letter-spacing: .08em; }
 .purchase-message .exchange-message { border-color: #b9d49b; background: linear-gradient(135deg, #f8fced, #eff7df); box-shadow: 0 8px 20px rgba(67, 92, 43, .06); }
 .purchase-message .exchange-message h3 { margin: 0; color: #354529; font-size: 19px; }
 .license-delivery { width: min(600px, calc(100% - 83px)); margin: 0 0 20px 42px; padding: 22px; border: 1px solid #bdd2a4; border-radius: 4px 18px 18px 18px; background: linear-gradient(135deg, #f9fdf1, #ebf5dc); box-shadow: 0 12px 28px rgba(67, 92, 43, .1); }

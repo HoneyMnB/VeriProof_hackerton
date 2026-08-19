@@ -66,12 +66,12 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
         return _error("invalid_json", "request body must be a JSON object", status=422)
 
     buyer_agent_id = (data.get("buyer_agent_id") or "").strip()
-    offer_sol = _parse_money(data.get("offer_sol"))
+    currency, offer = _negotiation_offer(data)
     usage_type = data.get("usage_type")
 
-    if offer_sol is None or offer_sol <= 0:
+    if offer is None or offer <= 0:
         return _error(
-            "invalid_offer", "offer_sol must be a positive number", status=422
+            "invalid_offer", "provide exactly one positive offer_sol or offer_usdc", status=422
         )
     if (
         asset.min_amount is None
@@ -106,16 +106,25 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
         buyer_agent_id=buyer_agent_id,
         defaults={
             "usage_type": usage_type,
-            "initial_offer_sol": offer_sol,
+            "currency": currency,
+            **_initial_offer_fields(currency, offer),
         },
     )
-    if session.initial_offer_sol is None:
-        session.initial_offer_sol = offer_sol
+    if session.currency != currency:
+        return _error(
+            "negotiation_currency_mismatch",
+            "the existing negotiation session uses a different currency",
+            409,
+        )
+    if currency == "USDC" and session.initial_offer_usdc is None:
+        session.initial_offer_usdc = offer
+    if currency == "SOL" and session.initial_offer_sol is None:
+        session.initial_offer_sol = offer
 
     # Gemini 결과에만 세션 불변식을 적용한다. 모델 오류는 503으로 경계 처리한다.
     engine = get_negotiation_engine()
     try:
-        result = engine.run_round(asset, session, offer_sol, usage_type)
+        result = engine.run_round(asset, session, offer, usage_type, currency=currency)
     except NegotiationUnavailableError as exc:
         logger.error(
             "negotiation unavailable buyer_agent_id=%s asset_id=%s error=%s",
@@ -130,8 +139,8 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     rounds = list(session.rounds or [])
     rounds.append(
         {
-            "offer_sol": str(offer_sol),
-            "counter_sol": (
+            f"offer_{currency.lower()}": str(offer),
+            f"counter_{currency.lower()}": (
                 str(result.price_sol) if result.price_sol is not None else None
             ),
             "status": result.status,
@@ -145,7 +154,10 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     # pay_address via the shared resolve_pay_to SSOT).
     if result.status == "ACCEPT":
         session.status = NegotiationSession.ACCEPTED
-        session.final_price_sol = result.price_sol
+        if currency == "USDC":
+            session.final_price_usdc = result.price_sol
+        else:
+            session.final_price_sol = result.price_sol
         session.pay_address = result.pay_address
 
     session.save()
@@ -155,9 +167,9 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     event_payload = {
         "asset_id": str(asset.id),
         "session_id": str(session.id),
-        "offer_sol": str(offer_sol),
+        f"offer_{currency.lower()}": str(offer),
         "status": result.status,
-        "price_sol": (
+        f"price_{currency.lower()}": (
             str(result.price_sol) if result.price_sol is not None else None
         ),
         "reason": result.reason,
@@ -181,9 +193,8 @@ def negotiate(request: HttpRequest, asset_id) -> JsonResponse:
     return JsonResponse(
         {
             "status": result.status,
-            "price_sol": (
-                str(result.price_sol) if result.price_sol is not None else None
-            ),
+            "currency": currency,
+            f"price_{currency.lower()}": str(result.price_sol) if result.price_sol is not None else None,
             "reason": result.reason,
             "pay_address": result.pay_address,
             "session_id": str(session.id),
@@ -214,3 +225,18 @@ def _parse_money(raw) -> decimal.Decimal | None:
         return value if value.is_finite() else None
     except (decimal.InvalidOperation, ValueError, TypeError):
         return None
+
+
+def _negotiation_offer(data: dict) -> tuple[str, decimal.Decimal | None]:
+    """Accept one currency-specific offer and reject ambiguous requests."""
+    has_sol = data.get("offer_sol") is not None
+    has_usdc = data.get("offer_usdc") is not None
+    if has_sol == has_usdc:
+        return "", None
+    if has_usdc:
+        return "USDC", _parse_money(data["offer_usdc"])
+    return "SOL", _parse_money(data["offer_sol"])
+
+
+def _initial_offer_fields(currency: str, offer: decimal.Decimal) -> dict[str, decimal.Decimal]:
+    return {"initial_offer_usdc": offer} if currency == "USDC" else {"initial_offer_sol": offer}

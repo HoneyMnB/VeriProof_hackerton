@@ -48,7 +48,7 @@ def _session(rounds=None):
 class _NegotiationDouble:
     """?뚯뒪???꾩슜 紐⑤뜽 ?붾툝: ?ㅽ뻾 肄붾뱶?먮뒗 媛寃?洹쒖튃???먯? ?딅뒗??"""
 
-    def negotiate(self, min_price, target_price, offer_sol, usage_type, history):
+    def negotiate(self, min_price, target_price, offer_sol, usage_type, history, *, currency="SOL"):
         if offer_sol >= min_price:
             return NegotiationResult("ACCEPT", offer_sol, "test acceptance")
         return NegotiationResult(
@@ -90,6 +90,25 @@ def test_accept_when_offer_equals_min_boundary():
 
     assert result.status == "ACCEPT"
     assert result.price_sol == decimal.Decimal("1.5")
+
+
+def test_list_price_is_accepted_without_a_model_decision():
+    """The published price is the deterministic final fallback for a buyer."""
+    class _RejectingModel:
+        def negotiate(self, *args, **kwargs):
+            raise AssertionError("the list-price fallback must not call Gemini")
+
+    asset = _asset(min_price="0.5", target_price="1.0")
+    result = NegotiationEngine(gemini=_RejectingModel()).run_round(
+        asset, _session(rounds=[{"status": "REJECT"}] * 5),
+        decimal.Decimal("1.0"),
+        "commercial",
+        currency="USDC",
+    )
+
+    assert result.status == "ACCEPT"
+    assert result.price_sol == decimal.Decimal("1.000000")
+    assert result.reason == "공개 원가 제안을 수락합니다."
 
 
 # === R3 / AC-2: COUNTER_OFFER in [min, target] when offer below min =========

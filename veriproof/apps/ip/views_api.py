@@ -477,11 +477,13 @@ def get_asset(request: HttpRequest, asset_id: uuid.UUID) -> JsonResponse:
                 "accepted negotiation session not found for this asset",
                 status=409,
             )
-        amount = (
-            session.final_price_usdc
-            if session is not None
-            else asset.target_price_usdc
-        )
+        amount = _x402_usdc_amount(asset, session)
+        if amount is None or amount <= 0:
+            return _error(
+                "usdc_price_not_configured",
+                "the seller has not configured a valid USDC price",
+                status=409,
+            )
         payment_signature = request.headers.get("PAYMENT-SIGNATURE")
         tool_log.info(f"[get_asset] payment_signature: {payment_signature}")
         if payment_signature:
@@ -615,6 +617,7 @@ def create_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUID) -> 
         buyer_user=request.user,
         buyer_wallet=buyer_wallet,
         channel=SponsoredPaymentIntent.BROWSER,
+        negotiation_session_id=data.get("session_id"),
     )
 
 
@@ -627,12 +630,19 @@ def create_agent_sponsored_usdc_payment(request: HttpRequest, asset_id: uuid.UUI
     if isinstance(principal, JsonResponse):
         return principal
     buyer_wallet = principal
+    try:
+        data = json.loads(request.body or b"{}")
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return _error("invalid_json", "JSON object required", status=422)
+    if not isinstance(data, dict):
+        return _error("invalid_json", "JSON object required", status=422)
     return _create_sponsored_usdc_intent(
         request,
         asset_id,
         buyer_user=None,
         buyer_wallet=buyer_wallet,
         channel=SponsoredPaymentIntent.AGENT,
+        negotiation_session_id=data.get("session_id"),
     )
 
 
@@ -643,6 +653,7 @@ def _create_sponsored_usdc_intent(
     buyer_user,
     buyer_wallet: str,
     channel: str,
+    negotiation_session_id: object = None,
 ) -> JsonResponse:
     asset = IpAsset.objects.select_related("creator").filter(id=asset_id).first()
     if (
@@ -654,7 +665,21 @@ def _create_sponsored_usdc_intent(
         return _error("not_found", "asset not found", status=404)
     if asset.currency != "USDC" or asset.target_amount is None or asset.target_amount <= 0:
         return _error("usdc_price_not_configured", "the seller has not configured a USDC price", status=409)
-    amount = asset.target_amount
+    negotiation_session = _accepted_usdc_session(
+        asset,
+        negotiation_session_id,
+    )
+    if negotiation_session_id and negotiation_session is None:
+        return _error(
+            "invalid_negotiation_session",
+            "accepted USDC negotiation session not found for this asset",
+            status=409,
+        )
+    amount = (
+        negotiation_session.final_price_usdc
+        if negotiation_session is not None
+        else asset.target_amount
+    )
     recipient = resolve_pay_to(asset)
     if not _is_valid_pubkey(recipient):
         logger.error("sponsored payment recipient is invalid asset=%s", asset.id)
@@ -688,6 +713,7 @@ def _create_sponsored_usdc_intent(
         buyer_wallet=buyer_wallet,
         recipient_wallet=recipient,
         amount_usdc=amount,
+        negotiation_session=negotiation_session,
         memo=memo,
         channel=channel,
         expires_at=expires_at,
@@ -703,6 +729,7 @@ def _create_sponsored_usdc_intent(
             "recipient_wallet": recipient,
             "usdc_mint": settings.USDC_MINT_ADDRESS,
             "memo": memo,
+            "session_id": str(negotiation_session.id) if negotiation_session else None,
             "expires_at": expires_at.isoformat(),
         },
         status=201,
@@ -798,7 +825,11 @@ def _settle_sponsored_usdc_intent(
         return _error("invalid_payment", "transaction does not match this payment intent", status=422)
 
     with transaction.atomic():
-        intent = SponsoredPaymentIntent.objects.select_for_update().select_related("asset").get(id=intent.id)
+        intent = (
+            SponsoredPaymentIntent.objects.select_for_update(of=("self",))
+            .select_related("asset", "negotiation_session")
+            .get(id=intent.id)
+        )
         if intent.status == SponsoredPaymentIntent.SETTLED:
             return _sponsored_payment_response(request, intent)
         if intent.transaction_signature and intent.transaction_signature != signature:
@@ -809,9 +840,13 @@ def _settle_sponsored_usdc_intent(
         result = get_settlement_service().settle_pipeline(
             asset=intent.asset,
             buyer_wallet=intent.buyer_wallet,
-            usage_type="commercial",
+            usage_type=(
+                intent.negotiation_session.usage_type
+                if intent.negotiation_session is not None
+                else "commercial"
+            ),
             tx_signature=signature,
-            session=None,
+            session=intent.negotiation_session,
             expected_amount=intent.amount_usdc,
             payment_already_verified=True,
             buyer_user=buyer_user,
@@ -1197,6 +1232,41 @@ def _accepted_x402_session(
             asset=asset,
             status=NegotiationSession.ACCEPTED,
             final_price_usdc__isnull=False,
+        ).first()
+    except (TypeError, ValueError):
+        return None
+
+
+def _x402_usdc_amount(
+    asset: IpAsset,
+    session: NegotiationSession | None,
+) -> decimal.Decimal | None:
+    """Resolve the actual USDC price without treating missing terms as payable."""
+    if session is not None:
+        return session.final_price_usdc
+    # Legacy x402 assets retain this field. New USDC assets store their price
+    # in the currency-labelled amount field.
+    if asset.target_price_usdc is not None:
+        return asset.target_price_usdc
+    if asset.currency == "USDC":
+        return asset.target_amount
+    return None
+
+
+def _accepted_usdc_session(
+    asset: IpAsset,
+    session_id: object,
+) -> NegotiationSession | None:
+    """Resolve an accepted USDC session for sponsored payment without fallback."""
+    if not session_id:
+        return None
+    try:
+        return NegotiationSession.objects.filter(
+            id=str(session_id),
+            asset=asset,
+            currency="USDC",
+            status=NegotiationSession.ACCEPTED,
+            final_price_usdc__gt=0,
         ).first()
     except (TypeError, ValueError):
         return None

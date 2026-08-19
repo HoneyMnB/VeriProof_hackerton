@@ -7,11 +7,87 @@ from starlette.testclient import TestClient
 from agents.buyer_agent.app import application
 from agents.buyer_agent.demo import (
     _agent_message_text,
+    _usdc_negotiation_attempts,
+    _usdc_negotiation_result,
     _delivery_payload,
     _linkify_bare_urls,
     _seller_message_text,
     safe_tool_value,
 )
+
+
+def test_usdc_negotiation_result_projects_only_the_actual_seller_outcome():
+    assert _usdc_negotiation_result(
+        {
+            "http_status": 200,
+            "body": {
+                "status": "COUNTER_OFFER",
+                "currency": "USDC",
+                "price_usdc": "0.500000",
+                "reason": "minimum price is 0.500000 USDC",
+            },
+        }
+    ) == {
+        "status": "COUNTER_OFFER",
+        "price_usdc": "0.500000",
+        "reason": "minimum price is 0.500000 USDC",
+    }
+
+
+def test_usdc_negotiation_result_hides_the_internal_round_cap_reason():
+    assert _usdc_negotiation_result(
+        {
+            "http_status": 200,
+            "body": {
+                "status": "REJECT",
+                "currency": "USDC",
+                "reason": "max rounds exceeded",
+            },
+        }
+    ) == {"status": "REJECT"}
+
+
+def test_usdc_negotiation_result_hides_a_reason_with_the_wrong_currency():
+    assert _usdc_negotiation_result(
+        {
+            "http_status": 200,
+            "body": {
+                "status": "ACCEPT",
+                "currency": "USDC",
+                "price_usdc": "1.000000",
+                "reason": "최소 가격 1.0 SOL을 충족하여 수락합니다.",
+            },
+        }
+    ) == {"status": "ACCEPT", "price_usdc": "1.000000"}
+
+
+def test_usdc_negotiation_attempts_include_the_real_list_price_fallback():
+    assert _usdc_negotiation_attempts(
+        {
+            "attempts": [
+                {
+                    "offer_usdc": "0.9",
+                    "result": {"body": {"status": "REJECT", "currency": "USDC"}},
+                },
+                {
+                    "offer_usdc": "1.0",
+                    "result": {
+                        "body": {
+                            "status": "ACCEPT",
+                            "currency": "USDC",
+                            "price_usdc": "1.000000",
+                        }
+                    },
+                },
+            ]
+        }
+    ) == [
+        {"offer_usdc": "0.9", "outcome": {"status": "REJECT"}},
+        {
+            "offer_usdc": "1.0",
+            "outcome": {"status": "ACCEPT", "price_usdc": "1.000000"},
+        },
+    ]
 
 
 def test_demo_ui_is_served_without_replacing_a2a_routes():
