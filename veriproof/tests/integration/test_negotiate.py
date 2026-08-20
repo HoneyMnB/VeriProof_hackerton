@@ -247,6 +247,57 @@ def test_negotiate_counter_offer_range(client, monkeypatch):
     assert decimal.Decimal("1.5") <= price <= decimal.Decimal("3.0")
 
 
+@pytest.mark.django_db
+def test_negotiate_does_not_finalize_model_accept_above_buyer_offer(monkeypatch):
+    """An ACCEPT price above the current offer remains an open negotiation."""
+    from apps.negotiation.views_api import negotiate
+    from apps.negotiation.models import NegotiationSession
+    from services._types import NegotiationResult
+    from services.negotiation_engine import NegotiationEngine
+    from tests.fakes import FakeGeminiService
+    from tests.factories import CreatorFactory, IpAssetFactory
+
+    asset = IpAssetFactory(
+        creator=CreatorFactory(wallet_address=VALID_WALLET),
+        currency="USDC",
+        min_amount=decimal.Decimal("0.003"),
+        target_amount=decimal.Decimal("0.005"),
+    )
+    model = FakeGeminiService()
+    model.negotiate_result = NegotiationResult(
+        status="ACCEPT",
+        price_sol=decimal.Decimal("0.003"),
+        reason="accepted at seller price",
+    )
+    _patch_view_services(
+        monkeypatch,
+        engine=NegotiationEngine(gemini=model, max_rounds=5),
+    )
+
+    request = RequestFactory().post(
+        NEGOTIATE_TEMPLATE.format(asset_id=str(asset.id)),
+        data={
+            "buyer_agent_id": "veriproof_buyer_agent",
+            "offer_usdc": "0.001",
+            "usage_type": "commercial",
+        },
+        content_type="application/json",
+        HTTP_X_AGENT_PROTOCOL="x402",
+        HTTP_ACCEPT="application/json",
+    )
+    response = negotiate(request, asset.id)
+
+    assert response.status_code == 200
+    body = json.loads(response.content)
+    assert body["status"] == "COUNTER_OFFER"
+    assert body["price_usdc"] == "0.003000"
+    assert body["pay_address"] is None
+    session = NegotiationSession.objects.get(id=body["session_id"])
+    assert session.status == NegotiationSession.NEGOTIATING
+    assert session.final_price_usdc is None
+    assert session.pay_address is None
+
+
 # === AC-3: ACCEPT finalises the session =====================================
 
 

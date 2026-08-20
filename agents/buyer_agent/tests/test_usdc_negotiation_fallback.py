@@ -5,6 +5,53 @@ import asyncio
 from agents.buyer_agent import tools
 
 
+def test_counter_offer_is_resubmitted_before_acceptance(monkeypatch):
+    responses = iter(
+        [
+            {
+                "http_status": 200,
+                "body": {
+                    "status": "COUNTER_OFFER",
+                    "currency": "USDC",
+                    "price_usdc": "0.003000",
+                    "pay_address": None,
+                },
+            },
+            {
+                "http_status": 200,
+                "body": {
+                    "status": "ACCEPT",
+                    "currency": "USDC",
+                    "price_usdc": "0.003000",
+                    "session_id": "12345678-1234-1234-1234-123456789012",
+                },
+            },
+        ]
+    )
+    offers = []
+
+    async def negotiate(asset_id, buyer_agent_id, offer_usdc, usage_type, tool_context):
+        offers.append(offer_usdc)
+        return next(responses)
+
+    monkeypatch.setattr(tools, "negotiate_usdc_license", negotiate)
+
+    result = asyncio.run(
+        tools.negotiate_usdc_with_list_price_fallback(
+            "12345678-1234-1234-1234-123456789012",
+            "buyer-1",
+            0.001,
+        )
+    )
+
+    assert offers == [0.001, 0.003]
+    assert result["body"]["status"] == "ACCEPT"
+    assert [attempt["offer_usdc"] for attempt in result["attempts"]] == [
+        "0.001",
+        "0.003",
+    ]
+
+
 def test_rejection_retries_once_at_the_published_usdc_list_price(monkeypatch):
     responses = iter(
         [

@@ -95,6 +95,8 @@ def test_negotiate_usdc_prompt_and_schema_are_currency_neutral():
     prompt = stub.models.last_kwargs["contents"][0]
     schema = stub.models.last_kwargs["config"]["response_schema"]
     assert "SOL" not in prompt
+    assert "Return ACCEPT only when" in prompt
+    assert "return COUNTER_OFFER" in prompt
     assert "price" in schema["properties"]
     assert "price_sol" not in schema["properties"]
 

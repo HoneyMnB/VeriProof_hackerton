@@ -770,7 +770,9 @@ class GeminiService:
             "Return JSON with exactly: status (ACCEPT|COUNTER_OFFER|REJECT), "
             "price (number, your proposed final/counter price in the stated currency), "
             "reason (short Korean string that uses only the stated currency). "
-            "Never accept below the minimum price."
+            "Return ACCEPT only when the final price is not greater than the buyer's "
+            "current offer. If your proposed price is greater than the buyer's offer, "
+            "return COUNTER_OFFER. Never accept below the minimum price."
         )
 
     def _parse_negotiate_response(

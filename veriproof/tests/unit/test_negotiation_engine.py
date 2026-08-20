@@ -179,12 +179,8 @@ def test_accept_still_honoured_at_max_rounds():
 # === Gemini-wired branch + shared invariants ================================
 
 
-def test_run_round_applies_invariants_to_gemini_result(monkeypatch):
-    """A wired Gemini result flows through the same invariant finaliser.
-
-    The fake returns an ACCEPT below min (a bad model answer); the engine MUST
-    clamp it up to min_price (R10) and still resolve pay_address from the asset.
-    """
+def test_model_accept_above_buyer_offer_becomes_counter_offer():
+    """A seller cannot unilaterally ACCEPT at more than the buyer offered."""
     from tests.fakes import FakeGeminiService
 
     asset = _asset(min_price="1.5", target_price="3.0")
@@ -199,10 +195,10 @@ def test_run_round_applies_invariants_to_gemini_result(monkeypatch):
         asset, _session(), decimal.Decimal("0.80"), "commercial"
     )
 
-    assert result.status == "ACCEPT"
-    # R10 clamp: never below min on ACCEPT.
-    assert result.price_sol >= asset.min_amount
-    assert result.pay_address == _CREATOR_WALLET
+    assert result.status == "COUNTER_OFFER"
+    assert result.price_sol == asset.min_amount
+    assert result.reason == "판매자가 더 높은 가격을 제안했습니다."
+    assert result.pay_address is None
     # Gemini was actually consulted.
     assert any(c[0] == "negotiate" for c in fake.calls)
 

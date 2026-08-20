@@ -102,7 +102,12 @@ class NegotiationEngine:
             )
             raise NegotiationUnavailableError("Gemini negotiation could not be completed") from exc
 
-        return self._finalize(raw, asset, currency=currency)
+        return self._finalize(
+            raw,
+            asset,
+            buyer_offer=offer_sol,
+            currency=currency,
+        )
 
     # --- Internal helpers ----------------------------------------------------
 
@@ -122,6 +127,7 @@ class NegotiationEngine:
         raw: NegotiationResult,
         asset: Any,
         *,
+        buyer_offer: decimal.Decimal,
         currency: str,
     ) -> NegotiationResult:
         """Apply the creator-protection invariants shared by both paths.
@@ -140,7 +146,12 @@ class NegotiationEngine:
         if status == "ACCEPT":
             if price is None or price < min_price:
                 price = min_price
-            pay_address = resolve_pay_to(asset)
+            if price > buyer_offer:
+                status = "COUNTER_OFFER"
+                reason = "판매자가 더 높은 가격을 제안했습니다."
+                pay_address = None
+            else:
+                pay_address = resolve_pay_to(asset)
         elif status == "COUNTER_OFFER":
             if price is None or price < min_price:
                 price = min_price
