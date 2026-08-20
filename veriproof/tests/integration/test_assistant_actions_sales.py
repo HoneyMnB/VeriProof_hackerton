@@ -102,13 +102,13 @@ def test_sales_endpoint_uses_only_verified_license_rows(client):
     data = response.json()
     assert data["summary"] == {
         "sale_count": 1,
-        "gross_sol": "7.5",
+        "gross_usdc": "20",
         "platform_fee_bps": 0,
-        "platform_fee_sol": "0",
-        "creator_proceeds_sol": "7.5",
+        "platform_fee_usdc": "0",
+        "creator_proceeds_usdc": "20",
     }
     assert data["items"][0]["asset_id"] == str(asset.id)
-    assert data["items"][0]["price_sol"] == "7.500000000"
+    assert data["items"][0]["price_usdc"] == "20.000000"
 
 
 @pytest.mark.django_db
@@ -118,16 +118,16 @@ def test_sales_endpoint_filters_and_paginates_actual_license_history(client):
     creator = CreatorFactory(wallet_address=VALID_WALLET)
     selected = IpAssetFactory(creator=creator, title="Selected work")
     other = IpAssetFactory(creator=creator, title="Other work")
-    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletOne", usage_type="commercial", price_usdc=None, price_sol=Decimal("3.000000000"), payment_currency="SOL")
-    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletTwo", usage_type="editorial", price_usdc=None, price_sol=Decimal("4.000000000"), payment_currency="SOL")
-    LicenseFactory(asset=other, price_usdc=None, price_sol=Decimal("9.000000000"), payment_currency="SOL")
+    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletOne", usage_type="commercial", price_usdc=Decimal("3.000000"), price_sol=None, payment_currency="USDC")
+    LicenseFactory(asset=selected, buyer_wallet="BuyerWalletTwo", usage_type="editorial", price_usdc=Decimal("4.000000"), price_sol=None, payment_currency="USDC")
+    LicenseFactory(asset=other, price_usdc=Decimal("9.000000"), price_sol=None, payment_currency="USDC")
 
     response = client.get(f"/api/v1/assistant/sales?creator={VALID_WALLET}&asset={selected.id}&usage=commercial&page_size=1")
 
     assert response.status_code == 200
     data = response.json()
     assert data["summary"]["sale_count"] == 1
-    assert data["summary"]["gross_sol"] == "3"
+    assert data["summary"]["gross_usdc"] == "3"
     assert data["pagination"] == {"page": 1, "page_size": 1, "total_count": 1, "page_count": 1}
     assert data["dashboard"]["by_work_pagination"] == {
         "page": 1,
@@ -135,8 +135,8 @@ def test_sales_endpoint_filters_and_paginates_actual_license_history(client):
         "total_count": 1,
         "page_count": 1,
     }
-    assert data["dashboard"]["by_work"][0]["gross_sol"] == "3"
-    assert data["dashboard"]["by_work"][0]["average_sol"] == "3"
+    assert data["dashboard"]["by_work"][0]["gross_usdc"] == "3"
+    assert data["dashboard"]["by_work"][0]["average_usdc"] == "3"
     assert data["items"][0]["buyer_wallet"] == "BuyerWalletOne"
     assert data["items"][0]["granted_at"]
     assert data["items"][0]["payment_tx_sig"]
@@ -161,8 +161,8 @@ def test_sales_endpoint_paginates_work_aggregates_server_side(client):
     creator = CreatorFactory(wallet_address=VALID_WALLET)
     first = IpAssetFactory(creator=creator, title="Higher gross")
     second = IpAssetFactory(creator=creator, title="Lower gross")
-    LicenseFactory(asset=first, price_usdc=None, price_sol=Decimal("8.000000000"), payment_currency="SOL")
-    LicenseFactory(asset=second, price_usdc=None, price_sol=Decimal("3.000000000"), payment_currency="SOL")
+    LicenseFactory(asset=first, price_usdc=Decimal("8.000000"), price_sol=None, payment_currency="USDC")
+    LicenseFactory(asset=second, price_usdc=Decimal("3.000000"), price_sol=None, payment_currency="USDC")
 
     response = client.get(f"/api/v1/assistant/sales?creator={VALID_WALLET}&work_page=2&work_page_size=1")
 

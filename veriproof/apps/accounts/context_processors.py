@@ -1,15 +1,16 @@
 """공통 셸이 필요한 계정 표시 데이터를 제공한다."""
 from __future__ import annotations
 
-from .models import UserPreference
+from .models import UserPreference, WalletConfiguration
 
 
 def account_preferences(request):
     """인증된 요청에만 설정을 주입하고 공개 화면에는 빈 값을 준다."""
     if not request.user.is_authenticated:
-        return {"account_preferences": None}
+        return {"account_preferences": None, "account_wallets": []}
     preference = UserPreference.objects.filter(user=request.user).first()
-    return {"account_preferences": preference}
+    wallets = WalletConfiguration.objects.filter(user=request.user)
+    return {"account_preferences": preference, "account_wallets": wallets}
 
 
 def vp_language(request):

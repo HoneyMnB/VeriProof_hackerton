@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import decimal
+from pathlib import Path
 import re
 
 import pytest
@@ -12,6 +13,15 @@ _TEST_STATIC_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+
+def test_public_detail_template_uses_the_canonical_target_amount_for_usdc():
+    template = (
+        Path(__file__).resolve().parents[2] / "templates" / "asset_detail.html"
+    ).read_text()
+
+    assert template.count("{{ asset.target_amount }} USDC") == 3
+    assert "target_price_usdc" not in template
 
 
 @pytest.mark.django_db

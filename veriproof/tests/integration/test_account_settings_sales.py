@@ -41,6 +41,26 @@ def test_settings_modal_contains_sales_overview_and_sidebar_has_no_dashboard(cli
 
 
 @pytest.mark.django_db
+def test_sales_wallet_select_renders_every_registered_wallet(client):
+    from django.contrib.auth.models import User
+
+    from apps.accounts.models import WalletConfiguration
+
+    user = User.objects.create_user(username="sales-wallet@example.com", password="test-password-123")
+    WalletConfiguration.objects.create(
+        user=user,
+        label="Settlement wallet",
+        address="SettlementWallet111111111111111111111111111111",
+    )
+    client.force_login(user)
+
+    response = client.get("/library")
+
+    assert response.status_code == 200
+    assert 'value="SettlementWallet111111111111111111111111111111"' in response.content.decode()
+
+
+@pytest.mark.django_db
 def test_removed_dashboard_route_is_not_exposed(client):
     """판매자 대시보드 URL은 독립 화면으로 더 이상 제공하지 않는다."""
     assert client.get("/dashboard").status_code == 404

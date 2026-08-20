@@ -330,21 +330,22 @@ def test_library_management_payload_contains_registered_metadata_and_real_sales(
         title="Registered work",
         description="Registration description",
         tags=["portrait", "oil"],
-        min_price_sol=decimal.Decimal("1.250000000"),
-        target_price_sol=decimal.Decimal("2.500000000"),
+        min_amount=decimal.Decimal("1.250000"),
+        target_amount=decimal.Decimal("2.500000"),
+        currency="USDC",
     )
-    LicenseFactory(asset=asset, price_usdc=None, price_sol=decimal.Decimal("3.250000000"), payment_currency="SOL")
+    LicenseFactory(asset=asset, price_usdc=decimal.Decimal("3.250000"), price_sol=None, payment_currency="USDC")
 
     response = client.get("/library")
     assert response.status_code == 200
     content = response.content.decode()
     assert "Registration description" in content
     assert "data-manage=" in content
-    assert 'data-min-price-sol="1.250000000"' in content
-    assert 'data-target-price-sol="2.500000000"' in content
-    assert "1.250000000 SOL" in content
+    assert 'data-min-amount="1.250000"' in content
+    assert 'data-target-amount="2.500000"' in content
+    assert "1.250000 USDC" in content
     assert "sale_count&quot;: 1" in content
-    assert "gross_sol&quot;: &quot;3.25" in content
+    assert "gross_usdc&quot;: &quot;3.25" in content
 
 
 @pytest.mark.django_db
@@ -538,6 +539,8 @@ def test_transactions_api_returns_licenses_and_events(client):
     # License entry carries the deal fields.
     lic = next(it for it in items if it["kind"] == "license")
     assert lic["buyer_wallet"] == _BUYER_WALLET
+    assert lic["amount"] == "1.500000"
+    assert lic["currency"] == "USDC"
     assert lic["price_usdc"] == "1.500000"
     assert lic["usage_type"] == "commercial"
     # Event entry carries type + payload.
