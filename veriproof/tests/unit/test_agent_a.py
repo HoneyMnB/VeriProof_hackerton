@@ -20,6 +20,17 @@ def test_agent_card_is_available_at_the_standard_well_known_path():
     assert payload["supportedInterfaces"][0]["url"].endswith("/a2a/")
 
 
+def test_seller_is_instructed_to_confirm_license_backed_use_for_all_public_assets():
+    from agent_a.agent import root_agent
+
+    assert "every public catalog asset is available for use under its purchased" in (
+        root_agent.instruction
+    )
+    assert "do not expose, infer, or override a stored usage classification" in (
+        root_agent.instruction
+    )
+
+
 @pytest.mark.django_db
 def test_agent_catalog_tool_returns_only_public_registered_assets():
     from agent_a.tools import search_licensable_assets
@@ -41,10 +52,40 @@ def test_agent_catalog_tool_returns_only_public_registered_assets():
 
     assert result["count"] == 1
     assert result["assets"][0]["asset_id"] == str(visible.id)
-    assert result["assets"][0]["license_currency"] == "SOL"
-    assert "min_price_sol" in result["assets"][0]
-    assert "min_price_usdc" not in result["assets"][0]
+    assert result["assets"][0]["currency"] == "USDC"
+    assert "min_price_usdc" in result["assets"][0]
     assert "original_url" not in result["assets"][0]
+
+
+@pytest.mark.django_db
+def test_agent_catalog_tool_filters_prices_only_in_the_requested_currency():
+    from agent_a.tools import _search_licensable_assets
+    from apps.ip.models import IpAsset
+    from tests.factories import IpAssetFactory
+
+    usdc_asset = IpAssetFactory(
+        title="USDC sea",
+        visibility=IpAsset.PUBLIC,
+        status=IpAsset.ANCHORED,
+        currency="USDC",
+        min_amount="8.000000",
+    )
+    IpAssetFactory(
+        title="SOL sea",
+        visibility=IpAsset.PUBLIC,
+        status=IpAsset.ANCHORED,
+        currency="SOL",
+        min_amount="0.100000000",
+    )
+
+    result = _search_licensable_assets(
+        query="sea", maximum_price=10, price_currency="USDC"
+    )
+
+    assert [asset["asset_id"] for asset in result["assets"]] == [str(usdc_asset.id)]
+    assert _search_licensable_assets(query="sea", maximum_price=10)["status"] == (
+        "price_currency_required"
+    )
 
 
 def test_agent_catalog_tool_rejects_noncanonical_asset_type():

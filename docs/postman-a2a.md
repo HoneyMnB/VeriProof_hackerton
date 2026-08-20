@@ -16,7 +16,7 @@ Postman의 `Import`에서 다음 파일을 가져온다.
 ./ctl.sh buyer-agent reload
 ```
 
-- Seller Agent A: `http://localhost:8000`
+- Marketplace Catalog Agent A: `http://localhost:8000`
 - Buyer Agent B: `http://localhost:8001`
 
 ## 실행 순서
@@ -24,7 +24,7 @@ Postman의 `Import`에서 다음 파일을 가져온다.
 컬렉션을 위에서 아래 순서로 실행한다.
 
 1. Seller/Buyer Agent Card 조회
-2. Seller Agent 직접 호출
+2. Marketplace Catalog Agent 직접 호출
 3. Buyer에서 Seller로 위임하는 결과 없음 시나리오
 4. Buyer에서 Seller로 위임하는 실제 자산 검색 시나리오
 5. `asset_id`를 설정하고 x402 결제 조건 조회

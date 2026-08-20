@@ -98,7 +98,7 @@ at the service boundary. Configure `SOLANA_RPC_URL`, `USDC_MINT_ADDRESS`, and
 
 ## A2A local check
 
-Agent A is an ADK/Gemini seller agent embedded in the Django ASGI process.
+Agent A is an ADK/Gemini marketplace catalog agent embedded in the Django ASGI process.
 Agent B is a separately deployable ADK/Gemini buyer coordinator under
 `agents/buyer_agent`; it discovers Agent A through the official A2A Agent Card
 and delegates marketplace requests through `RemoteA2aAgent`.

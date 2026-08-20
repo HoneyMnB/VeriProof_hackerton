@@ -2,7 +2,7 @@
 
 import decimal
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
@@ -29,13 +29,13 @@ def _json_safe_asset(asset: Any) -> dict[str, Any]:
 def _search_licensable_assets(
     query: str,
     asset_type: AssetType | str | None = None,
-    maximum_price_sol: float | None = None,
+    maximum_price: float | None = None,
+    price_currency: Literal["USDC", "SOL"] | None = None,
     limit: int = 10,
 ) -> dict[str, Any]:
     """동기 Django ORM 경로에서 공개 등록 자산을 검색한다."""
     try:
 
-        tool_log.info(f"query: {query}, asset_type: {asset_type}, maximum_price_sol: {maximum_price_sol}, limit: {limit}")
         canonical_asset_type = (
             AssetType(asset_type).value if asset_type else ""
         )
@@ -47,17 +47,35 @@ def _search_licensable_assets(
             "assets": [],
         }
 
+    if price_currency not in {None, "USDC", "SOL"}:
+        return {
+            "status": "invalid_price_currency",
+            "allowed_price_currencies": ["USDC", "SOL"],
+            "count": 0,
+            "assets": [],
+        }
+    if maximum_price is not None and price_currency is None:
+        return {"status": "price_currency_required", "count": 0, "assets": []}
+
     bounded_limit = max(1, min(int(limit), 20))
-    price_max = (
-        decimal.Decimal(str(maximum_price_sol))
-        if maximum_price_sol is not None
-        else None
+    try:
+        price_max = (
+            decimal.Decimal(str(maximum_price)) if maximum_price is not None
+            else None
+        )
+    except decimal.InvalidOperation:
+        return {"status": "invalid_maximum_price", "count": 0, "assets": []}
+    if price_max is not None and (not price_max.is_finite() or price_max < 0):
+        return {"status": "invalid_maximum_price", "count": 0, "assets": []}
+    tool_log.info(
+        "catalog search query=%r asset_type=%s maximum_price=%s currency=%s limit=%d",
+        query, canonical_asset_type, price_max, price_currency, bounded_limit,
     )
-    tool_log.info(f"price_max: {price_max}")
     assets = get_catalog_service().search(
         query=query.strip(),
         asset_type=canonical_asset_type,
         price_max=price_max,
+        price_currency=price_currency or "",
     )
     results = [_json_safe_asset(asset) for asset in assets[:bounded_limit]]
     return {"count": len(results), "assets": results}
@@ -66,8 +84,10 @@ def _search_licensable_assets(
 async def search_licensable_assets(
     query: str,
     asset_type: AssetType | None = None,
-    maximum_price_sol: float | None = None,
+    maximum_price: float | None = None,
+    price_currency: Literal["USDC", "SOL"] | None = None,
     limit: int = 10,
+    execution_reason: str = "",
 ) -> dict[str, Any]:
     """
     라이선스 구매가 가능한 공개 블록체인 등록 자산을 검색한다.
@@ -75,13 +95,15 @@ async def search_licensable_assets(
         query: 주제, 분위기, 스타일 등의 자연어 검색어.
         asset_type: image, document, audio, video, software, product, other 중
             하나인 선택 자산 유형. 사용자 표현을 번역하지 말고 이 표준 값을 사용한다.
-        maximum_price_sol: 선택 가능한 최대 최소 판매가(SOL).
+        maximum_price: 선택 가능한 최대 최소 판매가. price_currency와 함께 사용한다.
+        price_currency: 최대 가격의 통화. USDC 또는 SOL이며 환산하지 않는다.
         limit: 1개에서 20개 사이의 최대 결과 수.
     """
     return await sync_to_async(_search_licensable_assets, thread_sensitive=True)(
         query,
         asset_type,
-        maximum_price_sol,
+        maximum_price,
+        price_currency,
         limit,
     )
 
@@ -108,7 +130,10 @@ def _get_licensable_asset(asset_id: str) -> dict[str, Any]:
     return {"status": "found", "asset": _json_safe_asset(asset)}
 
 
-async def get_licensable_asset(asset_id: str) -> dict[str, Any]:
+async def get_licensable_asset(
+    asset_id: str,
+    execution_reason: str = "",
+) -> dict[str, Any]:
     """하나의 자산 ID에 대한 공개 라이선스 정보를 반환한다."""
     return await sync_to_async(_get_licensable_asset, thread_sensitive=True)(asset_id)
 
@@ -167,6 +192,7 @@ def _get_purchase_fulfillment(
 async def get_purchase_fulfillment(
     asset_id: str,
     transaction_signature: str,
+    execution_reason: str = "",
 ) -> dict[str, Any]:
     """Return the actual download and receipt data for one completed purchase.
 

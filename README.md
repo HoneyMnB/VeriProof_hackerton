@@ -92,7 +92,7 @@ docker compose up -d
 각 `run` 명령은 컨테이너 로그를 계속 표시하므로 별도 터미널에서 실행합니다.
 
 ```bash
-# Terminal 1: Django Web + Seller Agent(A)
+# Terminal 1: Django Web + Marketplace Catalog Agent(A)
 ./ctl.sh api run
 
 # Terminal 2: Buyer Agent(B)
@@ -105,7 +105,7 @@ docker compose up -d
 | 서비스 | 접속 주소 |
 |---|---|
 | VeriProof Web | http://localhost:8000 |
-| Seller Agent Card | http://localhost:8000/.well-known/agent-card.json |
+| Marketplace Catalog Agent Card | http://localhost:8000/.well-known/agent-card.json |
 | Buyer Agent | http://localhost:8001 |
 | ADK UI | http://localhost:8002 |
 

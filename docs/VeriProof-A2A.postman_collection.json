@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "8bd65368-2b12-4ab9-bb55-0b89f9004544",
     "name": "VeriProof A2A",
-    "description": "Seller Agent A와 Buyer Agent B의 A2A 탐색, 직접 호출, 원격 위임을 검증합니다. VeriProof Local A2A 환경을 선택하고 위에서 아래 순서로 실행하세요.",
+    "description": "Marketplace Catalog Agent A와 Buyer Agent B의 A2A 탐색, 직접 호출, 원격 위임을 검증합니다. VeriProof Local A2A 환경을 선택하고 위에서 아래 순서로 실행하세요.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -10,12 +10,12 @@
       "name": "01. Agent Card",
       "item": [
         {
-          "name": "Seller Agent Card 조회",
+          "name": "Marketplace Catalog Agent Card 조회",
           "request": {
             "method": "GET",
             "header": [],
             "url": "{{seller_base_url}}/.well-known/agent-card.json",
-            "description": "Seller Agent A의 공식 Agent Card를 조회합니다. Card의 web:8080 주소는 Docker 내부 주소이므로 Postman 직접 호출에는 seller_a2a_url을 사용합니다."
+            "description": "Marketplace Catalog Agent A의 공식 Agent Card를 조회합니다. Card의 web:8080 주소는 Docker 내부 주소이므로 Postman 직접 호출에는 seller_a2a_url을 사용합니다."
           },
           "response": [],
           "event": [
@@ -26,7 +26,7 @@
                 "exec": [
                   "pm.test(\"HTTP 200 응답\", function () { pm.response.to.have.status(200); });",
                   "const card = pm.response.json();",
-                  "pm.test(\"Seller Agent Card 계약 확인\", function () {",
+                  "pm.test(\"Marketplace Catalog Agent Card 계약 확인\", function () {",
                   "    pm.expect(card.name).to.eql(\"VeriProof Seller Agent\");",
                   "    pm.expect(card.supportedInterfaces).to.be.an(\"array\").that.is.not.empty;",
                   "    pm.expect(card.supportedInterfaces[0].protocolBinding).to.eql(\"JSONRPC\");",
@@ -68,7 +68,7 @@
       ]
     },
     {
-      "name": "02. Seller Agent 직접 호출",
+      "name": "02. Marketplace Catalog Agent 직접 호출",
       "item": [
         {
           "name": "공개 라이선스 이미지 검색",
@@ -90,7 +90,7 @@
               }
             },
             "url": "{{seller_a2a_url}}",
-            "description": "Buyer를 거치지 않고 Seller Agent와 실제 Django 카탈로그 도구를 확인합니다."
+            "description": "Buyer를 거치지 않고 Marketplace Catalog Agent와 실제 Django 카탈로그 도구를 확인합니다."
           },
           "response": [],
           "event": [

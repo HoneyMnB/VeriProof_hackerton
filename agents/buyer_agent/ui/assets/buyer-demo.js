@@ -6,7 +6,25 @@
     busy: false,
     pendingApproval: null,
     agentMessagesByCall: new Map(),
+    sellerWaitingByCall: new Map(),
+    negotiationToolCallsByCall: new Map(),
+    negotiationToolResultsByCall: new Map(),
   };
+  const EXECUTION_LABEL = "Execution";
+  const CATALOG_OPERATION_LABELS = {
+    discovery: "카탈로그 후보 검색",
+    listing_verification: "선택 에셋 판매 조건 재검증",
+    fulfillment: "정산 완료 라이선스 전달 조회",
+  };
+  function catalogOperationLabel(event) {
+    return CATALOG_OPERATION_LABELS[event.catalog_operation] || "마켓플레이스 카탈로그 조회";
+  }
+  const SELLER_AGENT = "SELLER AGENT";
+  const NEGOTIATION_TOOLS = new Set([
+    "negotiate_license",
+    "negotiate_usdc_license",
+    "negotiate_usdc_with_list_price_fallback",
+  ]);
   const elements = {
     form: document.querySelector("#chatForm"),
     input: document.querySelector("#chatInput"),
@@ -77,6 +95,7 @@
     const fragment = elements.turnTemplate.content.cloneNode(true);
     const turn = fragment.querySelector(".turn");
     renderMarkdown(turn.querySelector(".user-message"), message);
+    executionRoot(turn).hidden = true;
     elements.messages.append(fragment);
     return elements.messages.lastElementChild;
   }
@@ -109,10 +128,18 @@
     item.querySelector("strong").textContent = title;
     item.querySelector(".step-heading span").textContent = executionTime();
     const descriptionNode = item.querySelector(".step-description");
-    descriptionNode.textContent = description;
+    if (description) {
+      descriptionNode.textContent = description;
+    } else {
+      descriptionNode.hidden = true;
+    }
     const pre = item.querySelector("pre");
     const serialized = detailText(detail);
     if (serialized) {
+      if (!description) {
+        descriptionNode.hidden = false;
+        descriptionNode.textContent = "Runtime data";
+      }
       item.classList.add("has-detail");
       pre.textContent = serialized;
       descriptionNode.addEventListener("click", () => {
@@ -132,13 +159,6 @@
     executionRoot(container).querySelector(".execution-label").textContent = text;
   }
 
-  function resetExecution(container, label = "Excution") {
-    const execution = executionRoot(container);
-    execution.querySelector(".execution-list").replaceChildren();
-    execution.querySelector(".execution-label").textContent = label;
-    setExecutionStatus(container, "Working", "working");
-  }
-
   function appendInlineMarkdown(parent, text) {
     const tokens = /(`[^`]+`|\*\*[^*]+\*\*|\[[^\]]+\]\(https?:\/\/[^\s)]+\))/g;
     let cursor = 0;
@@ -156,6 +176,7 @@
       } else {
         const linkEnd = token.lastIndexOf("](");
         const link = document.createElement("a");
+        link.className = "message-link";
         link.href = token.slice(linkEnd + 2, -1);
         link.target = "_blank";
         link.rel = "noopener noreferrer";
@@ -296,12 +317,29 @@
   }
 
   function addAgentMessage(turn, event) {
+    const fromSeller = event.from === "seller_agent";
+    const waitingExchange = fromSeller && event.call_id && state.sellerWaitingByCall.get(event.call_id);
+    if (waitingExchange) {
+      const message = waitingExchange.querySelector(".exchange-message");
+      message.replaceChildren();
+      waitingExchange.classList.remove("is-loading");
+      if (event.delivery) {
+        waitingExchange.classList.add("purchase-message");
+        renderMarkdown(message, purchaseCompletionMarkdown(event.delivery));
+      } else {
+        renderMarkdown(message, event.text);
+      }
+      addSellerExecution(waitingExchange, event.execution);
+      state.sellerWaitingByCall.delete(event.call_id);
+      state.agentMessagesByCall.delete(event.call_id);
+      setAssistantLoading(turn, true);
+      return waitingExchange;
+    }
     const fragment = elements.agentMessageTemplate.content.cloneNode(true);
     const exchange = fragment.querySelector(".agent-exchange");
     const avatar = fragment.querySelector(".exchange-avatar");
-    const fromSeller = event.from === "seller_agent";
-    const sender = fromSeller ? "SELLER AGENT" : "BUYER AGENT";
-    const recipient = fromSeller ? "BUYER AGENT" : "SELLER AGENT";
+    const sender = fromSeller ? SELLER_AGENT : "BUYER AGENT";
+    const recipient = fromSeller ? "BUYER AGENT" : SELLER_AGENT;
     exchange.classList.add(fromSeller ? "seller-message" : "buyer-message");
     avatar.classList.add(fromSeller ? "seller-robot" : "buyer-robot");
     fragment.querySelector(".exchange-meta strong").textContent = sender;
@@ -314,73 +352,67 @@
     } else {
       renderMarkdown(message, event.text);
     }
-    const existingExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
-    if (fromSeller && existingExchange) {
-      existingExchange.querySelector(".exchange-message").replaceChildren();
-      existingExchange.classList.remove("is-loading");
-      if (event.delivery) existingExchange.classList.add("purchase-message");
-      existingExchange.querySelector(".exchange-meta strong").textContent = sender;
-      existingExchange.querySelector(".exchange-route").textContent = `→ ${recipient}`;
-      existingExchange.querySelector(".exchange-meta b").textContent = event.protocol;
-      if (event.delivery) {
-        renderMarkdown(existingExchange.querySelector(".exchange-message"), purchaseCompletionMarkdown(event.delivery));
-      } else {
-        renderMarkdown(existingExchange.querySelector(".exchange-message"), event.text);
-      }
-      addExecutionItem(existingExchange, {
-        kind: "tool-result",
-        title: "A2A response received",
-        description: "Seller Agent returned the response shown above.",
-        detail: event.text,
-      });
-      setExecutionStatus(existingExchange, "Completed");
-      setExecutionLabel(existingExchange, "Excution");
-      state.agentMessagesByCall.delete(event.call_id);
-      setAssistantLoading(turn, true);
-      return existingExchange;
-    }
     turn.querySelector(".agent-dialogue").append(fragment);
     const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
-    if (event.call_id) state.agentMessagesByCall.set(event.call_id, exchangeElement);
+    if (event.call_id && !fromSeller) state.agentMessagesByCall.set(event.call_id, exchangeElement);
     if (!fromSeller) {
-      addExecutionItem(exchangeElement, {
-        kind: "tool-call",
-        title: "A2A request prepared",
-        description: "Buyer Agent prepared this request for Seller Agent.",
-        detail: event.text,
-      });
       setExecutionStatus(exchangeElement, "Queued", "queued");
     } else {
+      addSellerExecution(exchangeElement, event.execution);
       setAssistantLoading(turn, true);
     }
     return exchangeElement;
   }
 
-  function addSellerActivity(turn, event) {
+  function addSellerExecution(container, execution) {
+    if (!execution || execution.length === 0) {
+      const list = executionRoot(container).querySelector(".execution-list");
+      if (list.children.length > 0) {
+        setExecutionLabel(container, "Seller 도구 실행");
+        setExecutionStatus(container, "Completed");
+        return;
+      }
+      executionRoot(container).hidden = true;
+      return;
+    }
+    renderSellerExecution(container, execution, "Completed");
+  }
+
+  function renderSellerExecution(container, execution, status = "Working") {
+    const list = executionRoot(container).querySelector(".execution-list");
+    list.replaceChildren();
+    for (const record of execution || []) {
+      const isCall = record.type === "tool_call";
+      addExecutionItem(container, {
+        kind: isCall ? "tool-call" : "tool-result",
+        title: isCall ? record.tool : `${record.tool} 결과`,
+        description: isCall ? record.reason : "도구 실행 완료",
+        detail: isCall ? record.input : record.output,
+      });
+    }
+    executionRoot(container).hidden = false;
+    setExecutionLabel(container, "Seller 도구 실행");
+    setExecutionStatus(container, status, "working");
+  }
+
+  function addSellerWaiting(turn, event) {
     const fragment = elements.agentMessageTemplate.content.cloneNode(true);
     const exchange = fragment.querySelector(".agent-exchange");
     exchange.classList.add("seller-message", "is-loading");
     fragment.querySelector(".exchange-avatar").classList.add("seller-robot");
-    fragment.querySelector(".exchange-meta strong").textContent = "SELLER AGENT";
+    fragment.querySelector(".exchange-meta strong").textContent = SELLER_AGENT;
     fragment.querySelector(".exchange-route").textContent = "→ BUYER AGENT";
     fragment.querySelector(".exchange-meta b").textContent = "A2A";
     const message = fragment.querySelector(".exchange-message");
     const typing = document.createElement("span");
     typing.className = "typing";
-    typing.setAttribute("aria-label", "Seller Agent is processing");
+    typing.setAttribute("aria-label", "Seller Agent is responding");
     for (let index = 0; index < 3; index += 1) typing.append(document.createElement("i"));
     message.append(typing);
     turn.querySelector(".agent-dialogue").append(fragment);
     const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
-    addExecutionItem(exchangeElement, {
-      kind: "tool-call",
-      title: event.tool,
-      description: "Seller Agent is processing the A2A request.",
-      detail: event.input,
-    });
-    setExecutionLabel(exchangeElement, event.tool);
-    setExecutionStatus(exchangeElement, "Working", "working");
-    if (event.call_id) state.agentMessagesByCall.set(event.call_id, exchangeElement);
+    executionRoot(exchangeElement).hidden = true;
+    if (event.call_id) state.sellerWaitingByCall.set(event.call_id, exchangeElement);
     return exchangeElement;
   }
 
@@ -408,7 +440,7 @@
       REJECT: "협상 거절",
     };
     const lines = isOffer
-      ? ["**구매 제안**", `${event.offer_usdc} USDC`, "", `사용 목적: ${event.usage_type}`]
+      ? ["**구매 제안**", `${event.offer_usdc} USDC`]
       : [
         `**${statusLabels[event.status] || event.status}**`,
         event.price_usdc ? `${event.price_usdc} USDC` : "",
@@ -417,70 +449,132 @@
     renderMarkdown(message, lines.filter((line, index) => line || index < 2).join("\n"));
     turn.querySelector(".agent-dialogue").append(fragment);
     const exchangeElement = turn.querySelector(".agent-dialogue").lastElementChild;
+    const toolCall = event.call_id && state.negotiationToolCallsByCall.get(event.call_id);
+    if (toolCall) {
+      addExecutionItem(exchangeElement, {
+        kind: "tool-call",
+        title: toolCall.tool,
+        description: toolCall.reason,
+        detail: toolCall.input,
+      });
+      state.negotiationToolCallsByCall.delete(event.call_id);
+    }
+    const toolResult = event.call_id && state.negotiationToolResultsByCall.get(event.call_id);
+    if (toolResult && (isOffer || event.type === "negotiation_result")) {
+      addExecutionItem(exchangeElement, {
+        kind: "tool-result",
+        title: `${toolResult.tool} returned`,
+        description: "Tool execution completed",
+        detail: toolResult.output,
+      });
+      state.negotiationToolResultsByCall.delete(event.call_id);
+    }
     setExecutionLabel(exchangeElement, "가격 협상");
     setExecutionStatus(exchangeElement, isOffer ? "제안 전송" : "응답 수신");
     return exchangeElement;
+  }
+
+  function flushUnattachedNegotiationToolEvents(turn) {
+    for (const [callId, toolCall] of state.negotiationToolCallsByCall) {
+      addExecutionItem(turn, {
+        kind: "tool-call",
+        title: toolCall.tool,
+        description: toolCall.reason,
+        detail: toolCall.input,
+      });
+      const toolResult = state.negotiationToolResultsByCall.get(callId);
+      if (toolResult) {
+        addExecutionItem(turn, {
+          kind: "tool-result",
+          title: `${toolResult.tool} returned`,
+          description: "Tool execution completed",
+          detail: toolResult.output,
+        });
+        state.negotiationToolResultsByCall.delete(callId);
+      }
+      state.negotiationToolCallsByCall.delete(callId);
+    }
+    for (const toolResult of state.negotiationToolResultsByCall.values()) {
+      addExecutionItem(turn, {
+        kind: "tool-result",
+        title: `${toolResult.tool} returned`,
+        description: "Tool execution completed",
+        detail: toolResult.output,
+      });
+    }
+    state.negotiationToolResultsByCall.clear();
   }
 
   function handleEvent(turn, event) {
     switch (event.type) {
       case "session":
         state.sessionId = event.session_id;
-        addExecutionItem(turn, {
-          title: "Request accepted",
-          description: `Session ${event.session_id.slice(0, 8)}`,
-        });
         break;
       case "status":
         if (event.status === "working") {
           setExecutionStatus(turn, "Working", "working");
         } else if (event.status === "completed") {
-          setExecutionStatus(turn, "Completed");
-          setExecutionLabel(turn, "Excution");
-          addExecutionItem(turn, {
-            kind: "tool-result",
-            title: "Response completed",
-            description: "The agent finished this turn.",
-          });
+          flushUnattachedNegotiationToolEvents(turn);
         }
         break;
       case "tool_call":
+        if (NEGOTIATION_TOOLS.has(event.tool)) {
+          if (event.call_id) state.negotiationToolCallsByCall.set(event.call_id, event);
+          break;
+        }
         if (event.tool === "veriproof_seller_agent") {
-          resetExecution(turn, event.tool);
           setAssistantLoading(turn, false);
           const buyerExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
           if (buyerExchange) {
             addExecutionItem(buyerExchange, {
               kind: "tool-call",
-              title: event.tool,
-              description: "Buyer Agent sent this A2A request to Seller Agent.",
+              title: "veriproof_seller_agent",
+              description: event.reason,
               detail: event.input,
             });
-            setExecutionLabel(buyerExchange, event.tool);
+            setExecutionLabel(buyerExchange, EXECUTION_LABEL);
             setExecutionStatus(buyerExchange, "Sent");
+          } else {
+            addExecutionItem(turn, {
+              kind: "tool-call",
+              title: catalogOperationLabel(event),
+              description: event.reason,
+              detail: event.input,
+            });
           }
-          addSellerActivity(turn, event);
+          addSellerWaiting(turn, event);
           break;
         }
-        if (event.tool === "negotiate_usdc_license" || event.tool === "negotiate_usdc_with_list_price_fallback") break;
         addExecutionItem(turn, {
           kind: "tool-call",
           title: event.tool,
-          description: "Tool called with the runtime arguments shown below",
+          description: event.reason,
           detail: event.input,
         });
-        setExecutionLabel(turn, event.tool);
         setExecutionStatus(turn, "Working", "working");
         break;
       case "tool_result":
+        if (NEGOTIATION_TOOLS.has(event.tool)) {
+          if (event.call_id) state.negotiationToolResultsByCall.set(event.call_id, event);
+          break;
+        }
         if (event.tool === "veriproof_seller_agent") {
-          const sellerExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
+          const buyerExchange = event.call_id && state.agentMessagesByCall.get(event.call_id);
+          if (buyerExchange) {
+            addExecutionItem(buyerExchange, {
+              kind: "tool-result",
+              title: "veriproof_seller_agent 결과",
+              description: "Seller Agent의 A2A 응답 수신",
+              detail: event.output,
+            });
+            setExecutionStatus(buyerExchange, "Completed");
+          }
+          const sellerExchange = event.call_id && state.sellerWaitingByCall.get(event.call_id);
           if (sellerExchange) {
             setExecutionStatus(sellerExchange, "Responding", "working");
           }
           break;
         }
-        if (event.tool === "negotiate_usdc_license" || event.tool === "negotiate_usdc_with_list_price_fallback") break;
         addExecutionItem(turn, {
           kind: "tool-result",
           title: `${event.tool} returned`,
@@ -494,6 +588,11 @@
       case "agent_message":
         addAgentMessage(turn, event);
         break;
+      case "seller_execution": {
+        const sellerExchange = event.call_id && state.sellerWaitingByCall.get(event.call_id);
+        if (sellerExchange) renderSellerExecution(sellerExchange, event.execution);
+        break;
+      }
       case "negotiation_offer":
       case "negotiation_result":
         addNegotiationMessage(turn, event);
@@ -514,7 +613,7 @@
       case "error":
         showAssistantMessage(turn, event.message, true);
         setExecutionStatus(turn, "Failed", "failed");
-        setExecutionLabel(turn, "Excution");
+        setExecutionLabel(turn, EXECUTION_LABEL);
         addExecutionItem(turn, {
           kind: "failed",
           title: "Execution failed",
@@ -547,7 +646,6 @@
         const event = JSON.parse(data);
         if (event.type === "assistant_message") receivedFinalMessage = true;
         handleEvent(turn, event);
-        window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
       }
       if (done) break;
     }
@@ -588,19 +686,13 @@
     elements.modeInputs.forEach((input) => { input.disabled = true; });
     elements.intro.classList.add("is-hidden");
     const turn = createTurn(message);
-    addExecutionItem(turn, {
-      title: "Preparing request",
-      description: "Sending the buyer instruction to the live agent",
-    });
-    setExecutionLabel(turn, "Preparing request");
-    setExecutionStatus(turn, "Working", "working");
-    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: "smooth" });
     try {
       await sendMessage(message, turn, paymentDecision);
     } catch (error) {
       showAssistantMessage(turn, error.message || "The request failed.", true);
+      executionRoot(turn).hidden = false;
       setExecutionStatus(turn, "Failed", "failed");
-      setExecutionLabel(turn, "Excution");
+      setExecutionLabel(turn, EXECUTION_LABEL);
       addExecutionItem(turn, {
         kind: "failed",
         title: "Connection failed",

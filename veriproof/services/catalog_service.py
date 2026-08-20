@@ -26,6 +26,7 @@ class CatalogService:
         sort: str = "recent",
         price_min: Any | None = None,
         price_max: Any | None = None,
+        price_currency: str = "",
     ) -> list[Any]:
         """공개 카탈로그를 유형·검색어·가격대·정렬 조건으로 필터링해 반환한다.
 
@@ -55,6 +56,8 @@ class CatalogService:
             queryset = queryset.filter(min_amount__gte=price_min)
         if price_max is not None:
             queryset = queryset.filter(min_amount__lte=price_max)
+        if price_currency:
+            queryset = queryset.filter(currency=price_currency)
         order_by = self.SORT_MAP.get(sort, "-created_at")
         results = list(queryset.order_by(order_by))
         logger.info(

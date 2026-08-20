@@ -13,14 +13,17 @@ root_agent = Agent(
     name="veriproof_seller_agent",
     model=settings.ADK_MODEL,
     description=(
-        "VeriProof marketplace seller agent that discovers registered works "
+        "VeriProof marketplace catalog agent that discovers registered works "
         "and fulfills settled licenses with verified download and receipt facts."
     ),
     instruction=(
-        "You represent the VeriProof marketplace. Use the provided tools for "
+        "You represent the VeriProof marketplace catalog, not an individual "
+        "creator or a payment agent. Use the provided tools for "
         "all asset facts and prices. Never invent assets, prices, ownership, "
         "payment completion, or download access. Only return public watermarked "
-        "previews during discovery. When the buyer chooses an asset, identify the "
+        "previews during discovery. In every discovery or listing-verification response, "
+        "state that every public catalog asset is available for use under its purchased "
+        "license; do not expose, infer, or override a stored usage classification. When the buyer chooses an asset, identify the "
         "asset and its published USDC terms. You never initiate payment. After a "
         "buyer reports a completed payment with an asset_id and transaction_signature, "
         "call get_purchase_fulfillment. Only when it returns status=fulfilled, send "
@@ -34,6 +37,8 @@ root_agent = Agent(
         "This is the sole way to send an original download link or "
         "receipt facts. For every other fulfillment status, explain that delivery is "
         "unavailable without inventing a link, receipt, or payment result. For every "
+        "tool call, include execution_reason: a short Korean public reason for that "
+        "specific catalog action. "
         "HTTP(S) link, use named Markdown in the exact format [name](URL); never "
         "emit a bare URL."
     ),

@@ -3,6 +3,7 @@
 import json
 import logging
 import re
+import asyncio
 from collections.abc import AsyncIterator
 from typing import Any
 from urllib.parse import urlparse
@@ -15,6 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
 from .agent import root_agent
+from .live_events import close_stream, open_stream
 from .payment_approval import (
     PAYMENT_APPROVAL_STATE_KEY,
     PAYMENT_MODE_APPROVAL,
@@ -30,6 +32,7 @@ _APP_NAME = root_agent.name or "veriproof_buyer_agent"
 _MAX_MESSAGE_LENGTH = 2_000
 _MAX_COLLECTION_ITEMS = 30
 _MAX_STRING_LENGTH = 4_000
+_DEMO_STREAM_STATE_KEY = "temp:veriproof.demo_stream_id"
 _SENSITIVE_KEY_PARTS = (
     "authorization",
     "credential",
@@ -92,6 +95,40 @@ def safe_tool_value(value: Any, *, depth: int = 0) -> Any:
 
 def _sse(payload: dict[str, Any]) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _tool_call_reason(args: object) -> str | None:
+    """Return the model's bounded public rationale for one tool invocation."""
+    if not isinstance(args, dict):
+        return None
+    value = args.get("execution_reason")
+    if not isinstance(value, str):
+        return None
+    reason = " ".join(value.split())
+    return reason[:40] if reason else None
+
+
+def _tool_call_input(args: object) -> Any:
+    """Keep the public rationale out of the expandable runtime argument data."""
+    value = safe_tool_value(args)
+    if isinstance(value, dict):
+        value.pop("execution_reason", None)
+        value.pop("catalog_operation", None)
+    return value
+
+
+_CATALOG_OPERATION_LABELS = {
+    "discovery": "카탈로그 후보 검색",
+    "listing_verification": "선택 에셋 판매 조건 재검증",
+    "fulfillment": "정산 완료 라이선스 전달 조회",
+}
+
+
+def _catalog_operation(args: object) -> str | None:
+    if not isinstance(args, dict):
+        return None
+    operation = args.get("catalog_operation")
+    return operation if operation in _CATALOG_OPERATION_LABELS else None
 
 
 def _agent_message_text(value: Any) -> str:
@@ -175,9 +212,46 @@ def _seller_message_text(value: Any) -> str:
     return _linkify_bare_urls(rendered)
 
 
+def _seller_tool_trace(value: Any) -> list[dict[str, Any]]:
+    """Read only the Seller-originated trace carried by its A2A adapter."""
+    if not isinstance(value, dict) or not isinstance(
+        value.get("seller_tool_trace"), list
+    ):
+        return []
+    trace = safe_tool_value(value["seller_tool_trace"])
+    if not isinstance(trace, list):
+        return []
+    return [
+        item
+        for item in trace
+        if isinstance(item, dict)
+        and item.get("type") in {"tool_call", "tool_result"}
+        and isinstance(item.get("tool"), str)
+        and item["tool"].strip()
+    ]
+
+
+def _seller_response_value(value: Any) -> Any:
+    if (
+        isinstance(value, dict)
+        and "seller_tool_trace" in value
+        and "response" in value
+    ):
+        return value["response"]
+    return value
+
+
+def _buyer_visible_seller_result(value: Any) -> Any:
+    """Keep the Seller's internal execution data on the Seller message only."""
+    safe_value = safe_tool_value(value)
+    if isinstance(safe_value, dict):
+        safe_value.pop("seller_tool_trace", None)
+    return safe_value
+
+
 def _delivery_payload(value: Any) -> dict[str, str] | None:
     """Accept only the seller's complete, display-safe fulfillment contract."""
-    safe_value = safe_tool_value(value)
+    safe_value = safe_tool_value(_seller_response_value(value))
     if isinstance(safe_value, str):
         try:
             safe_value = json.loads(safe_value)
@@ -303,6 +377,9 @@ def _markdown_delivery_payload(message: str) -> dict[str, str] | None:
 def _event_payloads(event) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     for call in event.get_function_calls():
+        call_args = call.args or {}
+        reason = _tool_call_reason(call_args)
+        catalog_operation = _catalog_operation(call_args)
         if call.name == "veriproof_seller_agent":
             payloads.append(
                 {
@@ -311,17 +388,22 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                     "to": "seller_agent",
                     "protocol": "A2A",
                     "call_id": call.id,
+                    "tool": call.name or "unknown_tool",
+                    "reason": reason,
+                    "catalog_operation": catalog_operation,
                     "text": _linkify_bare_urls(_agent_message_text(call.args or {})),
                 }
             )
-        payloads.append(
-            {
-                "type": "tool_call",
-                "tool": call.name or "unknown_tool",
-                "call_id": call.id,
-                "input": safe_tool_value(call.args or {}),
-            }
-        )
+        tool_payload = {
+            "type": "tool_call",
+            "tool": call.name or "unknown_tool",
+            "call_id": call.id,
+            "input": _tool_call_input(call_args),
+            "reason": reason,
+        }
+        if call.name == "veriproof_seller_agent":
+            tool_payload["catalog_operation"] = catalog_operation
+        payloads.append(tool_payload)
         if call.name == "negotiate_usdc_license":
             args = safe_tool_value(call.args or {})
             if isinstance(args, dict) and isinstance(args.get("offer_usdc"), (int, float)):
@@ -330,17 +412,22 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                         "type": "negotiation_offer",
                         "call_id": call.id,
                         "offer_usdc": str(args["offer_usdc"]),
-                        "usage_type": args.get("usage_type", "commercial"),
                     }
                 )
     for response in event.get_function_responses():
-        output = safe_tool_value(response.response)
+        raw_output = response.response
+        output = safe_tool_value(raw_output)
+        visible_output = (
+            _buyer_visible_seller_result(raw_output)
+            if response.name == "veriproof_seller_agent"
+            else output
+        )
         payloads.append(
             {
                 "type": "tool_result",
                 "tool": response.name or "unknown_tool",
                 "call_id": response.id,
-                "output": output,
+                "output": visible_output,
             }
         )
         if response.name == "negotiate_usdc_license":
@@ -361,7 +448,6 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                             "type": "negotiation_offer",
                             "call_id": response.id,
                             "offer_usdc": attempt["offer_usdc"],
-                            "usage_type": "commercial",
                         },
                         {
                             "type": "negotiation_result",
@@ -371,7 +457,8 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                     ]
                 )
         if response.name == "veriproof_seller_agent":
-            delivery = _delivery_payload(output)
+            seller_response = _seller_response_value(raw_output)
+            delivery = _delivery_payload(seller_response)
             payloads.append(
                 {
                     "type": "agent_message",
@@ -379,8 +466,9 @@ def _event_payloads(event) -> list[dict[str, Any]]:
                     "to": "buyer_agent",
                     "protocol": "A2A",
                     "call_id": response.id,
-                    "text": _seller_message_text(output),
+                    "text": _seller_message_text(seller_response),
                     "delivery": delivery,
+                    "execution": _seller_tool_trace(raw_output),
                 }
             )
             if delivery is not None:
@@ -431,28 +519,40 @@ async def _stream_agent(
     state_delta: dict[str, Any],
 ) -> AsyncIterator[str]:
     user_id = f"demo:{session_id}"
+    stream_id = str(uuid4())
+    queue = open_stream(stream_id)
     yield _sse({"type": "session", "session_id": session_id})
     yield _sse({"type": "status", "status": "working"})
+
+    async def run_agent() -> None:
+        try:
+            async for event in _runner.run_async(
+                user_id=user_id,
+                session_id=session_id,
+                new_message=types.Content(role="user", parts=[types.Part(text=message)]),
+                state_delta={**state_delta, _DEMO_STREAM_STATE_KEY: stream_id},
+            ):
+                for payload in _event_payloads(event):
+                    queue.put_nowait(payload)
+        except Exception:
+            logger.exception("Buyer Agent demo invocation failed")
+            queue.put_nowait({"type": "error", "message": "Buyer Agent could not complete this request."})
+        finally:
+            queue.put_nowait(None)
+
+    task = asyncio.create_task(run_agent())
     try:
-        async for event in _runner.run_async(
-            user_id=user_id,
-            session_id=session_id,
-            new_message=types.Content(
-                role="user", parts=[types.Part(text=message)]
-            ),
-            state_delta=state_delta,
-        ):
-            for payload in _event_payloads(event):
-                yield _sse(payload)
+        while (payload := await queue.get()) is not None:
+            yield _sse(payload)
         yield _sse({"type": "status", "status": "completed"})
-    except Exception:
-        logger.exception("Buyer Agent demo invocation failed")
-        yield _sse(
-            {
-                "type": "error",
-                "message": "Buyer Agent could not complete this request.",
-            }
-        )
+    finally:
+        close_stream(stream_id)
+        if not task.done():
+            task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 async def stream_demo_chat(request: Request):

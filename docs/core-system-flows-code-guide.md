@@ -1,6 +1,6 @@
 # VeriProof 핵심 시스템 흐름과 담당 코드
 
-> 목적: 현재 저장소의 실제 런타임 코드를 기준으로 **사용자 에셋 등록**과 **Buyer–Seller Agent 거래**가 어떻게 동작하는지 설명한다.  
+> 목적: 현재 저장소의 실제 런타임 코드를 기준으로 **사용자 에셋 등록**과 **Buyer–Marketplace Catalog Agent 거래**가 어떻게 동작하는지 설명한다.
 > 기준일: 2026-08-17  
 > 관련 발표 개정안: [Technical Blueprint 개정안](./technical-blueprint-revision-guide.md)
 
@@ -13,8 +13,8 @@ VeriProof의 핵심은 한 개의 거대한 에이전트가 모든 일을 처리
 | Creator Web | 파일 선택, 메타데이터 확인, 등록 확정 | Django Template + Vanilla JS |
 | Registration API | 인증, 입력 검증, 등록 유스케이스 호출 | Django |
 | Registration Service | 해시, AI 분석, 온체인 앵커, 저장, DB 반영 | Django Service Layer |
-| Seller Agent A | 공개 에셋 발견과 라이선스 조건 조회 | ADK + A2A 1.0 |
-| Buyer Agent B | Seller Agent 호출, 협상·결제 도구 조정, 정책 집행 | 별도 ADK/ASGI 서비스 |
+| Marketplace Catalog Agent A | 공개 에셋 발견과 라이선스 조건 조회 | ADK + A2A 1.0 |
+| Buyer Agent B | Marketplace Catalog Agent 호출, 협상·결제 도구 조정, 정책 집행 | 별도 ADK/ASGI 서비스 |
 | Negotiation API | 협상 세션과 라운드 저장, Gemini 결과 검증 | Django REST |
 | x402 Payment | USDC 결제 요구, 서명 검증, Facilitator 정산 | Django + x402 V2 SDK |
 | Settlement | 라이선스, 인증서, 다운로드 토큰, 감사 데이터 | Django Service Layer |
@@ -23,7 +23,7 @@ VeriProof의 핵심은 한 개의 거대한 에이전트가 모든 일을 처리
 현재 거래 구조는 다음과 같은 **하이브리드 A2A 구조**다.
 
 ```text
-A2A 1.0              : Agent Card 조회, Seller Agent 호출, 공개 에셋 발견
+A2A 1.0              : Agent Card 조회, Marketplace Catalog Agent 호출, 공개 에셋 발견
 Django REST          : 가격 협상
 x402 V2 over HTTP    : USDC 결제 요구, 결제 서명, 검증, 정산
 Settlement Service   : 라이선스·온체인 인증서·다운로드 권한 발급
@@ -349,7 +349,7 @@ sequenceDiagram
     API-->>Buyer: 200 + PAYMENT-RESPONSE + download URL
 ```
 
-### 2.2 1단계 — Seller Agent A가 A2A 엔드포인트로 공개된다
+### 2.2 1단계 — Marketplace Catalog Agent A가 A2A 엔드포인트로 공개된다
 
 담당 파일:
 
@@ -372,14 +372,14 @@ return Starlette(routes=[
 ])
 ```
 
-공개 인터페이스는 JSON-RPC 기반 A2A 1.0이며 streaming capability를 선언한다. Seller Agent가 가진 실제 도구는 다음 두 개의 읽기 전용 도구다.
+공개 인터페이스는 JSON-RPC 기반 A2A 1.0이며 streaming capability를 선언한다. Marketplace Catalog Agent가 가진 실제 도구는 다음 두 개의 읽기 전용 도구다.
 
 - `search_licensable_assets`: 공개 카탈로그 검색
 - `get_licensable_asset`: Asset UUID로 상세 조회
 
 검색 결과에는 워터마크 미리보기만 포함되며 원본 URL은 노출되지 않는다. 또한 `visibility=public`, `status=anchored/listed`, `registration_certificate_tx_sig IS NOT NULL`인 자산만 반환한다.
 
-### 2.3 2단계 — Buyer Agent B가 Seller Agent를 원격 도구로 사용한다
+### 2.3 2단계 — Buyer Agent B가 Marketplace Catalog Agent를 원격 도구로 사용한다
 
 담당 파일:
 
@@ -397,12 +397,12 @@ def build_seller_agent() -> RemoteA2aAgent:
     )
 ```
 
-Buyer Agent는 Seller Agent에 구매·결제·원본 전달 전체를 넘기지 않는다. Seller Agent는 발견 하위 작업만 수행하고, Buyer Agent가 반환된 Asset ID를 가지고 이후 REST 협상과 결제 도구를 직접 호출한다.
+Buyer Agent는 Marketplace Catalog Agent에 구매·결제 전체를 넘기지 않는다. Marketplace Catalog Agent는 발견·선택 에셋 조건 재검증·정산 후 전달 사실 조회만 수행하고, Buyer Agent가 반환된 Asset ID를 가지고 이후 REST 협상과 결제 도구를 직접 호출한다.
 
 이 설계의 장점은 다음과 같다.
 
-- Seller Agent의 권한을 공개 카탈로그 읽기로 제한한다.
-- 결제 개인키가 Seller Agent나 LLM 대화에 노출되지 않는다.
+- Marketplace Catalog Agent의 권한을 공개 카탈로그 읽기와 정산 후 전달 사실 조회로 제한한다.
+- 결제 개인키가 Marketplace Catalog Agent나 LLM 대화에 노출되지 않는다.
 - 결제 정책과 사용자 승인 상태를 Buyer Agent 세션에 유지한다.
 - A2A 장애를 빈 검색 결과로 오인하지 않고 `seller_agent_unavailable`로 구분한다.
 
@@ -751,4 +751,3 @@ def _to_atomic_usdc(amount_usdc: decimal.Decimal) -> str:
 | Firestore Mirror | [`veriproof/services/firestore_mirror.py`](../veriproof/services/firestore_mirror.py) |
 | 인증 SSE | [`veriproof/apps/common/views_live_demo.py`](../veriproof/apps/common/views_live_demo.py) |
 | Live Demo 클라이언트 | [`veriproof/static/js/live_demo.js`](../veriproof/static/js/live_demo.js) |
-

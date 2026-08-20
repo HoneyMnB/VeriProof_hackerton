@@ -7,10 +7,13 @@ from a2a.server.routes import create_agent_card_routes
 from a2a.types import AgentCapabilities, AgentCard, AgentInterface, AgentSkill
 from django.conf import settings
 from google.adk.a2a.utils.agent_to_a2a import to_a2a
+from google.adk.a2a.executor.a2a_agent_executor import A2aAgentExecutor
+from google.adk.a2a.executor.config import A2aAgentExecutorConfig
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
 from .agent import root_agent
+from .a2a_trace import seller_trace_event_converter
 
 
 def build_agent_card() -> AgentCard:
@@ -56,7 +59,16 @@ def build_agent_card() -> AgentCard:
 def build_application(django_application: object) -> Starlette:
     """공식 Agent Card/A2A 경로와 Django ASGI 앱을 결합한다."""
     agent_card = build_agent_card()
-    a2a_application = to_a2a(root_agent, agent_card=agent_card)
+    a2a_application = to_a2a(
+        root_agent,
+        agent_card=agent_card,
+        agent_executor_factory=lambda runner: A2aAgentExecutor(
+            runner=runner,
+            config=A2aAgentExecutorConfig(
+                event_converter=seller_trace_event_converter(),
+            ),
+        ),
+    )
 
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncIterator[None]:

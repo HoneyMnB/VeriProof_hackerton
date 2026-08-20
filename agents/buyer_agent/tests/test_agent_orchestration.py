@@ -20,6 +20,27 @@ def test_seller_agent_is_exposed_as_a_tool_without_transfer():
     assert len(seller_tools) == 1
     assert root_agent.sub_agents == []
 
+    declaration = seller_tools[0]._get_declaration()
+    schema = declaration.parameters_json_schema
+    assert isinstance(schema, dict)
+    assert "execution_reason" in schema["properties"]
+    assert "seller agent에게 요청" in schema["properties"]["execution_reason"]["description"]
+
+
+def test_buyer_is_instructed_to_send_a_natural_language_a2a_brief_to_seller():
+    assert "natural Korean Buyer-to-Seller message" in root_agent.instruction
+    assert "Never send only a keyword, asset_id, or tool-like instruction." in (
+        root_agent.instruction
+    )
+    assert "'<current target> seller agent에게 요청'" in root_agent.instruction
+
+
+def test_buyer_is_instructed_to_keep_usage_classifications_out_of_messages():
+    assert "Never say, ask about, or relay commercial" in root_agent.instruction
+    assert "Keep the usage_type required by a negotiation tool internal" in (
+        root_agent.instruction
+    )
+
 
 def test_empty_seller_response_is_reported_as_unavailable(monkeypatch):
     """A2A 연결 오류를 자산 검색 결과 없음으로 오인하지 않는다."""
@@ -35,7 +56,22 @@ def test_empty_seller_response_is_reported_as_unavailable(monkeypatch):
     )
 
     result = asyncio.run(
+        seller_tool.run_async(
+            args={"request": "sea image", "catalog_operation": "discovery"},
+            tool_context=None,
+        )
+    )
+
+    assert result.startswith("catalog_agent_unavailable:")
+
+
+def test_catalog_request_requires_a_declared_operation():
+    seller_tool = next(
+        tool for tool in root_agent.tools if isinstance(tool, SellerAgentTool)
+    )
+
+    result = asyncio.run(
         seller_tool.run_async(args={"request": "sea image"}, tool_context=None)
     )
 
-    assert result.startswith("seller_agent_unavailable:")
+    assert result.startswith("catalog_operation_required:")

@@ -2,13 +2,16 @@
 
 import os
 import uuid
+from contextvars import ContextVar
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlparse
 
 import httpx
 from google.adk.agents.remote_a2a_agent import RemoteA2aAgent
+from google.adk.a2a import _compat
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.tools.tool_context import ToolContext
+from google.genai import types
 from x402.http.utils import (
     decode_payment_required_header,
     decode_payment_response_header,
@@ -21,12 +24,153 @@ from .payments import (
     AutonomousX402Buyer,
 )
 from .payment_approval import payment_approval_gate
+from .live_events import publish
 
 _ACCEPTED_SESSION_STATE_KEY = "buyer:accepted_x402_sessions"
+# This is a wire-contract key, deliberately local to the Buyer deployment.
+# The Seller service is independently deployable and must not be imported here.
+SELLER_TOOL_TRACE_METADATA_KEY = "veriproof.seller_tool_trace"
+SELLER_TOOL_TRACE_STATE_KEY = "temp:veriproof.seller_tool_trace"
+_DEMO_STREAM_STATE_KEY = "temp:veriproof.demo_stream_id"
+_SELLER_CALL_STATE_KEY = "temp:veriproof.seller_call_id"
+_SELLER_TRACE_DISPATCH: ContextVar[dict[str, object] | None] = ContextVar(
+    "seller_trace_dispatch", default=None
+)
+
+
+def _metadata_trace(metadata: object) -> list[dict] | None:
+    try:
+        trace = _compat.metadata_get(metadata, SELLER_TOOL_TRACE_METADATA_KEY)
+    except (NotImplementedError, TypeError, ValueError):
+        try:
+            from google.protobuf.json_format import MessageToDict
+
+            trace = MessageToDict(metadata).get(SELLER_TOOL_TRACE_METADATA_KEY)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(trace, list) and trace is not None:
+        try:
+            from google.protobuf.json_format import MessageToDict
+
+            trace = MessageToDict(trace)
+        except (TypeError, ValueError):
+            return None
+    if not isinstance(trace, list) or not all(
+        isinstance(item, dict) for item in trace
+    ):
+        return None
+    return trace
+
+
+def _response_trace(response: object) -> list[dict] | None:
+    """Read a trace from legacy and current A2A client response wrappers."""
+    candidates: list[object] = []
+    visited: set[int] = set()
+
+    def collect(value: object) -> None:
+        if value is None or id(value) in visited:
+            return
+        visited.add(id(value))
+        if isinstance(value, tuple):
+            for item in value:
+                collect(item)
+            return
+
+        candidates.append(getattr(value, "metadata", None))
+        for artifact in getattr(value, "artifacts", []) or []:
+            collect(artifact)
+        collect(getattr(value, "artifact", None))
+        status = getattr(value, "status", None)
+        collect(status)
+        collect(getattr(status, "message", None))
+
+        # A2A SDK versions wrap normalized updates differently. Inspect the
+        # wrapper's public task/update/result objects rather than assuming the
+        # legacy ``(task, update)`` tuple shape.
+        for attribute in ("task", "update", "result", "event"):
+            collect(getattr(value, attribute, None))
+
+    collect(response)
+    for metadata in candidates:
+        trace = _metadata_trace(metadata)
+        if trace is not None:
+            return trace
+    return None
+
+
+class TracePreservingRemoteA2aAgent(RemoteA2aAgent):
+    """Expose only the Seller's namespaced public trace to its AgentTool."""
+
+    async def _handle_a2a_response(self, a2a_response, ctx):
+        event = await super()._handle_a2a_response(a2a_response, ctx)
+        return self._with_seller_trace(event, a2a_response, ctx)
+
+    async def _handle_a2a_response_v2(self, a2a_response, ctx):
+        event = await super()._handle_a2a_response_v2(a2a_response, ctx)
+        return self._with_seller_trace(event, a2a_response, ctx)
+
+    @staticmethod
+    def _with_seller_trace(event, response, ctx):
+        trace = _response_trace(response)
+        dispatch = _SELLER_TRACE_DISPATCH.get()
+        if trace is not None:
+            should_publish = True
+            if dispatch is not None:
+                should_publish = dispatch.get("published_trace") != trace
+                dispatch["trace"] = trace
+                dispatch["published_trace"] = trace
+            stream_id = (
+                dispatch.get("stream_id")
+                if dispatch is not None
+                else ctx.session.state.get(_DEMO_STREAM_STATE_KEY)
+            )
+            call_id = (
+                dispatch.get("call_id")
+                if dispatch is not None
+                else ctx.session.state.get(_SELLER_CALL_STATE_KEY)
+            )
+            # Some valid A2A streaming updates do not become ADK events. The
+            # trace still belongs to the active demo stream and must be shown
+            # immediately instead of waiting for a final response event.
+            if should_publish:
+                publish(
+                    stream_id,
+                    {
+                        "type": "seller_execution",
+                        "call_id": call_id,
+                        "execution": trace,
+                    },
+                )
+        if event is not None and trace is not None:
+            event.actions.state_delta[SELLER_TOOL_TRACE_STATE_KEY] = trace
+        return event
 
 
 class SellerAgentTool(AgentTool):
-    """원격 판매자 장애가 빈 검색 결과처럼 보이지 않게 한다."""
+    """원격 카탈로그 장애가 빈 검색 결과처럼 보이지 않게 한다."""
+
+    def _get_declaration(self) -> types.FunctionDeclaration:
+        """Expose the public rationale without adding it to the A2A request."""
+        declaration = super()._get_declaration()
+        schema = declaration.parameters_json_schema
+        if isinstance(schema, dict):
+            properties = schema.get("properties")
+            if isinstance(properties, dict):
+                properties["execution_reason"] = {
+                    "type": "string",
+                    "description": (
+                        "Concise public display text in the format "
+                        "'<current target> seller agent에게 요청'."
+                    ),
+                }
+                properties["catalog_operation"] = {
+                    "type": "string",
+                    "description": (
+                        "Use one of discovery, listing_verification, or fulfillment "
+                        "to identify the public catalog operation for this A2A call."
+                    ),
+                }
+        return declaration
 
     async def run_async(
         self,
@@ -34,11 +178,41 @@ class SellerAgentTool(AgentTool):
         args: dict,
         tool_context: ToolContext,
     ):
-        result = await super().run_async(args=args, tool_context=tool_context)
+        args = dict(args)
+        args.pop("execution_reason", None)
+        catalog_operation = args.pop("catalog_operation", None)
+        if catalog_operation not in {
+            "discovery",
+            "listing_verification",
+            "fulfillment",
+        }:
+            return (
+                "catalog_operation_required: use discovery, "
+                "listing_verification, or fulfillment for every catalog request."
+            )
+        if tool_context is not None:
+            tool_context.state[SELLER_TOOL_TRACE_STATE_KEY] = []
+            tool_context.state[_SELLER_CALL_STATE_KEY] = tool_context.function_call_id
+        dispatch = {
+            "stream_id": tool_context.state.get(_DEMO_STREAM_STATE_KEY)
+            if tool_context is not None
+            else None,
+            "call_id": tool_context.function_call_id if tool_context is not None else None,
+            "trace": [],
+            "published_trace": None,
+        }
+        token = _SELLER_TRACE_DISPATCH.set(dispatch)
+        try:
+            result = await super().run_async(args=args, tool_context=tool_context)
+        finally:
+            _SELLER_TRACE_DISPATCH.reset(token)
+        trace = dispatch["trace"]
+        if isinstance(trace, list) and trace:
+            return {"response": result, "seller_tool_trace": trace}
         if result:
             return result
         return (
-            "seller_agent_unavailable: the remote seller returned no usable "
+            "catalog_agent_unavailable: the remote catalog returned no usable "
             "A2A response. Verify SELLER_AGENT_CARD_URL and that the seller "
             "service is running."
         )
@@ -157,6 +331,7 @@ def _resolve_session_id(
 async def get_x402_payment_terms(
     asset_id: str,
     session_id: str = "",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """공식 x402 V2 결제 조건을 조회한다.
@@ -199,7 +374,10 @@ async def get_x402_payment_terms(
     }
 
 
-async def get_sol_payment_terms(asset_id: str) -> dict:
+async def get_sol_payment_terms(
+    asset_id: str,
+    execution_reason: str = "",
+) -> dict:
     """판매자가 직접 설정한 Devnet 네이티브 SOL 결제 조건을 조회한다.
 
     기존 USDC x402 조건을 환산하지 않는다. SOL 가격을 설정하지 않은 자산은
@@ -221,6 +399,7 @@ async def negotiate_license(
     buyer_agent_id: str,
     offer_sol: float,
     usage_type: str = "commercial",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """판매자 Agent A의 라이선스 가격 협상 API를 호출한다.
@@ -296,6 +475,7 @@ async def negotiate_usdc_with_list_price_fallback(
     buyer_agent_id: str,
     opening_offer_usdc: float,
     usage_type: str = "commercial",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """할인 협상 후 거절되면 공개 원가를 한 번만 최종 제안한다.
@@ -374,6 +554,7 @@ async def _published_usdc_list_price(asset_id: str) -> Decimal | None:
 async def purchase_x402_asset(
     asset_id: str,
     session_id: str = "",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """위임된 거래당 한도 안에서 자산을 자율 결제한다.
@@ -414,6 +595,7 @@ async def purchase_x402_asset(
 async def purchase_sol_asset(
     asset_id: str,
     session_id: str = "",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """판매자 설정 Devnet SOL 가격으로 자산을 자율 결제한다.
@@ -445,6 +627,7 @@ async def purchase_sol_asset(
 async def purchase_sponsored_usdc_asset(
     asset_id: str,
     session_id: str = "",
+    execution_reason: str = "",
     tool_context: ToolContext | None = None,
 ) -> dict:
     """Buyer KMS 지갑으로 sponsor-paid USDC 즉시 구매를 완료한다.
@@ -524,12 +707,12 @@ def _response_body(response: httpx.Response):
 
 
 def build_seller_agent() -> RemoteA2aAgent:
-    """판매자 에이전트 A를 호출할 ADK 공식 원격 A2A 프록시를 생성한다."""
-    return RemoteA2aAgent(
+    """마켓플레이스 카탈로그 에이전트를 호출할 ADK 원격 A2A 프록시를 생성한다."""
+    return TracePreservingRemoteA2aAgent(
         name="veriproof_seller_agent",
         description=(
-            "Remote VeriProof seller that discovers registered works and "
-            "returns public native SOL licensing terms."
+            "Remote VeriProof marketplace catalog that discovers registered "
+            "works, verifies published listing terms, and fulfills settled licenses."
         ),
         agent_card=get_seller_agent_card_url(),
     )

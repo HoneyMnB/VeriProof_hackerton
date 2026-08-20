@@ -9,7 +9,7 @@ ADK-UI를 운영·개발 도구로 유지하면서, 발표에서는 구매자의
 ## 핵심 사용자 흐름
 
 1. 구매자가 필요한 에셋을 자연어로 입력한다.
-2. Buyer Agent가 Seller Agent에 탐색을 위임하고 검증된 결과를 반환한다.
+2. Buyer Agent가 Marketplace Catalog Agent에 후보 탐색과 선택 에셋의 판매 조건 재검증을 위임한다.
 3. 각 답변 아래에서 실제 Tool 호출명, 입력, 응답과 완료 상태를 확인한다.
 4. 사용자가 결과를 검토한 뒤 후속 메시지로 협상 또는 구매를 명시적으로 지시한다.
 
@@ -23,7 +23,7 @@ ADK-UI를 운영·개발 도구로 유지하면서, 발표에서는 구매자의
 - 각 Buyer Agent 답변 바로 아래 접을 수 있는 Execution 영역
 - Tool 호출 인자와 Tool 응답은 사용자가 펼쳐서 확인
 - 사용자 메시지는 사람 아이콘, Buyer/Seller 메시지는 색상이 다른 로봇 아이콘으로 구분
-- 실제 `veriproof_seller_agent` Tool의 요청과 응답을 Buyer → Seller, Seller → Buyer A2A 대화로 표시
+- 실제 `veriproof_seller_agent` Tool의 요청과 응답을 Buyer → Marketplace Catalog, Marketplace Catalog → Buyer A2A 대화로 표시한다. 내부 tool 식별자는 연결 호환성을 위해 유지한다.
 
 ### 구매 모드
 
@@ -38,7 +38,8 @@ ADK-UI를 운영·개발 도구로 유지하면서, 발표에서는 구매자의
 
 화면은 동일 오리진의 `/demo/api/chat`에 요청하고 실제 ADK Runner 이벤트를 SSE로 수신한다. Tool 호출과 응답은 `Event.get_function_calls()` 및 `Event.get_function_responses()`에서만 생성한다.
 
-- Tool 이름, 호출 ID, 실제 입력과 실제 응답을 순서대로 표시
+- Tool 이름, 호출 ID, LLM이 해당 호출에 명시한 공개 사용 근거, 실제 입력과 실제 응답을 순서대로 표시
+- 사용 근거는 호출 인자의 `execution_reason`으로 SSE에만 전달하며 DB에 저장하지 않는다. Tool명을 반복하지 않는 40자 이내의 한국어 선택 근거로 표시한다. 비공개 thought/chain-of-thought는 표시하거나 저장하지 않는다.
 - private key, signature, token, credential 등 민감 키는 서버에서 재귀적으로 마스킹
 - Tool 데이터의 크기와 깊이를 제한해 UI 및 로그 과다 노출 방지
 - 모델의 비공개 `thought` 필드는 전송하거나 표시하지 않음
@@ -46,7 +47,7 @@ ADK-UI를 운영·개발 도구로 유지하면서, 발표에서는 구매자의
 - 실패 시 실제 실패 상태를 표시하고 성공으로 위장하지 않음
 - Tool 응답의 `status=approval_required`일 때만 승인 모달 표시
 
-Seller Agent의 현재 공개 A2A Skill은 에셋 탐색만 지원한다. `negotiate_license`, 결제조건 조회와 구매는 Buyer Agent가 호출하는 REST/x402 Tool이므로 Execution에는 표시하되 A2A 대화로 표기하지 않는다.
+Marketplace Catalog Agent의 공개 A2A Skill은 후보 탐색, 선택 에셋의 공개 판매 조건 재검증, 정산 후 전달 사실 조회만 지원한다. `negotiate_license`, 결제조건 조회와 구매는 Buyer Agent가 호출하는 REST/x402 Tool이므로 Execution에는 표시하되 A2A 대화로 표기하지 않는다.
 
 ## 시각·반응형 원칙
 
@@ -61,7 +62,7 @@ Seller Agent의 현재 공개 A2A Skill은 에셋 탐색만 지원한다. `negot
 
 1. `Sea image · under 10 USDC` 예시를 선택한다.
 2. 요청 문장에 USDC x402, 예산, 사용 목적, 구매 보류 조건이 포함됐는지 확인한다.
-3. 메시지를 보내고 Execution에서 Seller Agent 호출과 응답을 짚는다.
+3. 메시지를 보내고 Execution에서 카탈로그 후보 검색과 판매 조건 재검증 호출을 구분해 짚는다.
 4. 이어서 x402 결제 조건 조회 Tool이 호출되는 과정을 보여준다.
 5. Buyer Agent의 최종 답변과 실제 Tool 결과가 일치하는지 설명한다.
 6. 조건이 맞으면 후속 메시지로 협상을 지시하고, 구매는 별도 메시지로 명시적으로 승인한다.
