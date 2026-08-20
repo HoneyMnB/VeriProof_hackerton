@@ -306,7 +306,7 @@
       `- **작품 ID**: \`${delivery.asset_id}\``,
       `- **라이선스 ID**: \`${delivery.license_id}\``,
       `- **결제 금액**: ${delivery.amount_usdc} ${delivery.currency}`,
-      `- **네트워크 수수료**: ${delivery.network_fee_usdc} ${delivery.currency} · ${delivery.fee_sponsor} 부담`,
+      `- **네트워크 수수료**: ${delivery.network_fee_usdc} SOL · ${delivery.fee_sponsor} 부담`,
       `- **트랜잭션**: \`${delivery.transaction_signature}\``,
     ];
     if (delivery.download_expires_at) {
