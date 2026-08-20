@@ -110,7 +110,7 @@
                 if (status) { status.textContent = ""; }
                 document.getElementById("asset-settings-name").textContent = data.title || card.querySelector("h3").textContent;
                 renderRegistration(data);
-                renderSales(data.sales_summary || {}, data.sales || []);
+                renderSales(data.sales_summary || {}, data.sales || [], card.dataset.currency);
                 var explorer = document.getElementById("asset-settings-explorer");
                 explorer.hidden = !card.dataset.explorerUrl;
                 explorer.href = card.dataset.explorerUrl || "#";
@@ -152,13 +152,15 @@
     /**
      * 자산 설정 모달에 판매 요약(건수/총액)과 판매 내역 리스트를 렌더링한다.
      */
-    function renderSales(summary, sales) {
+    function renderSales(summary, sales, assetCurrency) {
         var summaryBox = document.getElementById("asset-settings-sales-summary");
         var list = document.getElementById("asset-settings-sales-list");
-        if (summaryBox) { summaryBox.innerHTML = '<span><strong>' + escapeHtml(summary.sale_count || 0) + '</strong>' + escapeHtml(t("library.sales.count")) + '</span><span class="asset-settings-modal__sales-summary--gross"><strong>' + escapeHtml(summary.gross_sol || "0") + ' SOL</strong>' + escapeHtml(t("library.sales.gross")) + '</span>'; }
+        var currency = assetCurrency === "USDC" ? "USDC" : "SOL";
+        var gross = currency === "USDC" ? summary.gross_usdc : summary.gross_sol;
+        if (summaryBox) { summaryBox.innerHTML = '<span><strong>' + escapeHtml(summary.sale_count || 0) + '</strong>' + escapeHtml(t("library.sales.count")) + '</span><span class="asset-settings-modal__sales-summary--gross"><strong>' + escapeHtml(gross || "0") + ' ' + currency + '</strong>' + escapeHtml(t("library.sales.gross")) + '</span>'; }
         if (!list) { return; }
         if (!sales.length) { list.innerHTML = "<li>" + escapeHtml(t("library.sales.empty")) + "</li>"; return; }
-        list.innerHTML = sales.map(function (sale) { return "<li><div><strong>" + escapeHtml(sale.price_sol) + " SOL</strong><span>" + escapeHtml(sale.usage_type) + " · " + escapeHtml(shortWallet(sale.buyer_wallet)) + "</span></div><time>" + escapeHtml(formatTs(sale.granted_at)) + "</time></li>"; }).join("");
+        list.innerHTML = sales.map(function (sale) { return "<li><div><strong>" + escapeHtml(sale.amount) + " " + escapeHtml(sale.currency) + "</strong><span>" + escapeHtml(sale.usage_type) + " · " + escapeHtml(shortWallet(sale.buyer_wallet)) + "</span></div><time>" + escapeHtml(formatTs(sale.granted_at)) + "</time></li>"; }).join("");
     }
 
     // --- R6 / AC-5: preview toggle -----------------------------------------
@@ -429,7 +431,7 @@
             var ts = formatTs(it.timestamp);
             if (it.kind === "license") {
                 return '<li><strong>' + t("library.timeline.license") + '</strong> · ' + t("library.timeline.buyer") + ' ' + escapeHtml(shortWallet(it.buyer_wallet)) +
-                    " · " + escapeHtml(it.price_usdc) + " SOL (" + escapeHtml(it.usage_type) + ")" +
+                    " · " + escapeHtml(it.amount) + " " + escapeHtml(it.currency) + " (" + escapeHtml(it.usage_type) + ")" +
                     ' <span class="ts">' + ts + "</span></li>";
             }
             return "<li><strong>" + escapeHtml(it.type || "event") + "</strong>" +

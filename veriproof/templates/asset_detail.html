@@ -36,7 +36,7 @@
         <aside class="asset-detail__purchase" aria-labelledby="purchase-title">
             <p data-i18n="detail.buy_eyebrow">BUY-IT-NOW LICENSE</p>
             <h2 id="purchase-title" data-i18n="detail.buy_title">License this work</h2>
-            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ asset.target_price_usdc }} USDC</strong></p>
+            <p class="asset-detail__price"><span class="asset-detail__price-label" data-i18n="detail.price_now">Immediate license</span> <strong>{{ asset.target_amount }} USDC</strong></p>
             <dl class="asset-detail__payment-summary">
                 <div><dt data-i18n="detail.delivery">After verification</dt><dd data-i18n="detail.delivery_value">License certificate and time-bound original download</dd></div>
                 <div><dt data-i18n="detail.network">Payment network</dt><dd>Solana · USDC · Network fee sponsored</dd></div>
@@ -44,7 +44,7 @@
             {% if active_license %}
             <a class="asset-detail__pay" href="{{ active_license.download_url }}" download data-solana-pay-download data-download-expires-at="{{ active_license.download_expires_at }}">다운로드</a>
             {% elif request.user.is_authenticated %}
-            <button class="asset-detail__pay" type="button" data-sponsored-usdc-open>Pay {{ asset.target_price_usdc }} USDC</button>
+            <button class="asset-detail__pay" type="button" data-sponsored-usdc-open>Pay {{ asset.target_amount }} USDC</button>
             {% else %}
             <a class="asset-detail__pay" href="{% url 'accounts:login' %}?next={{ request.get_full_path|urlencode }}">Sign in to purchase</a>
             {% endif %}
@@ -63,7 +63,7 @@
             </header>
             <dl class="asset-detail__pay-fields">
                 <div><dt>Network</dt><dd>Solana</dd></div>
-                <div><dt>Amount</dt><dd>{{ asset.target_price_usdc }} USDC</dd></div>
+                <div><dt>Amount</dt><dd>{{ asset.target_amount }} USDC</dd></div>
                 <div><dt>Network fee</dt><dd>Sponsored by VeriProof</dd></div>
             </dl>
             <div class="asset-detail__pay-actions">

@@ -475,25 +475,33 @@ def _asset_card(asset: IpAsset) -> dict:
     """
     licenses = list(asset.licenses.all())
     latest_license = licenses[0] if licenses else None
-    sol_licenses = [
-        license for license in licenses
-        if license.payment_currency == "SOL" and license.price_sol is not None
-    ]
-    sales = [
-        {
-            "buyer_wallet": license.buyer_wallet,
-            "price_usdc": str(license.price_usdc) if license.price_usdc is not None else None,
-            "price_sol": str(license.price_sol) if license.price_sol is not None else None,
-            "payment_currency": license.payment_currency,
-            "usage_type": license.usage_type,
-            "granted_at": license.granted_at.isoformat() if license.granted_at else None,
-            "certificate_tx_sig": license.certificate_tx_sig or "",
-        }
-        for license in sol_licenses
-    ]
+    totals = {"USDC": decimal.Decimal("0"), "SOL": decimal.Decimal("0")}
+    sales = []
+    for license in licenses:
+        currency = license.payment_currency
+        if currency == "USDC":
+            amount = license.price_usdc
+        elif currency == "SOL":
+            amount = license.price_sol
+        else:
+            amount = None
+        if amount is None:
+            continue
+        totals[currency] += amount
+        sales.append(
+            {
+                "buyer_wallet": license.buyer_wallet,
+                "amount": str(amount),
+                "currency": currency,
+                "usage_type": license.usage_type,
+                "granted_at": license.granted_at.isoformat() if license.granted_at else None,
+                "certificate_tx_sig": license.certificate_tx_sig or "",
+            }
+        )
     sales_summary = {
-        "sale_count": len(sol_licenses),
-        "gross_sol": str(sum((license.price_sol for license in sol_licenses), decimal.Decimal("0"))),
+        "sale_count": len(sales),
+        "gross_usdc": str(totals["USDC"]),
+        "gross_sol": str(totals["SOL"]),
         "last_sale_at": sales[0]["granted_at"] if sales else None,
     }
     manage_data = {

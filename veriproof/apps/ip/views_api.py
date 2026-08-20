@@ -1359,12 +1359,16 @@ def transactions(
 
     # License entries — commercial deal record.
     for lic in License.objects.filter(asset=asset).order_by("granted_at"):
+        currency = lic.payment_currency
+        amount = lic.price_usdc if currency == "USDC" else lic.price_sol
         items.append(
             {
                 "kind": "license",
                 "timestamp": lic.granted_at.isoformat() if lic.granted_at else None,
                 "license_id": str(lic.id),
                 "buyer_wallet": lic.buyer_wallet,
+                "amount": str(amount) if amount is not None else None,
+                "currency": currency,
                 "price_usdc": str(lic.price_usdc),
                 "usage_type": lic.usage_type,
                 "payment_tx_sig": lic.payment_tx_sig,
