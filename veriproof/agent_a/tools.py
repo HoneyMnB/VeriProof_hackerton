@@ -6,6 +6,7 @@ from typing import Any, Literal
 
 from asgiref.sync import sync_to_async
 from django.conf import settings
+from django.db import close_old_connections
 from django.utils import timezone
 
 from apps.ip.models import IpAsset
@@ -16,6 +17,15 @@ from .schemas import AssetType
 from services.tools_logger import ToolsLogger
 
 tool_log = ToolsLogger()
+
+
+def _run_with_fresh_db_connection(fn, *args: Any, **kwargs: Any) -> Any:
+    """Run ORM-backed agent tools outside Django's request middleware boundary."""
+    close_old_connections()
+    try:
+        return fn(*args, **kwargs)
+    finally:
+        close_old_connections()
 
 
 def _json_safe_asset(asset: Any) -> dict[str, Any]:
@@ -99,7 +109,8 @@ async def search_licensable_assets(
         price_currency: 최대 가격의 통화. USDC 또는 SOL이며 환산하지 않는다.
         limit: 1개에서 20개 사이의 최대 결과 수.
     """
-    return await sync_to_async(_search_licensable_assets, thread_sensitive=True)(
+    return await sync_to_async(_run_with_fresh_db_connection, thread_sensitive=True)(
+        _search_licensable_assets,
         query,
         asset_type,
         maximum_price,
@@ -135,7 +146,10 @@ async def get_licensable_asset(
     execution_reason: str = "",
 ) -> dict[str, Any]:
     """하나의 자산 ID에 대한 공개 라이선스 정보를 반환한다."""
-    return await sync_to_async(_get_licensable_asset, thread_sensitive=True)(asset_id)
+    return await sync_to_async(_run_with_fresh_db_connection, thread_sensitive=True)(
+        _get_licensable_asset,
+        asset_id,
+    )
 
 
 def _get_purchase_fulfillment(
@@ -199,7 +213,8 @@ async def get_purchase_fulfillment(
     This tool never creates a payment or a license. It can only disclose a
     persisted fulfillment record whose asset and transaction both match.
     """
-    return await sync_to_async(_get_purchase_fulfillment, thread_sensitive=True)(
+    return await sync_to_async(_run_with_fresh_db_connection, thread_sensitive=True)(
+        _get_purchase_fulfillment,
         asset_id,
         transaction_signature,
     )
